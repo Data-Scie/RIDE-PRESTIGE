@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ride Prestige — Customer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#f4f4f4;min-height:100vh}
+nav{background:#000;color:#c9a84c;padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
+nav h1{font-size:1rem;letter-spacing:3px;font-weight:900}
+.role-badge{background:#c9a84c;color:#000;font-size:.75rem;font-weight:bold;padding:4px 12px;border-radius:20px}
+.container{max-width:1000px;margin:0 auto;padding:24px}
+.card{background:#fff;border-radius:10px;padding:24px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.card h2{font-size:.85rem;text-transform:uppercase;letter-spacing:1.5px;color:#000;border-bottom:2px solid #c9a84c;padding-bottom:8px;margin-bottom:18px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}
+.stat{background:#fff;border-radius:10px;padding:20px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.stat .n{font-size:2rem;font-weight:bold;color:#c9a84c}
+.stat .l{font-size:.78rem;color:#777;margin-top:4px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fg{margin-bottom:12px}
+label{display:block;font-size:.82rem;color:#555;font-weight:500;margin-bottom:4px}
+input,select,textarea{width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:.9rem}
+input:focus,select:focus{outline:none;border-color:#c9a84c}
+.btn{background:#c9a84c;color:#000;border:none;padding:10px 24px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:.85rem;width:100%}
+.btn:hover{background:#b8943d}
+.btn-sm{padding:5px 14px;font-size:.78rem;width:auto}
+.btn-danger{background:#e74c3c;color:#fff}
+.btn-outline{background:transparent;border:2px solid #c9a84c;color:#c9a84c}
+.tabs{display:flex;gap:4px;margin-bottom:24px;border-bottom:2px solid #eee;overflow-x:auto}
+.tab{padding:10px 18px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;font-size:.85rem;white-space:nowrap;color:#888}
+.tab.active{border-color:#c9a84c;color:#c9a84c;font-weight:bold}
+.hidden{display:none!important}
+.alert{padding:12px 16px;border-radius:6px;margin-bottom:14px;font-size:.85rem}
+.alert-s{background:#d4edda;color:#155724}
+.alert-e{background:#f8d7da;color:#721c24}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:bold}
+.b-green{background:#d4edda;color:#155724}
+.b-yellow{background:#fff3cd;color:#856404}
+.b-red{background:#f8d7da;color:#721c24}
+.b-blue{background:#d1ecf1;color:#0c5460}
+.b-gray{background:#e9ecef;color:#495057}
+table{width:100%;border-collapse:collapse;font-size:.83rem}
+th{background:#000;color:#c9a84c;padding:10px 12px;text-align:left;font-size:.78rem;letter-spacing:.5px}
+td{padding:10px 12px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+tr:hover td{background:#fafafa}
+.track-box{background:#f8f8f8;border:1px solid #eee;border-radius:8px;padding:20px;text-align:center}
+.track-status{font-size:1.5rem;font-weight:bold;color:#c9a84c;margin:10px 0}
+.track-driver{font-size:.9rem;color:#333;margin:4px 0}
+#login-wrap{max-width:420px;margin:60px auto}
+.reg-link{text-align:center;font-size:.83rem;color:#777;margin-top:12px}
+.reg-link a{color:#c9a84c;cursor:pointer;text-decoration:none}
+.quote-result{background:#f8f8f8;border-left:4px solid #c9a84c;padding:16px;border-radius:4px;margin-top:12px;font-size:.85rem}
+.quote-result strong{font-size:1.4rem;color:#c9a84c}
+</style>
+</head>
+<body>
+<nav>
+  <h1>RIDE PRESTIGE</h1>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span id="nav-name" class="hidden" style="font-size:.85rem;color:#888"></span>
+    <span class="role-badge">CUSTOMER</span>
+    <button onclick="logout()" class="hidden" id="btn-logout" style="background:transparent;border:1px solid #555;color:#888;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:.78rem">Logout</button>
+  </div>
+</nav>
+
+<!-- LOGIN -->
+<div id="login-wrap">
+  <div class="card">
+    <h2 id="form-title">Customer Login</h2>
+    <div id="msg"></div>
+    <!-- Login fields -->
+    <div class="fg"><label>Email</label><input id="l-email" type="email" value="james@example.com"></div>
+    <div class="fg"><label>Password</label><input id="l-pass" type="password" value="Customer@123"></div>
+    <!-- Register extra fields (hidden) -->
+    <div id="reg-fields" class="hidden">
+      <div class="fg"><label>Full Name</label><input id="r-name" type="text"></div>
+      <div class="fg"><label>Phone</label><input id="r-phone" type="text"></div>
+    </div>
+    <button class="btn" onclick="submitAuth()">Login</button>
+    <div class="reg-link" id="toggle-link">New customer? <a onclick="toggleMode()">Register here</a></div>
+  </div>
+  <div style="text-align:center;margin-top:12px"><a href="/" style="color:#c9a84c;font-size:.82rem">← Back to Portal Hub</a></div>
+</div>
+
+<!-- MAIN PORTAL -->
+<div id="portal" class="container hidden">
+  <div class="grid3">
+    <div class="stat"><div class="n" id="s-bookings">0</div><div class="l">MY BOOKINGS</div></div>
+    <div class="stat"><div class="n" id="s-active">0</div><div class="l">ACTIVE RIDES</div></div>
+    <div class="stat"><div class="n" id="s-completed">0</div><div class="l">COMPLETED</div></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('quote')">Get Quote</div>
+    <div class="tab" onclick="showTab('book')">Book a Ride</div>
+    <div class="tab" onclick="showTab('bookings')">My Bookings</div>
+    <div class="tab" onclick="showTab('track')">Track / Rate</div>
+  </div>
+
+  <!-- QUOTE TAB -->
+  <div id="tab-quote">
+    <div class="card">
+      <h2>Get an Instant Quote</h2>
+      <div id="quote-msg"></div>
+      <div class="form-row">
+        <div class="fg"><label>Pickup Postcode</label><input id="q-from" value="S1 1AB"></div>
+        <div class="fg"><label>Dropoff Postcode</label><input id="q-to" value="M90 1QX"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>Vehicle Category</label>
+          <select id="q-cat">
+            <option value="prestige">Prestige (Executive/Luxury)</option>
+            <option value="minibus">Minibus (up to 24 seats)</option>
+            <option value="coaches">Coach (44+ seats)</option>
+            <option value="taxi">Taxi (standard)</option>
+          </select>
+        </div>
+        <div class="fg"><label>Passengers</label><input id="q-pax" type="number" value="2" min="1"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>Date</label><input id="q-date" type="date"></div>
+        <div class="fg"><label>Time</label><input id="q-time" type="time" value="09:00"></div>
+      </div>
+      <div class="fg"><label>Promo Code (optional)</label><input id="q-coupon" placeholder="e.g. AIRPORT15"></div>
+      <button class="btn" onclick="getQuote()">Calculate Quote</button>
+      <div id="quote-result" class="hidden"></div>
+    </div>
+  </div>
+
+  <!-- BOOK TAB -->
+  <div id="tab-book" class="hidden">
+    <div class="card">
+      <h2>Book a Ride</h2>
+      <div id="book-msg"></div>
+      <div class="form-row">
+        <div class="fg"><label>Pickup Postcode</label><input id="b-from" value="S1 1AB"></div>
+        <div class="fg"><label>Dropoff Postcode</label><input id="b-to" value="M90 1QX"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>Vehicle Category</label>
+          <select id="b-cat">
+            <option value="prestige">Prestige</option>
+            <option value="minibus">Minibus</option>
+            <option value="coaches">Coach</option>
+            <option value="taxi">Taxi</option>
+          </select>
+        </div>
+        <div class="fg"><label>Passengers</label><input id="b-pax" type="number" value="2" min="1"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>Date</label><input id="b-date" type="date"></div>
+        <div class="fg"><label>Time</label><input id="b-time" type="time" value="09:00"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>Booking Type</label>
+          <select id="b-type"><option value="scheduled">Scheduled</option><option value="current">ASAP (Now)</option></select>
+        </div>
+        <div class="fg"><label>Promo Code</label><input id="b-coupon" placeholder="e.g. AIRPORT15"></div>
+      </div>
+      <div class="fg"><label>Notes</label><textarea id="b-notes" rows="2" placeholder="Any special instructions..."></textarea></div>
+      <button class="btn" onclick="bookRide()">Confirm Booking</button>
+    </div>
+  </div>
+
+  <!-- BOOKINGS TAB -->
+  <div id="tab-bookings" class="hidden">
+    <div class="card">
+      <h2>My Bookings</h2>
+      <button class="btn btn-outline btn-sm" style="margin-bottom:16px" onclick="loadBookings()">Refresh</button>
+      <div id="bookings-list"><p style="color:#999;font-size:.85rem">Loading...</p></div>
+    </div>
+  </div>
+
+  <!-- TRACK TAB -->
+  <div id="tab-track" class="hidden">
+    <div class="card">
+      <h2>Track Ride / Rate Driver</h2>
+      <div class="fg"><label>Booking ID</label>
+        <div style="display:flex;gap:8px">
+          <input id="track-id" placeholder="bk-xxxxxxxx">
+          <button class="btn btn-sm" onclick="trackRide()" style="width:auto;white-space:nowrap">Track</button>
+        </div>
+      </div>
+      <div id="track-result"></div>
+    </div>
+    <div class="card" id="rate-card" style="display:none">
+      <h2>Rate Your Driver</h2>
+      <div class="fg"><label>Rating (1–5 stars)</label>
+        <select id="rate-val"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select>
+      </div>
+      <div class="fg"><label>Feedback (optional)</label><textarea id="rate-feedback" rows="2"></textarea></div>
+      <button class="btn" onclick="rateDriver()">Submit Rating</button>
+      <div id="rate-msg"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let isRegister = false, currentBookingId = null;
+const tok = () => localStorage.getItem('rp_cust_token');
+const ah = () => ({ 'Content-Type':'application/json','Authorization':'Bearer '+tok() });
+
+async function api(method, path, body) {
+  const r = await fetch(path, { method, headers: ah(), body: body ? JSON.stringify(body) : undefined });
+  return r.json();
+}
+
+function toggleMode() {
+  isRegister = !isRegister;
+  document.getElementById('form-title').textContent = isRegister ? 'Create Account' : 'Customer Login';
+  document.getElementById('reg-fields').classList.toggle('hidden', !isRegister);
+  document.getElementById('toggle-link').innerHTML = isRegister ? 'Already have an account? <a onclick="toggleMode()">Login</a>' : 'New customer? <a onclick="toggleMode()">Register here</a>';
+}
+
+async function submitAuth() {
+  const email = document.getElementById('l-email').value;
+  const password = document.getElementById('l-pass').value;
+  let d;
+  if (isRegister) {
+    d = await fetch('/api/auth/register/customer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password, fullName: document.getElementById('r-name').value, phone: document.getElementById('r-phone').value }) }).then(r=>r.json());
+  } else {
+    d = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password, role:'customer' }) }).then(r=>r.json());
+  }
+  if (d.success) {
+    localStorage.setItem('rp_cust_token', d.token);
+    localStorage.setItem('rp_cust_name', d.user?.fullName || email);
+    showPortal();
+  } else {
+    document.getElementById('msg').innerHTML = `<div class="alert alert-e">${d.message}</div>`;
+  }
+}
+
+function logout() {
+  localStorage.removeItem('rp_cust_token');
+  location.reload();
+}
+
+function showPortal() {
+  document.getElementById('login-wrap').classList.add('hidden');
+  document.getElementById('portal').classList.remove('hidden');
+  document.getElementById('btn-logout').classList.remove('hidden');
+  document.getElementById('nav-name').classList.remove('hidden');
+  document.getElementById('nav-name').textContent = localStorage.getItem('rp_cust_name') || '';
+  loadDashboard();
+  loadBookings();
+  // set default date
+  const d = new Date(); d.setDate(d.getDate()+1);
+  const ds = d.toISOString().slice(0,10);
+  document.getElementById('q-date').value = ds;
+  document.getElementById('b-date').value = ds;
+}
+
+async function loadDashboard() {
+  const d = await api('GET', '/api/customer/bookings');
+  if (!d.data) return;
+  document.getElementById('s-bookings').textContent = d.total;
+  document.getElementById('s-active').textContent = d.data.filter(b=>['pending','accepted'].includes(b.status)).length;
+  document.getElementById('s-completed').textContent = d.data.filter(b=>b.status==='completed').length;
+}
+
+async function getQuote() {
+  const r = await api('POST', '/api/customer/quote', {
+    pickupPostcode: document.getElementById('q-from').value,
+    dropoffPostcode: document.getElementById('q-to').value,
+    vehicleCategory: document.getElementById('q-cat').value,
+    passengers: +document.getElementById('q-pax').value,
+    bookingType: 'scheduled',
+    date: document.getElementById('q-date').value,
+    time: document.getElementById('q-time').value,
+    couponCode: document.getElementById('q-coupon').value || undefined
+  });
+  const el = document.getElementById('quote-result');
+  el.classList.remove('hidden');
+  if (r.success) {
+    const c = r.data.calculation;
+    el.innerHTML = `<div class="quote-result">
+      <strong>£${c.total}</strong> estimated fare<br>
+      <small style="color:#888">${c.estimatedDistanceMiles} miles · ${Math.round(c.estimatedHours*60)} min · ${c.breakdown}${c.discount>0?' · Discount: £'+c.discount:''}</small>
+    </div>`;
+  } else {
+    el.innerHTML = `<div class="alert alert-e">${r.message}</div>`;
+  }
+}
+
+async function bookRide() {
+  const r = await api('POST', '/api/customer/bookings', {
+    pickupPostcode: document.getElementById('b-from').value,
+    dropoffPostcode: document.getElementById('b-to').value,
+    vehicleCategory: document.getElementById('b-cat').value,
+    passengers: +document.getElementById('b-pax').value,
+    bookingType: document.getElementById('b-type').value,
+    date: document.getElementById('b-date').value,
+    time: document.getElementById('b-time').value,
+    notes: document.getElementById('b-notes').value || undefined,
+    couponCode: document.getElementById('b-coupon').value || undefined
+  });
+  const el = document.getElementById('book-msg');
+  if (r.success) {
+    el.innerHTML = `<div class="alert alert-s">Booking confirmed! Reference: <strong>${r.data.reference}</strong> · Fare: <strong>£${r.calculation.total}</strong><br><small>Job dispatched to affiliates automatically.</small></div>`;
+    loadDashboard(); loadBookings();
+  } else {
+    el.innerHTML = `<div class="alert alert-e">${r.message}</div>`;
+  }
+}
+
+async function loadBookings() {
+  const d = await api('GET', '/api/customer/bookings');
+  const el = document.getElementById('bookings-list');
+  if (!d.data || !d.data.length) { el.innerHTML = '<p style="color:#999;font-size:.85rem">No bookings yet.</p>'; return; }
+  const statusBadge = s => {
+    const m = {pending:'b-yellow',accepted:'b-blue',completed:'b-green',cancelled:'b-red',rejected:'b-red'};
+    return `<span class="badge ${m[s]||'b-gray'}">${s.toUpperCase()}</span>`;
+  };
+  el.innerHTML = `<table><tr><th>Reference</th><th>Route</th><th>Vehicle</th><th>Date</th><th>Fare</th><th>Status</th><th>Actions</th></tr>
+  ${d.data.map(b=>`<tr>
+    <td><strong>${b.reference}</strong></td>
+    <td style="font-size:.78rem">${b.journey.pickupPostcode} → ${b.journey.dropoffPostcode}</td>
+    <td>${b.vehicleCategory}</td>
+    <td style="font-size:.78rem">${b.journey.date||'ASAP'} ${b.journey.time||''}</td>
+    <td>£${b.estimatedFare||'—'}</td>
+    <td>${statusBadge(b.status)}</td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-sm btn-outline" onclick="setTrack('${b.id}')">Track</button>
+      ${b.status==='completed'?`<button class="btn btn-sm" onclick="setRate('${b.id}')" style="margin-left:4px">Rate</button>`:''}
+      ${['pending','accepted'].includes(b.status)?`<button class="btn btn-sm btn-danger" onclick="cancelBooking('${b.id}')" style="margin-left:4px">Cancel</button>`:''}
+    </td>
+  </tr>`).join('')}</table>`;
+}
+
+function setTrack(id) { document.getElementById('track-id').value = id; showTab('track'); trackRide(); }
+function setRate(id) { currentBookingId = id; document.getElementById('track-id').value = id; showTab('track'); trackRide(); }
+
+async function trackRide() {
+  const id = document.getElementById('track-id').value.trim();
+  if (!id) return;
+  currentBookingId = id;
+  const r = await api('GET', `/api/customer/bookings/${id}/track`);
+  const el = document.getElementById('track-result');
+  const rc = document.getElementById('rate-card');
+  if (r.success) {
+    const d = r.data;
+    const statusLabels = {
+      pending:'Awaiting dispatch',needs_allocation:'Finding driver',driver_assigned:'Driver assigned',
+      vehicle_assigned:'Vehicle assigned',driver_accepted:'Driver confirmed',on_route:'Driver on the way',
+      arrived_pickup:'Driver arrived',passenger_onboard:'Onboard',in_progress:'Ride in progress',
+      completed:'Ride complete',cancelled:'Cancelled'
+    };
+    el.innerHTML = `<div class="track-box">
+      <div style="font-size:.8rem;color:#999">RIDE STATUS</div>
+      <div class="track-status">${statusLabels[d.jobStatus]||d.jobStatus||'Pending dispatch'}</div>
+      ${d.driver ? `<div class="track-driver"><strong>${d.driver.name}</strong> · ⭐ ${d.driver.rating} · 📞 ${d.driver.phone}</div>
+      ${d.driver.latitude ? `<div style="font-size:.78rem;color:#999;margin-top:6px">Location: ${d.driver.latitude.toFixed(4)}, ${d.driver.longitude.toFixed(4)}<br><small>Updated: ${d.driver.lastLocationUpdate ? new Date(d.driver.lastLocationUpdate).toLocaleTimeString() : 'N/A'}</small></div>` : '<div style="font-size:.78rem;color:#aaa;margin-top:6px">Awaiting driver location</div>'}` : '<div style="color:#999;margin-top:8px;font-size:.85rem">No driver assigned yet</div>'}
+    </div>`;
+    rc.style.display = d.jobStatus === 'completed' ? 'block' : 'none';
+  } else {
+    el.innerHTML = `<div class="alert alert-e">${r.message}</div>`;
+  }
+}
+
+async function rateDriver() {
+  if (!currentBookingId) return;
+  const r = await api('POST', `/api/customer/bookings/${currentBookingId}/rate`, {
+    rating: +document.getElementById('rate-val').value,
+    feedback: document.getElementById('rate-feedback').value
+  });
+  document.getElementById('rate-msg').innerHTML = r.success
+    ? `<div class="alert alert-s" style="margin-top:12px">${r.message}</div>`
+    : `<div class="alert alert-e" style="margin-top:12px">${r.message}</div>`;
+}
+
+async function cancelBooking(id) {
+  if (!confirm('Cancel this booking?')) return;
+  const r = await api('PUT', `/api/customer/bookings/${id}/cancel`);
+  if (r.success) loadBookings(); else alert(r.message);
+}
+
+function showTab(name) {
+  ['quote','book','bookings','track'].forEach(t => document.getElementById('tab-'+t).classList.add('hidden'));
+  document.getElementById('tab-'+name).classList.remove('hidden');
+  document.querySelectorAll('.tab').forEach((el,i)=>{ el.classList.toggle('active', ['quote','book','bookings','track'][i]===name) });
+  if (name==='bookings') loadBookings();
+}
+
+window.onload = () => { if (tok()) showPortal(); };
+</script>
+</body>
+</html>

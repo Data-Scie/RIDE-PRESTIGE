@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Set-Location \"c:\\\\Users\\\\act22aa\\\\Desktop\\\\backend\\\\ride-prestige\"; $env:NODE_OPTIONS=\"--max-old-space-size=4096\"; Start-Process powershell -ArgumentList '-NoExit', '-Command', '$env:NODE_OPTIONS=\"--max-old-space-size=4096\"; Set-Location \"c:\\\\Users\\\\act22aa\\\\Desktop\\\\backend\\\\ride-prestige\"; npm run dev' -WindowStyle Normal; Write-Host \"Frontend launched with 4GB heap\")",
+      "PowerShell(Set-Location \"c:\\\\Users\\\\act22aa\\\\Desktop\\\\backend\\\\ride-prestige\"; $env:NODE_OPTIONS=\"--max-old-space-size=4096\"; npx next dev --no-turbopack --port 3000 2>&1 | Select-Object -First 30)"
+    ]
+  }
+}
