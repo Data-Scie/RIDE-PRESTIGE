@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Ride Prestige Affiliate & Driver",
+    "slug": "ride-prestige-affiliate-driver",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "rpaffiliate",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#030303"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#030303",
+          "resizeMode": "contain"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

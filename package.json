@@ -1,0 +1,33 @@
+{
+  "name": "ride-prestige-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev":                "concurrently --kill-others-on-fail --names api,web --prefix-colors cyan,magenta \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:all":            "concurrently --kill-others-on-fail --names api,web,customer,operator --prefix-colors cyan,magenta,green,yellow \"npm run dev:api\" \"npm run dev:web\" \"npm exec --workspace=apps/mobile-customer -- expo start --web --port 8081\" \"npm exec --workspace=apps/mobile-operator -- expo start --web --port 8082\"",
+    "dev:web":            "npm run dev            --workspace=apps/web",
+    "dev:api":            "npm run dev            --workspace=apps/api",
+    "dev:mobile-customer":"npm run start          --workspace=apps/mobile-customer",
+    "dev:mobile-operator":"npm run start          --workspace=apps/mobile-operator",
+    "build:web":          "npm run build          --workspace=apps/web",
+    "build:api":          "npm run build          --workspace=apps/api",
+    "lint:web":           "npm run lint           --workspace=apps/web",
+    "lint:mobile":        "npm run lint --workspace=apps/mobile-customer && npm run lint --workspace=apps/mobile-operator",
+    "check":              "npm run build:api && npm run build:web && npm run lint:mobile",
+    "db:migrate":         "npm run db:migrate     --workspace=apps/api",
+    "db:seed":            "npm run db:seed        --workspace=apps/api",
+    "db:studio":          "npm run db:studio      --workspace=apps/api",
+    "db:generate":        "npm run db:generate    --workspace=apps/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

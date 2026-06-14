@@ -57,3 +57,8 @@ ios/
 .cache/
 coverage/
 .nyc_output/
+
+# Local generated files
+tmp/
+artifacts/local-dev/
+artifacts/live-demo/demo-account.json

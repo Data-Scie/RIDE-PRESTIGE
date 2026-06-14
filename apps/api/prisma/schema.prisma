@@ -1,0 +1,432 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Admin Users ──────────────────────────────────────────────────────────────
+
+model Admin {
+  id           String   @id
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   // super_admin | admin | ops
+  createdAt    DateTime @default(now())
+}
+
+// ─── Customers ────────────────────────────────────────────────────────────────
+
+model Customer {
+  id            String   @id
+  fullName      String
+  email         String   @unique
+  phone         String
+  passwordHash  String
+  isVerified    Boolean  @default(false)
+  totalBookings Int      @default(0)
+  createdAt     DateTime @default(now())
+}
+
+// ─── Affiliates ───────────────────────────────────────────────────────────────
+
+model Affiliate {
+  id                    String   @id
+  companyName           String
+  tradingName           String
+  contactPerson         String
+  email                 String   @unique
+  phone                 String
+  passwordHash          String
+  address               String
+  city                  String
+  postcode              String
+  operatorLicenceNumber String
+  companyRegNumber      String
+  vatNumber             String?
+  serviceAreas          String[]
+  bankAccountName       String
+  sortCode              String
+  accountNumber         String
+  isApproved            Boolean  @default(false)
+  rating                Float    @default(0)
+  totalJobs             Int      @default(0)
+  totalEarnings         Float    @default(0)
+  createdAt             DateTime @default(now())
+
+  drivers       Driver[]
+  fleetVehicles FleetVehicle[]
+}
+
+// ─── Drivers ─────────────────────────────────────────────────────────────────
+
+model Driver {
+  id                     String    @id
+  fullName               String
+  email                  String    @unique
+  phone                  String
+  passwordHash           String
+  address                String
+  city                   String
+  postcode               String
+  dateOfBirth            String
+  drivingLicenceNumber   String
+  privateHireBadgeNumber String
+  nationalInsurance      String?
+  driverType             String    // affiliateDriver | independentDriver
+  affiliateId            String?
+  affiliate              Affiliate? @relation(fields: [affiliateId], references: [id])
+  status                 String    @default("offline") // available | busy | offline
+  rating                 Float     @default(0)
+  totalJobs              Int       @default(0)
+  totalEarnings          Float     @default(0)
+  documentsStatus        String    @default("missing") // approved | pending | rejected | expired | missing
+  assignedVehicleId      String?
+  isApproved             Boolean   @default(false)
+  applicationStatus      String    @default("pending") // pending | approved | rejected | suspended
+  joinedDate             DateTime  @default(now())
+  latitude               Float?
+  longitude              Float?
+  lastLocationUpdate     DateTime?
+  updatedAt              DateTime  @updatedAt
+
+  documents DriverDocument[]
+}
+
+// ─── Driver Documents ─────────────────────────────────────────────────────────
+
+model DriverDocument {
+  id               String   @id
+  driverId         String
+  driver           Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  type             String
+  label            String
+  status           String   @default("missing") // approved | pending | rejected | expired | missing
+  expiryDate       String?
+  uploadedAt       DateTime?
+  rejectionReason  String?
+}
+
+// ─── Operational Fleet Vehicles ───────────────────────────────────────────────
+
+model FleetVehicle {
+  id                String    @id
+  make              String
+  model             String
+  year              Int
+  registration      String    @unique
+  vehicleType       String    // Saloon | Estate | MPV | Executive | Minibus | Coach | Luxury
+  vehicleCategory   String    // prestige | minibus | coaches | taxi
+  colour            String
+  passengerCapacity Int
+  luggageCapacity   Int
+  motExpiry         String
+  insuranceExpiry   String
+  phvLicenceExpiry  String
+  status            String    @default("available") // available | in_use | maintenance | offline
+  affiliateId       String?
+  affiliate         Affiliate? @relation(fields: [affiliateId], references: [id])
+  assignedDriverId  String?
+}
+
+// ─── Website Fleet (CMS) ─────────────────────────────────────────────────────
+
+model WebsiteVehicle {
+  id           String   @id
+  categorySlug String   // prestige | minibus | coaches | taxi
+  name         String
+  description  String
+  passengers   Int
+  luggage      String?
+  features     String[]
+  imageUrl     String
+  available    Boolean  @default(true)
+  priceNote    String?
+  badge        String?
+}
+
+model WebsiteFleetCategory {
+  id          String  @id
+  slug        String  @unique
+  name        String
+  tagline     String
+  description String
+  icon        String
+  available   Boolean @default(true)
+  order       Int
+}
+
+// ─── Jobs (operational rides) ─────────────────────────────────────────────────
+
+model Job {
+  id                    String    @id
+  bookingRef            String
+  bookingId             String?
+  customerId            String?
+  customerName          String
+  customerPhone         String
+  customerEmail         String?
+  pickupAddress         String
+  dropoffAddress        String
+  stops                 Json      @default("[]")
+  dateTime              DateTime
+  passengerCount        Int       @default(1)
+  luggageCount          Int       @default(0)
+  vehicleTypeRequested  String
+  vehicleCategory       String
+  fareAmount            Float
+  commissionAmount      Float
+  affiliatePayoutAmount Float
+  driverPayoutAmount    Float
+  distance              String
+  estimatedDuration     String
+  specialInstructions   String?
+  flightNumber          String?
+  trainNumber           String?
+  status                String    // JobStatus values
+  affiliateId           String?
+  assignedDriverId      String?
+  assignedVehicleId     String?
+  completedAt           DateTime?
+  customerRating        Float?
+  customerFeedback      String?
+  driverRating          Float?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+// ─── Bookings (website-originated) ──────────────────────────────────────────
+
+model Booking {
+  id              String   @id
+  reference       String   @unique
+  status          String   @default("pending")
+  customerId      String?
+  customerData    Json     // { fullName, phone, email }
+  journeyData     Json     // { pickupPostcode, dropoffPostcode, bookingType, date?, time?, passengers, notes? }
+  vehicleCategory String
+  vehicleId       String?
+  estimatedMiles  Float?
+  estimatedFare   Float?
+  couponCode      String?
+  discountAmount  Float?
+  adminNotes      String?
+  jobId           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ─── Earnings ─────────────────────────────────────────────────────────────────
+
+model EarningEntry {
+  id                 String   @id
+  jobId              String
+  bookingRef         String
+  entityId           String   // polymorphic — affiliateId or driverId
+  entityType         String   // affiliate | driver
+  date               DateTime
+  grossAmount        Float
+  commissionDeducted Float    @default(0)
+  netAmount          Float
+  status             String   @default("pending") // paid | pending | processing
+  createdAt          DateTime @default(now())
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id            String   @id @default(uuid())
+  recipientId   String   // polymorphic — any userId
+  recipientRole String   // admin | ops | affiliate | driver | customer
+  title         String
+  body          String
+  type          String   // job | system | earnings | document | booking
+  isRead        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
+
+// ─── Support Tickets ─────────────────────────────────────────────────────────
+
+model SupportTicket {
+  id               String   @id
+  reference        String   @unique
+  type             String   // enquiry | complaint | booking_support | other
+  status           String   @default("open") // open | in_progress | resolved
+  customerData     Json     // { name, email, phone? }
+  bookingReference String?
+  subject          String
+  message          String
+  adminNotes       String?
+  reply            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// ─── Pricing Config ───────────────────────────────────────────────────────────
+
+model PricingConfig {
+  id                      String @id @default("default")
+  prestigeRatePerMile     Float
+  prestigeHourlyRate      Float
+  minibusRatePerMile      Float
+  minibusRate16Seater     Float
+  minibusRate24Seater     Float
+  minibusRate32Seater     Float
+  coachesRatePerMile      Float
+  coachesHourlyRate       Float
+  taxiRatePerMile         Float
+  taxiMinimumFare         Float
+  driverSearchRadiusMiles Float
+  commissionPercentage    Float
+  driverPayoutPercentage  Float
+}
+
+// ─── Site Settings ────────────────────────────────────────────────────────────
+
+model SiteSettings {
+  id                 String  @id @default("default")
+  siteName           String
+  tagline            String
+  heroSubtitle       String
+  logoUrl            String
+  faviconUrl         String
+  brandColor         String
+  accentColor        String
+  contactEmail       String
+  phoneNumber        String
+  address            String
+  socialLinks        Json    // { twitter?, instagram?, linkedin?, facebook? }
+  seoDefaults        Json    // { title, description, ogImage }
+  emailNotifications Boolean @default(true)
+  smsNotifications   Boolean @default(false)
+}
+
+// ─── Navigation ───────────────────────────────────────────────────────────────
+
+model NavigationItem {
+  id      String  @id
+  label   String
+  href    String
+  visible Boolean @default(true)
+  order   Int
+}
+
+// ─── Promotions ───────────────────────────────────────────────────────────────
+
+model Promotion {
+  id            String  @id
+  title         String
+  description   String
+  couponCode    String?
+  discountType  String  // percentage | fixed
+  discountValue Float
+  startDate     String
+  endDate       String
+  active        Boolean @default(true)
+  imageUrl      String?
+  terms         String
+  category      String? // prestige | minibus | coaches | taxi | all
+}
+
+// ─── FAQ Items ────────────────────────────────────────────────────────────────
+
+model FAQItem {
+  id       String  @id
+  question String
+  answer   String
+  category String
+  order    Int
+  active   Boolean @default(true)
+}
+
+// ─── Cancellation Policy ──────────────────────────────────────────────────────
+
+model CancellationPolicy {
+  id                 String @id @default("default")
+  minHoursBeforeRide Int    @default(8)
+  refundWindowHours  Int    @default(48)
+  message            String @default("Cancellations made more than 8 hours before your scheduled pickup are eligible for a full refund. Cancellations made within 8 hours of the pickup time are non-refundable. Refunds are processed within 48 hours of approval.")
+}
+
+// ─── Website Pages (CMS) ──────────────────────────────────────────────────────
+
+model WebsitePage {
+  id              String @id
+  slug            String @unique
+  title           String
+  seoTitle        String
+  metaDescription String
+  ogTitle         String
+  ogDescription   String
+  sectionsJson    Json   // PageSection[]
+}
+
+// ─── Vacancies ────────────────────────────────────────────────────────────────
+
+model Vacancy {
+  id           String   @id @default(uuid())
+  title        String
+  department   String
+  location     String
+  type         String   @default("full-time") // full-time | part-time | contract
+  description  String
+  requirements String
+  salary       String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}
+
+// ─── Courses ─────────────────────────────────────────────────────────────────
+
+model Course {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  duration    String
+  price       Float?
+  imageUrl    String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+// ─── Attributes ───────────────────────────────────────────────────────────────
+
+model Attribute {
+  id       String   @id @default(uuid())
+  key      String   @unique
+  label    String
+  type     String   @default("text") // text | number | boolean | select
+  options  String[]
+  category String   @default("vehicle") // vehicle | booking | driver
+  active   Boolean  @default(true)
+}
+
+// ─── Ride Status History ──────────────────────────────────────────────────────
+
+model RideStatusHistory {
+  id            String   @id @default(uuid())
+  jobId         String
+  fromStatus    String?
+  toStatus      String
+  changedBy     String?
+  changedByRole String?
+  notes         String?
+  createdAt     DateTime @default(now())
+}
+
+// ─── Driver Location History ──────────────────────────────────────────────────
+
+model DriverLocationHistory {
+  id         String   @id @default(uuid())
+  driverId   String
+  jobId      String?
+  latitude   Float
+  longitude  Float
+  speed      Float?
+  heading    Float?
+  accuracy   Float?
+  recordedAt DateTime @default(now())
+}

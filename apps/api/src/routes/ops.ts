@@ -1,0 +1,754 @@
+import { Router, Request, Response } from 'express';
+import { v4 as uuid } from 'uuid';
+import { Prisma } from '@prisma/client';
+import { authenticate, requireRole } from '../middleware/auth';
+import { prisma } from '../lib/db';
+import { applyCommission } from '../services/fareService';
+import { pushNotification } from '../services/notificationService';
+import type { Job, JobStatus, Stop } from '../types';
+
+const router = Router();
+router.use(authenticate, requireRole('admin', 'ops'));
+
+function shapeJob(j: {
+  id: string; bookingRef: string; bookingId: string | null; customerId: string | null;
+  customerName: string; customerPhone: string; customerEmail: string | null;
+  pickupAddress: string; dropoffAddress: string; stops: unknown;
+  dateTime: Date; passengerCount: number; luggageCount: number;
+  vehicleTypeRequested: string; vehicleCategory: string;
+  fareAmount: number; commissionAmount: number; affiliatePayoutAmount: number; driverPayoutAmount: number;
+  distance: string; estimatedDuration: string; specialInstructions: string | null;
+  flightNumber: string | null; trainNumber: string | null;
+  status: string; affiliateId: string | null; assignedDriverId: string | null; assignedVehicleId: string | null;
+  completedAt: Date | null; customerRating: number | null; customerFeedback: string | null; driverRating: number | null;
+  createdAt: Date; updatedAt: Date;
+}) {
+  return {
+    ...j,
+    stops: j.stops as Stop[],
+    dateTime: j.dateTime.toISOString(),
+    completedAt: j.completedAt?.toISOString() ?? null,
+    createdAt: j.createdAt.toISOString(),
+    updatedAt: j.updatedAt.toISOString(),
+  };
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/ops/dashboard:
+ *   get:
+ *     summary: Operations dashboard
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Ops stats }
+ */
+router.get('/dashboard', async (_req: Request, res: Response) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const [
+      activeRides, awaitingAffiliate, needsAllocation, completedToday,
+      totalDrivers, availableDrivers, totalAffiliates,
+      pendingDriverCount, pendingAffCount,
+    ] = await Promise.all([
+      prisma.job.count({ where: { status: { in: ['on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress'] } } }),
+      prisma.job.count({ where: { status: 'awaiting_affiliate' } }),
+      prisma.job.count({ where: { status: 'needs_allocation' } }),
+      prisma.job.count({ where: { status: 'completed', updatedAt: { gte: new Date(today) } } }),
+      prisma.driver.count(),
+      prisma.driver.count({ where: { status: 'available', isApproved: true } }),
+      prisma.affiliate.count(),
+      prisma.driver.count({ where: { applicationStatus: 'pending' } }),
+      prisma.affiliate.count({ where: { isApproved: false } }),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        activeRides, awaitingAffiliate, needsAllocation, completedToday,
+        totalDrivers, availableDrivers, totalAffiliates,
+        pendingApprovals: pendingDriverCount + pendingAffCount,
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+// ─── Rides / Jobs ─────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/ops/rides:
+ *   get:
+ *     summary: List all rides (ops view)
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string }
+ *       - in: query
+ *         name: affiliateId
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Rides }
+ */
+router.get('/rides', async (req: Request, res: Response) => {
+  try {
+    const { status, affiliateId } = req.query as Record<string, string>;
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    if (affiliateId) where.affiliateId = affiliateId;
+    const jobs = await prisma.job.findMany({ where, orderBy: { dateTime: 'desc' } });
+    const list = jobs.map(shapeJob);
+    res.json({ success: true, data: list, total: list.length });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/ops/rides/{id}:
+ *   get:
+ *     summary: Get a single ride with full context
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Ride with driver, affiliate, vehicle info }
+ */
+router.get('/rides/:id', async (req: Request, res: Response) => {
+  try {
+    const job = await prisma.job.findUnique({ where: { id: req.params.id } });
+    if (!job) { res.status(404).json({ success: false, message: 'Ride not found' }); return; }
+    const [driver, affiliate, vehicle] = await Promise.all([
+      job.assignedDriverId ? prisma.driver.findUnique({ where: { id: job.assignedDriverId } }) : null,
+      job.affiliateId ? prisma.affiliate.findUnique({ where: { id: job.affiliateId } }) : null,
+      job.assignedVehicleId ? prisma.fleetVehicle.findUnique({ where: { id: job.assignedVehicleId } }) : null,
+    ]);
+    const safeDriver = driver ? (({ passwordHash: _, ...d }) => d)(driver) : null;
+    const safeAffiliate = affiliate ? (({ passwordHash: _, ...a }) => a)(affiliate) : null;
+    res.json({ success: true, data: shapeJob(job), driver: safeDriver, affiliate: safeAffiliate, vehicle: vehicle ?? null });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/ops/rides:
+ *   post:
+ *     summary: Create a new ride / job manually
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [customerName, customerPhone, pickupAddress, dropoffAddress, dateTime, passengerCount, vehicleCategory, fareAmount]
+ *             properties:
+ *               customerName:      { type: string }
+ *               customerPhone:     { type: string }
+ *               customerEmail:     { type: string }
+ *               pickupAddress:     { type: string }
+ *               dropoffAddress:    { type: string }
+ *               dateTime:          { type: string, example: "2026-07-01T09:00:00Z" }
+ *               passengerCount:    { type: number }
+ *               luggageCount:      { type: number }
+ *               vehicleCategory:   { type: string, enum: [prestige, minibus, coaches, taxi] }
+ *               fareAmount:        { type: number }
+ *               specialInstructions: { type: string }
+ *               flightNumber:      { type: string }
+ *     responses:
+ *       201: { description: Job created }
+ */
+router.post('/rides', async (req: Request, res: Response) => {
+  try {
+    const b = req.body as Partial<Job>;
+    if (!b.customerName || !b.customerPhone || !b.pickupAddress || !b.dropoffAddress || !b.dateTime || !b.fareAmount) {
+      res.status(400).json({ success: false, message: 'Missing required fields' }); return;
+    }
+    const { commission, affiliatePayout, driverPayout } = applyCommission(b.fareAmount!);
+    const totalJobs = await prisma.job.count();
+    const ref = `RP-${new Date().getFullYear()}-${String(totalJobs + 2000).padStart(4, '0')}`;
+    const job = await prisma.job.create({
+      data: {
+        id: `job-${uuid()}`,
+        bookingRef: ref,
+        customerName: b.customerName!,
+        customerPhone: b.customerPhone!,
+        customerEmail: b.customerEmail,
+        pickupAddress: b.pickupAddress!,
+        dropoffAddress: b.dropoffAddress!,
+        stops: (b.stops ?? []) as unknown as Prisma.InputJsonValue,
+        dateTime: new Date(b.dateTime!),
+        passengerCount: b.passengerCount ?? 1,
+        luggageCount: b.luggageCount ?? 0,
+        vehicleTypeRequested: b.vehicleTypeRequested ?? 'Executive',
+        vehicleCategory: b.vehicleCategory ?? 'prestige',
+        fareAmount: b.fareAmount!,
+        commissionAmount: commission,
+        affiliatePayoutAmount: affiliatePayout,
+        driverPayoutAmount: driverPayout,
+        distance: b.distance ?? 'TBC',
+        estimatedDuration: b.estimatedDuration ?? 'TBC',
+        specialInstructions: b.specialInstructions,
+        flightNumber: b.flightNumber,
+        trainNumber: b.trainNumber,
+        status: 'awaiting_affiliate',
+      },
+    });
+    // Notify all approved affiliates
+    const approvedAffiliates = await prisma.affiliate.findMany({ where: { isApproved: true } });
+    for (const a of approvedAffiliates) {
+      await pushNotification(a.id, 'affiliate', 'New Job Available', `Job ${ref} is available — ${job.pickupAddress} → ${job.dropoffAddress}`, 'job');
+    }
+    res.status(201).json({ success: true, data: shapeJob(job) });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/ops/rides/{id}/status:
+ *   put:
+ *     summary: Update a ride status
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status: { type: string, enum: [awaiting_affiliate, accepted_by_affiliate, needs_allocation, driver_assigned, vehicle_assigned, driver_accepted, on_route, arrived_pickup, passenger_onboard, in_progress, completed, cancelled, rejected] }
+ *     responses:
+ *       200: { description: Updated ride }
+ */
+router.put('/rides/:id/status', async (req: Request, res: Response) => {
+  try {
+    const job = await prisma.job.findUnique({ where: { id: req.params.id } });
+    if (!job) { res.status(404).json({ success: false, message: 'Ride not found' }); return; }
+    const { status } = req.body as { status: JobStatus };
+    const updated = await prisma.job.update({ where: { id: job.id }, data: { status } });
+
+    // Auto-create earnings when completed
+    if (status === 'completed' && job.affiliateId && job.assignedDriverId) {
+      const now = new Date();
+      await Promise.all([
+        prisma.earningEntry.create({
+          data: {
+            id: `earn-${uuid()}`, jobId: job.id, bookingRef: job.bookingRef,
+            entityId: job.affiliateId!, entityType: 'affiliate',
+            date: now, grossAmount: job.affiliatePayoutAmount,
+            commissionDeducted: 0, netAmount: job.affiliatePayoutAmount, status: 'pending',
+          },
+        }),
+        prisma.earningEntry.create({
+          data: {
+            id: `earn-${uuid()}`, jobId: job.id, bookingRef: job.bookingRef,
+            entityId: job.assignedDriverId!, entityType: 'driver',
+            date: now, grossAmount: job.driverPayoutAmount,
+            commissionDeducted: 0, netAmount: job.driverPayoutAmount, status: 'pending',
+          },
+        }),
+      ]);
+      // Update linked booking
+      const bk = await prisma.booking.findFirst({ where: { jobId: job.id } });
+      if (bk) {
+        await prisma.booking.update({ where: { id: bk.id }, data: { status: 'completed' } });
+      }
+    }
+    res.json({ success: true, data: shapeJob(updated) });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/ops/rides/{id}/assign-affiliate:
+ *   put:
+ *     summary: Assign an affiliate to a ride
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               affiliateId: { type: string }
+ *     responses:
+ *       200: { description: Updated }
+ */
+router.put('/rides/:id/assign-affiliate', async (req: Request, res: Response) => {
+  try {
+    const job = await prisma.job.findUnique({ where: { id: req.params.id } });
+    if (!job) { res.status(404).json({ success: false, message: 'Ride not found' }); return; }
+    const { affiliateId } = req.body as { affiliateId: string };
+    const aff = await prisma.affiliate.findFirst({ where: { id: affiliateId, isApproved: true } });
+    if (!aff) { res.status(404).json({ success: false, message: 'Affiliate not found or not approved' }); return; }
+    const updated = await prisma.job.update({
+      where: { id: job.id },
+      data: { affiliateId, status: 'needs_allocation' },
+    });
+    await pushNotification(affiliateId, 'affiliate', 'Job Assigned', `Job ${job.bookingRef} has been assigned to you. Please allocate driver and vehicle.`, 'job');
+    res.json({ success: true, data: shapeJob(updated) });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+// ─── Operational Fleet Vehicles ───────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/ops/vehicles:
+ *   get:
+ *     summary: List all operational fleet vehicles
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Fleet vehicles }
+ */
+router.get('/vehicles', async (_req: Request, res: Response) => {
+  try {
+    const vehicles = await prisma.fleetVehicle.findMany();
+    res.json({ success: true, data: vehicles, total: vehicles.length });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/ops/vehicles:
+ *   post:
+ *     summary: Add an operational vehicle to the fleet
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [make, model, year, registration, vehicleType, vehicleCategory, colour, passengerCapacity, luggageCapacity]
+ *             properties:
+ *               make:              { type: string }
+ *               model:             { type: string }
+ *               year:              { type: number }
+ *               registration:      { type: string }
+ *               vehicleType:       { type: string, enum: [Saloon, Estate, MPV, Executive, Minibus, Coach, Luxury] }
+ *               vehicleCategory:   { type: string, enum: [prestige, minibus, coaches, taxi] }
+ *               colour:            { type: string }
+ *               passengerCapacity: { type: number }
+ *               luggageCapacity:   { type: number }
+ *               motExpiry:         { type: string }
+ *               insuranceExpiry:   { type: string }
+ *               phvLicenceExpiry:  { type: string }
+ *               affiliateId:       { type: string }
+ *     responses:
+ *       201: { description: Vehicle added }
+ */
+router.post('/vehicles', async (req: Request, res: Response) => {
+  try {
+    const { id: _id, status: _s, ...b } = req.body;
+    const v = await prisma.fleetVehicle.create({ data: { id: `fv-${uuid()}`, status: 'available', ...b } });
+    res.status(201).json({ success: true, data: v });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/ops/vehicles/{id}:
+ *   put:
+ *     summary: Update an operational vehicle
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Updated }
+ */
+router.put('/vehicles/:id', async (req: Request, res: Response) => {
+  try {
+    const exists = await prisma.fleetVehicle.findUnique({ where: { id: req.params.id } });
+    if (!exists) { res.status(404).json({ success: false, message: 'Vehicle not found' }); return; }
+    const { id: _id, ...data } = req.body;
+    const v = await prisma.fleetVehicle.update({ where: { id: req.params.id }, data });
+    res.json({ success: true, data: v });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+// ─── Affiliates ───────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/ops/affiliates:
+ *   get:
+ *     summary: List affiliates (ops view)
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Affiliates }
+ */
+router.get('/affiliates', async (_req: Request, res: Response) => {
+  try {
+    const affiliates = await prisma.affiliate.findMany();
+    const list = await Promise.all(affiliates.map(async ({ passwordHash: _, ...a }) => ({
+      ...a,
+      driverCount:  await prisma.driver.count({ where: { affiliateId: a.id } }),
+      vehicleCount: await prisma.fleetVehicle.count({ where: { affiliateId: a.id } }),
+    })));
+    res.json({ success: true, data: list });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/ops/affiliates/{id}:
+ *   get:
+ *     summary: Get affiliate detail with their drivers and vehicles
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Affiliate detail }
+ */
+router.get('/affiliates/:id', async (req: Request, res: Response) => {
+  try {
+    const a = await prisma.affiliate.findUnique({ where: { id: req.params.id } });
+    if (!a) { res.status(404).json({ success: false, message: 'Affiliate not found' }); return; }
+    const { passwordHash: _, ...safe } = a;
+    const [affDrivers, affVehicles, affJobs] = await Promise.all([
+      prisma.driver.findMany({ where: { affiliateId: a.id }, include: { documents: true } }),
+      prisma.fleetVehicle.findMany({ where: { affiliateId: a.id } }),
+      prisma.job.findMany({ where: { affiliateId: a.id } }),
+    ]);
+    res.json({
+      success: true,
+      data: safe,
+      drivers: affDrivers.map(({ passwordHash: _p, ...d }) => d),
+      vehicles: affVehicles,
+      jobs: affJobs.map(shapeJob),
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/affiliates/:id/approve', async (req: Request, res: Response) => {
+  try {
+    const exists = await prisma.affiliate.findUnique({ where: { id: req.params.id } });
+    if (!exists) { res.status(404).json({ success: false, message: 'Affiliate not found' }); return; }
+    const a = await prisma.affiliate.update({ where: { id: req.params.id }, data: { isApproved: true } });
+    const { passwordHash: _, ...safe } = a;
+    res.json({ success: true, message: 'Affiliate approved', data: safe });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/affiliates/:id/suspend', async (req: Request, res: Response) => {
+  try {
+    const exists = await prisma.affiliate.findUnique({ where: { id: req.params.id } });
+    if (!exists) { res.status(404).json({ success: false, message: 'Affiliate not found' }); return; }
+    const a = await prisma.affiliate.update({ where: { id: req.params.id }, data: { isApproved: false } });
+    const { passwordHash: _, ...safe } = a;
+    res.json({ success: true, message: 'Affiliate suspended', data: safe });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+// ─── Drivers ──────────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/ops/drivers:
+ *   get:
+ *     summary: List all drivers (ops view)
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Drivers }
+ */
+router.get('/drivers', async (_req: Request, res: Response) => {
+  try {
+    const drivers = await prisma.driver.findMany({
+      include: {
+        documents: true,
+        affiliate: { select: { id: true, companyName: true } },
+      },
+      orderBy: { joinedDate: 'desc' },
+    });
+    const list = drivers.map(({ passwordHash: _, ...d }) => d);
+    res.json({ success: true, data: list, total: list.length });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/ops/drivers/{id}:
+ *   get:
+ *     summary: Get driver detail
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Driver }
+ */
+router.get('/drivers/:id', async (req: Request, res: Response) => {
+  try {
+    const d = await prisma.driver.findUnique({
+      where: { id: req.params.id },
+      include: {
+        documents: true,
+        affiliate: { select: { id: true, companyName: true } },
+      },
+    });
+    if (!d) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+    const { passwordHash: _, ...safe } = d;
+    const [driverJobs, driverEarnings] = await Promise.all([
+      prisma.job.findMany({ where: { assignedDriverId: d.id } }),
+      prisma.earningEntry.findMany({ where: { entityId: d.id } }),
+    ]);
+    res.json({
+      success: true,
+      data: safe,
+      jobs: driverJobs.map(shapeJob),
+      earnings: driverEarnings.map(e => ({ ...e, date: e.date.toISOString(), createdAt: e.createdAt.toISOString() })),
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/drivers/:id/approve', async (req: Request, res: Response) => {
+  try {
+    const exists = await prisma.driver.findUnique({ where: { id: req.params.id } });
+    if (!exists) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+    const d = await prisma.driver.update({
+      where: { id: req.params.id },
+      data: { isApproved: true, applicationStatus: 'approved', status: 'available' },
+      include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
+    });
+    const { passwordHash: _, ...safe } = d;
+    res.json({ success: true, message: 'Driver approved', data: safe });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/drivers/:id/suspend', async (req: Request, res: Response) => {
+  try {
+    const exists = await prisma.driver.findUnique({ where: { id: req.params.id } });
+    if (!exists) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+    const d = await prisma.driver.update({
+      where: { id: req.params.id },
+      data: { isApproved: false, applicationStatus: 'suspended', status: 'offline' },
+      include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
+    });
+    const { passwordHash: _, ...safe } = d;
+    res.json({ success: true, message: 'Driver suspended', data: safe });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/drivers/:id/reject', async (req: Request, res: Response) => {
+  try {
+    const exists = await prisma.driver.findUnique({ where: { id: req.params.id } });
+    if (!exists) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+    const d = await prisma.driver.update({
+      where: { id: req.params.id },
+      data: { isApproved: false, applicationStatus: 'rejected', status: 'offline' },
+      include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
+    });
+    const { passwordHash: _, ...safe } = d;
+    res.json({ success: true, message: 'Driver application rejected', data: safe });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+// ─── Customers ────────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/ops/customers:
+ *   get:
+ *     summary: List all customers (ops view)
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Customers }
+ */
+router.get('/customers', async (_req: Request, res: Response) => {
+  try {
+    const [customers, jobs] = await Promise.all([
+      prisma.customer.findMany(),
+      prisma.job.findMany({ orderBy: { createdAt: 'desc' } }),
+    ]);
+    const customerByEmail = new Map(customers.map(customer => [customer.email.toLowerCase(), customer]));
+    const jobGroups = new Map<string, typeof jobs>();
+    for (const job of jobs) {
+      const key = job.customerEmail?.toLowerCase() || `phone:${job.customerPhone}`;
+      jobGroups.set(key, [...(jobGroups.get(key) ?? []), job]);
+    }
+
+    const list = Array.from(jobGroups.entries()).map(([key, customerJobs]) => {
+      const latest = customerJobs[0];
+      const registered = latest.customerEmail ? customerByEmail.get(latest.customerEmail.toLowerCase()) : undefined;
+      const ratings = customerJobs.map(job => job.driverRating).filter((rating): rating is number => rating !== null);
+      return {
+        id: registered?.id ?? `guest:${encodeURIComponent(key)}`,
+        fullName: registered?.fullName ?? latest.customerName,
+        email: registered?.email ?? latest.customerEmail ?? '',
+        phone: registered?.phone ?? latest.customerPhone,
+        createdAt: registered?.createdAt.toISOString() ?? customerJobs[customerJobs.length - 1].createdAt.toISOString(),
+        isGuest: !registered,
+        totalJobs: customerJobs.length,
+        totalSpend: parseFloat(customerJobs.reduce((sum, job) => sum + job.fareAmount, 0).toFixed(2)),
+        averageCustomerRating: ratings.length
+          ? parseFloat((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1))
+          : null,
+        latestRide: {
+          bookingRef: latest.bookingRef,
+          status: latest.status,
+          dateTime: latest.dateTime.toISOString(),
+        } as { bookingRef: string; status: string; dateTime: string } | null,
+      };
+    });
+
+    for (const customer of customers) {
+      if (!jobGroups.has(customer.email.toLowerCase())) {
+        const { passwordHash: _, ...safe } = customer;
+        list.push({
+          ...safe,
+          createdAt: customer.createdAt.toISOString(),
+          isGuest: false,
+          totalJobs: 0,
+          totalSpend: 0,
+          averageCustomerRating: null,
+          latestRide: null,
+        });
+      }
+    }
+    list.sort((a, b) => new Date(b.latestRide?.dateTime ?? b.createdAt).getTime() - new Date(a.latestRide?.dateTime ?? a.createdAt).getTime());
+    res.json({ success: true, data: list });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+// ─── Earnings ─────────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/ops/earnings:
+ *   get:
+ *     summary: All earnings records
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Earnings }
+ */
+router.get('/earnings', async (_req: Request, res: Response) => {
+  try {
+    const earnings = await prisma.earningEntry.findMany({ orderBy: { date: 'desc' } });
+    const shaped = earnings.map(e => ({ ...e, date: e.date.toISOString(), createdAt: e.createdAt.toISOString() }));
+    const totalPaid    = shaped.filter(e => e.status === 'paid').reduce((s, e) => s + e.netAmount, 0);
+    const totalPending = shaped.filter(e => e.status === 'pending').reduce((s, e) => s + e.netAmount, 0);
+    res.json({ success: true, data: shaped, summary: { totalPaid, totalPending, count: shaped.length } });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/ops/earnings/{id}/pay:
+ *   put:
+ *     summary: Mark an earning as paid
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Updated }
+ */
+router.put('/earnings/:id/pay', async (req: Request, res: Response) => {
+  try {
+    const exists = await prisma.earningEntry.findUnique({ where: { id: req.params.id } });
+    if (!exists) { res.status(404).json({ success: false, message: 'Earning not found' }); return; }
+    const e = await prisma.earningEntry.update({ where: { id: req.params.id }, data: { status: 'paid' } });
+    res.json({ success: true, data: { ...e, date: e.date.toISOString(), createdAt: e.createdAt.toISOString() } });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+export default router;

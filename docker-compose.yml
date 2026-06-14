@@ -1,0 +1,27 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:18
+    container_name: ride_prestige_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ride_prestige
+      POSTGRES_USER: rp_user
+      POSTGRES_PASSWORD: rp_secret_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: ride_prestige_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@rideprestige.co.uk
+      PGADMIN_DEFAULT_PASSWORD: Admin@2026!
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+volumes:
+  pgdata:
