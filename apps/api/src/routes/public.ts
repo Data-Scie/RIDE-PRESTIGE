@@ -289,7 +289,7 @@ router.post('/quote', async (req: Request, res: Response) => {
   }
 
   const pricing = await getPricingConfig();
-  const miles   = estimateDistance(pickupPostcode, dropoffPostcode);
+  const miles   = await estimateDistance(pickupPostcode, dropoffPostcode);
   const hours   = estimateHours(miles);
   const calc    = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
   const quoteId = `qt-${uuid()}`;
@@ -357,7 +357,7 @@ router.post('/booking', async (req: Request, res: Response) => {
 
   try {
     const pricing = await getPricingConfig();
-    const miles = estimateDistance(pickupPostcode, dropoffPostcode);
+    const miles = await estimateDistance(pickupPostcode, dropoffPostcode);
     const hours = estimateHours(miles);
     const calc  = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
     const { commission, affiliatePayout, driverPayout } = applyCommission(calc.total, pricing);

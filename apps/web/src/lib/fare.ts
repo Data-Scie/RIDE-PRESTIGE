@@ -126,6 +126,6 @@ export function applyVehicleMultiplier(base: number, category: VehicleCategory):
 
 export const fareSettings = {
   baseFare: 15, ratePerMile: 2.50, ratePerMinute: 0.35,
-  surgeMultiplier: 1.0, serviceFee: 3.50, mcPercentage: 27.5,
+  surgeMultiplier: 1.0, serviceFee: 3.50, mcPercentage: 15,
   waitingTimeFee: 8, airportFee: 12, minimumFare: 25,
 };

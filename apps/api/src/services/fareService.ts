@@ -26,9 +26,37 @@ export async function getPricingConfig(): Promise<PricingConfig> {
 }
 
 // Simulated distance lookup — replace with Google Maps Distance Matrix API in production
-export function estimateDistance(fromPostcode: string, toPostcode: string): number {
+function fallbackDistance(fromPostcode: string, toPostcode: string): number {
   const seed = (fromPostcode + toPostcode).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   return Math.max(5, (seed % 190) + 10);
+}
+
+export async function estimateDistance(fromPostcode: string, toPostcode: string): Promise<number> {
+  const apiKey = process.env.GOOGLE_MAPS_DISTANCE_MATRIX_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) return fallbackDistance(fromPostcode, toPostcode);
+
+  const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json');
+  url.searchParams.set('origins', `${fromPostcode}, UK`);
+  url.searchParams.set('destinations', `${toPostcode}, UK`);
+  url.searchParams.set('units', 'imperial');
+  url.searchParams.set('key', apiKey);
+
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (!response.ok) return fallbackDistance(fromPostcode, toPostcode);
+    const data = await response.json() as {
+      status?: string;
+      rows?: Array<{ elements?: Array<{ status?: string; distance?: { value?: number } }> }>;
+    };
+    const element = data.rows?.[0]?.elements?.[0];
+    const metres = element?.distance?.value;
+    if (data.status !== 'OK' || element?.status !== 'OK' || !metres) {
+      return fallbackDistance(fromPostcode, toPostcode);
+    }
+    return parseFloat((metres / 1609.344).toFixed(1));
+  } catch {
+    return fallbackDistance(fromPostcode, toPostcode);
+  }
 }
 
 export function estimateHours(miles: number): number {

@@ -21,8 +21,8 @@ const router = Router();
  *             type: object
  *             required: [email, password, role]
  *             properties:
- *               email:    { type: string, example: "admin@rideprestige.co.uk" }
- *               password: { type: string, example: "Admin@2026!" }
+ *               email:    { type: string, example: "user@rideprestige.co.uk" }
+ *               password: { type: string, example: "your-secure-password" }
  *               role:     { type: string, enum: [admin, ops, affiliate, driver, customer], example: "admin" }
  *     responses:
  *       200: { description: Login successful }

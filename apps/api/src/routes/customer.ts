@@ -158,7 +158,7 @@ router.post('/quote', async (req: Request, res: Response) => {
     res.status(400).json({ success: false, message: 'Missing required fields' }); return;
   }
   const pricing = await getPricingConfig();
-  const miles   = estimateDistance(pickupPostcode, dropoffPostcode);
+  const miles   = await estimateDistance(pickupPostcode, dropoffPostcode);
   const hours   = estimateHours(miles);
   const calc    = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
   const ref     = `RP-QUOTE-${Date.now()}`;
@@ -292,7 +292,7 @@ router.post('/bookings', async (req: Request, res: Response) => {
     }
 
     const pricing = await getPricingConfig();
-    const miles   = estimateDistance(pickupPostcode, dropoffPostcode);
+    const miles   = await estimateDistance(pickupPostcode, dropoffPostcode);
     const hours   = estimateHours(miles);
     const calc    = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
 

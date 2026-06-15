@@ -74,13 +74,13 @@ const swaggerSpec = swaggerJsdoc({
 A private hire & coach transport platform based in Sheffield, UK.
 
 ### Portals
-| Portal | Role | Login |
-|---|---|---|
-| Admin | \`admin\` | admin@rideprestige.co.uk / Admin@2026! |
-| Operations | \`ops\` | ops@rideprestige.co.uk / Ops@2026! |
-| Affiliate | \`affiliate\` | affiliate@settransfers.co.uk / Affiliate@123 |
-| Driver | \`driver\` | driver@rideprestige.co.uk / Driver@123 |
-| Customer | \`customer\` | james@example.com / Customer@123 |
+| Portal | Role |
+|---|---|
+| Admin | \`admin\` |
+| Operations | \`ops\` |
+| Affiliate | \`affiliate\` |
+| Driver | \`driver\` |
+| Customer | \`customer\` |
 
 ### Authentication
 All protected routes require a Bearer JWT token.
@@ -90,7 +90,7 @@ All protected routes require a Bearer JWT token.
 
 ### Business Logic
 - **Fare calculation**: Mileage × rate + time charge (varies by vehicle category)
-- **Commission**: ${27.5}% deducted; remainder split 60% driver / 40% affiliate
+- **Commission**: Ride Prestige commission is deducted from the customer fare; affiliates and independent drivers receive the remaining partner payout
 - **Ride lifecycle**: awaiting_affiliate → needs_allocation → driver_assigned → vehicle_assigned → driver_accepted → on_route → arrived_pickup → passenger_onboard → in_progress → completed
       `,
     },
@@ -183,13 +183,8 @@ server.listen(PORT, () => {
   console.log(`  ║  API Docs: http://localhost:${PORT}/api-docs              ║`);
   console.log(`  ║  Health  : http://localhost:${PORT}/health                ║`);
   console.log('  ╠══════════════════════════════════════════════════════╣');
-  console.log('  ║  TEST CREDENTIALS                                    ║');
-  console.log('  ║  Admin     : admin@rideprestige.co.uk / Admin@2026!  ║');
-  console.log('  ║  Ops       : ops@rideprestige.co.uk  / Ops@2026!    ║');
-  console.log('  ║  Affiliate : affiliate@settransfers.co.uk            ║');
-  console.log('  ║  Driver    : driver@rideprestige.co.uk               ║');
-  console.log('  ║  Customer  : james@example.com / Customer@123        ║');
-  console.log('  ║  (all passwords: <Role>@123 except admin/ops above)  ║');
+  console.log('  ║  Production credentials are managed privately         ║');
+  console.log('  ║  Do not expose portal passwords in public logs        ║');
   console.log('  ╚══════════════════════════════════════════════════════╝');
   console.log('');
 });

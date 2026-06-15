@@ -1,10 +1,11 @@
 // ============================================================
 // Ride Prestige — Distance Calculation Utility
 //
-// GOOGLE MAPS DISTANCE MATRIX INTEGRATION:
+// LEGACY CLIENT-SIDE DISTANCE FALLBACK:
 // 1. Add to .env.local:
 //    GOOGLE_MAPS_DISTANCE_MATRIX_API_KEY=your_key_here
-// 2. Replace the body of `estimateDistance()` below with:
+// The live customer prices page now uses the backend quote endpoint.
+// Keep this utility only for older client-side previews or offline fallbacks.
 //
 //    const url = `https://maps.googleapis.com/maps/api/distancematrix/json`
 //      + `?origins=${encodeURIComponent(pickupPostcode)}`
@@ -28,7 +29,7 @@ export interface DistanceResult {
   durationHours: number;
 }
 
-// Demo lookup table for common Sheffield routes (miles)
+// Local fallback lookup table for common Sheffield routes (miles)
 const DEMO_DISTANCES: Record<string, number> = {
   'S1-S2': 2.1, 'S1-S3': 1.5, 'S1-S4': 3.2, 'S1-S5': 4.1,
   'S1-S6': 5.0, 'S1-S7': 6.3, 'S1-S10': 2.8, 'S1-S11': 4.5,
@@ -45,7 +46,7 @@ function getAreaCode(postcode: string): string {
   return match ? match[1] : cleaned.substring(0, 3);
 }
 
-// Returns demo distance. Replace with real Google Maps Distance Matrix API call.
+// Returns a local fallback distance. Production quotes should use the backend quote API.
 export async function estimateDistance(
   pickupPostcode: string,
   dropoffPostcode: string,

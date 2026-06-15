@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Users, CheckCircle, Clock, MapPin, Bus, Car, Van, Star } from 'lucide-react';
-import { calculateFareForCategory, formatCurrency } from '@/lib/fare';
-import { estimateDistance } from '@/lib/distance';
+import { formatCurrency } from '@/lib/fare';
 import type { PricingConfig, VehicleCategory } from '@/types';
 
 const GOLD = '#c9a84c';
@@ -18,7 +17,23 @@ const VEHICLES: { value: VehicleCategory; label: string; icon: ReactNode; capaci
   { value:'taxi',     label:'Taxi',    icon:<Car size={26} />, capacity:'1–4 persons', description:'Reliable saloon taxis for everyday journeys and fast local transfers.', features:['Card payments','GPS navigation','Licensed driver','Quick pickup'] },
 ];
 
+interface QuoteCalculation {
+  estimatedDistanceMiles: number;
+  estimatedHours: number;
+  total: number;
+  breakdown: string;
+  note: string;
+}
+
+interface QuoteResponse {
+  success: boolean;
+  data: {
+    calculation: QuoteCalculation;
+  };
+}
+
 export default function PricesClient({ pricing }: { pricing: PricingConfig }) {
+  void pricing;
   const router = useRouter();
   const params = useSearchParams();
 
@@ -29,14 +44,45 @@ export default function PricesClient({ pricing }: { pricing: PricingConfig }) {
   const date = params.get('date') || '';
   const time = params.get('time') || '';
 
-  const [distance, setDistance] = useState<{ distanceMiles:number; durationHours:number } | null>(null);
+  const [quotes, setQuotes] = useState<Partial<Record<VehicleCategory, QuoteCalculation>>>({});
+  const [loadingQuotes, setLoadingQuotes] = useState(false);
+  const [quoteError, setQuoteError] = useState('');
   const [selected, setSelected] = useState<VehicleCategory | null>(null);
 
   useEffect(() => {
-    if (pickup && dropoff) {
-      estimateDistance(pickup, dropoff).then(r => setDistance({ distanceMiles:r.distanceMiles, durationHours:r.durationHours }));
-    }
-  }, [pickup, dropoff]);
+    if (!pickup || !dropoff) return;
+    let cancelled = false;
+    setLoadingQuotes(true);
+    setQuoteError('');
+    Promise.all(VEHICLES.map(async vehicle => {
+      const response = await fetch('/api/backend/public/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pickupPostcode: pickup,
+          dropoffPostcode: dropoff,
+          passengers,
+          bookingType,
+          vehicleCategory: vehicle.value,
+          ...(date ? { date } : {}),
+          ...(time ? { time } : {}),
+        }),
+      });
+      const payload = await response.json() as QuoteResponse & { message?: string };
+      if (!response.ok) throw new Error(payload.message || 'Quote failed');
+      return [vehicle.value, payload.data.calculation] as const;
+    }))
+      .then(results => {
+        if (!cancelled) setQuotes(Object.fromEntries(results) as Partial<Record<VehicleCategory, QuoteCalculation>>);
+      })
+      .catch(error => {
+        if (!cancelled) setQuoteError(error instanceof Error ? error.message : 'Could not calculate fares');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingQuotes(false);
+      });
+    return () => { cancelled = true; };
+  }, [pickup, dropoff, passengers, bookingType, date, time]);
 
   const handleSelect = (category: VehicleCategory) => {
     setSelected(category);
@@ -78,13 +124,13 @@ export default function PricesClient({ pricing }: { pricing: PricingConfig }) {
               <Users size={13} style={{ color:'rgba(255,255,255,0.45)' }} />
               <span className="text-sm" style={{ color:'rgba(255,255,255,0.6)' }}>{passengers} {passengers===1?'person':'persons'}</span>
             </div>
-            {distance && (
+            {VEHICLES.some(vehicle => quotes[vehicle.value]) && (
               <>
                 <span style={{ color:'rgba(255,255,255,0.15)' }}>|</span>
                 <div className="flex items-center gap-2">
                   <Clock size={13} style={{ color:'rgba(255,255,255,0.45)' }} />
                   <span className="text-sm" style={{ color:'rgba(255,255,255,0.6)' }}>
-                    ~{Math.round(distance.durationHours * 60)} min &middot; {distance.distanceMiles} mi
+                    ~{Math.round((quotes[VEHICLES[0].value]?.estimatedHours ?? 0) * 60)} min &middot; {quotes[VEHICLES[0].value]?.estimatedDistanceMiles} mi
                   </span>
                 </div>
               </>
@@ -95,15 +141,20 @@ export default function PricesClient({ pricing }: { pricing: PricingConfig }) {
 
       <div className="py-14" style={{ background:'#f4f5f8', minHeight:'60vh' }}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          {!distance ? (
+          {loadingQuotes ? (
             <div className="flex flex-col items-center justify-center py-24 gap-4">
               <div className="w-12 h-12 border-4 border-yellow-200 border-t-yellow-600 rounded-full animate-spin" />
               <p style={{ color:'#8b8fa8' }}>Calculating your fares&hellip;</p>
             </div>
+          ) : quoteError ? (
+            <div className="rounded-2xl bg-white border border-red-100 p-8 text-center">
+              <p className="font-semibold text-red-600">Could not calculate fares</p>
+              <p className="text-sm mt-2" style={{ color:'#8b8fa8' }}>{quoteError}</p>
+            </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
               {VEHICLES.map(v => {
-                const fare = calculateFareForCategory(v.value, distance.distanceMiles, distance.durationHours, passengers, pricing);
+                const quote = quotes[v.value];
                 const isSel = selected === v.value;
                 return (
                   <div key={v.value} className="relative rounded-2xl overflow-hidden flex flex-col transition-all duration-200"
@@ -134,11 +185,13 @@ export default function PricesClient({ pricing }: { pricing: PricingConfig }) {
                       <div className="rounded-xl p-4 mb-3" style={{ background:'#f8f9fb', border:'1px solid #e8eaef' }}>
                         <p className="text-xs uppercase tracking-wider mb-1" style={{ color:'#8b8fa8' }}>Est. fare</p>
                         <p className="font-bold" style={{ fontFamily:'Playfair Display,Georgia,serif', fontSize:'1.75rem', color:BLACK, lineHeight:1 }}>
-                          {formatCurrency(fare.total)}
+                          {quote ? formatCurrency(quote.total) : 'Unavailable'}
                         </p>
-                        <p className="text-xs mt-1" style={{ color:'#b0b4c4' }}>{distance.distanceMiles} mi &middot; ~{Math.round(distance.durationHours*60)} min</p>
+                        <p className="text-xs mt-1" style={{ color:'#b0b4c4' }}>
+                          {quote ? `${quote.estimatedDistanceMiles} mi · ~${Math.round(quote.estimatedHours * 60)} min` : 'Try again shortly'}
+                        </p>
                       </div>
-                      <button type="button" onClick={() => handleSelect(v.value)} disabled={!!selected}
+                      <button type="button" onClick={() => handleSelect(v.value)} disabled={!!selected || !quote}
                         className="w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200"
                         style={{ background:isSel?'linear-gradient(135deg,#c9a84c,#e8c96d,#a07c30)':BLACK, color:isSel?BLACK:'white', cursor:selected?'default':'pointer', border:'none', fontFamily:'inherit' }}>
                         {isSel ? 'Selected ✓' : 'Select'}
@@ -150,7 +203,7 @@ export default function PricesClient({ pricing }: { pricing: PricingConfig }) {
             </div>
           )}
           <p className="text-center text-xs mt-8" style={{ color:'#b0b4c4' }}>
-            Estimates based on demo distance. Final fare confirmed on booking based on actual route.
+            Estimates use the live backend fare engine. Final fare is confirmed on booking.
           </p>
         </div>
       </div>
