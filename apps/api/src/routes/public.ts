@@ -5,6 +5,7 @@ import { estimateDistance, estimateHours, calculateFare, applyCommission, getPri
 import { pushNotification } from '../services/notificationService';
 import { DEFAULT_HOME_SECTIONS, DEFAULT_WEBSITE_PAGES } from '../data/cmsDefaults';
 import { createIndependentRideOffers } from '../services/dispatchService';
+import { bookingConfirmationEmail, sendTransactionalEmail } from '../services/emailService';
 import type { VehicleCategory, BookingType } from '../types';
 
 const router = Router();
@@ -434,6 +435,25 @@ router.post('/booking', async (req: Request, res: Response) => {
 
     // Notify admin
     await pushNotification('admin-1', 'admin', 'New Booking', `New booking ${ref} from ${fullName} — £${calc.total}`, 'booking');
+
+    const confirmation = bookingConfirmationEmail({
+      reference: ref,
+      customerName: fullName,
+      pickup: pickupPostcode,
+      dropoff: dropoffPostcode,
+      fare: calc.total,
+      dateTime: rideDateTime,
+    });
+    await Promise.all([
+      sendTransactionalEmail({ to: email, ...confirmation }),
+      process.env.OPERATIONS_EMAIL
+        ? sendTransactionalEmail({
+          to: process.env.OPERATIONS_EMAIL,
+          subject: `New Ride Prestige booking: ${ref}`,
+          text: `New booking ${ref} from ${fullName}\n${pickupPostcode} -> ${dropoffPostcode}\nFare: £${calc.total}`,
+        })
+        : Promise.resolve(false),
+    ]);
 
     // Dispatch — notify only affiliates/drivers who have a matching vehicle category
     const affiliates = await prisma.affiliate.findMany({

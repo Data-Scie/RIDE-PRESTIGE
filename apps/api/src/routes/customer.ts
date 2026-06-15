@@ -5,6 +5,7 @@ import { prisma } from '../lib/db';
 import { estimateDistance, estimateHours, calculateFare, applyCommission, getPricingConfig } from '../services/fareService';
 import { createIndependentRideOffers } from '../services/dispatchService';
 import { pushNotification } from '../services/notificationService';
+import { bookingConfirmationEmail, sendTransactionalEmail } from '../services/emailService';
 import type { VehicleCategory, VehicleType, BookingType, Stop } from '../types';
 
 const router = Router();
@@ -376,6 +377,24 @@ router.post('/bookings', async (req: Request, res: Response) => {
       ...matchingAffiliates.map(a => pushNotification(a.id, 'affiliate', notifTitle, notifBody, 'job')),
       pushNotification('admin-1', 'admin', 'New Booking', `${c.fullName} booked ${ref} — £${calc.total}`, 'booking'),
       createIndependentRideOffers(jobRow.id),
+      sendTransactionalEmail({
+        to: c.email,
+        ...bookingConfirmationEmail({
+          reference: ref,
+          customerName: c.fullName,
+          pickup: pickupPostcode,
+          dropoff: dropoffPostcode,
+          fare: calc.total,
+          dateTime: jobDateTime,
+        }),
+      }),
+      process.env.OPERATIONS_EMAIL
+        ? sendTransactionalEmail({
+          to: process.env.OPERATIONS_EMAIL,
+          subject: `New Ride Prestige booking: ${ref}`,
+          text: `New booking ${ref} from ${c.fullName}\n${pickupPostcode} -> ${dropoffPostcode}\nFare: £${calc.total}`,
+        })
+        : Promise.resolve(false),
     ]);
 
     const booking = shapeBooking({ ...bookingRow, jobId: jobRow.id });
