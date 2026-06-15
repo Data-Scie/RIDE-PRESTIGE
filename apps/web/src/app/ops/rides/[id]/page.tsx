@@ -25,11 +25,11 @@ interface Vehicle { id: string; make: string; model: string; registration: strin
 
 const STATUS_COLORS: Record<string, string> = {
   awaiting_affiliate: '#f59e0b', needs_allocation: '#f59e0b',
-  driver_assigned: '#3b82f6', driver_accepted: '#3b82f6',
-  on_route: '#8b5cf6', arrived_pickup: '#8b5cf6',
+  driver_assigned: '#3b82f6', vehicle_assigned: '#3b82f6', driver_accepted: '#3b82f6',
+  on_route: '#8b5cf6', arrived_pickup: '#8b5cf6', passenger_onboard: '#8b5cf6',
   in_progress: '#10b981', completed: '#6b7280', cancelled: '#ef4444',
 };
-const TIMELINE = ['awaiting_affiliate','needs_allocation','driver_assigned','driver_accepted','on_route','arrived_pickup','in_progress','completed'];
+const TIMELINE = ['awaiting_affiliate','needs_allocation','driver_assigned','vehicle_assigned','driver_accepted','on_route','arrived_pickup','passenger_onboard','in_progress','completed'];
 
 export default function RideDetailPage() {
   const { id } = useParams() as { id: string };

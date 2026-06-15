@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import PublicLayout from '@/components/layout/PublicLayout';
 import { getFaqs } from '@/lib/cms';
 import FaqClient from './FaqClient';

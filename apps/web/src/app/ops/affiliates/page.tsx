@@ -6,7 +6,7 @@ import { opsApi } from '@/lib/api-client';
 
 interface Affiliate {
   id: string; companyName: string; contactPerson: string; email: string; phone: string;
-  address?: string; registrationNumber?: string; isApproved: boolean; isActive: boolean;
+  address?: string; registrationNumber?: string; isApproved: boolean;
   driverCount?: number; vehicleCount?: number; totalJobs?: number; rating?: number;
   commissionRate?: number; createdAt: string;
 }
@@ -62,6 +62,26 @@ export default function OpsAffiliatesPage() {
         setError('That affiliate no longer exists. The list has been refreshed.');
       } else {
         setError(requestError.message || 'Could not suspend affiliate');
+      }
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const reject = async (id: string) => {
+    if (!confirm('Reject this affiliate application? This will prevent them from joining the platform.')) return;
+    setUpdating(id);
+    setError('');
+    try {
+      await opsApi.put(`/api/ops/affiliates/${id}/suspend`, {});
+      await loadAffiliates();
+    } catch (e) {
+      const requestError = e as Error & { status?: number };
+      if (requestError.status === 404) {
+        setAffiliates(current => current.filter(affiliate => affiliate.id !== id));
+        setError('That application no longer exists. The list has been refreshed.');
+      } else {
+        setError(requestError.message || 'Could not reject affiliate');
       }
     } finally {
       setUpdating(null);
@@ -125,10 +145,10 @@ export default function OpsAffiliatesPage() {
                 {!a.isApproved && (
                   <>
                     <button onClick={() => approve(a.id)} disabled={updating === a.id} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-60" style={{ background: '#10b981' }}>{updating === a.id ? '…' : 'Approve'}</button>
-                    <button className="px-4 py-2 rounded-xl text-sm font-semibold" style={{ background: '#fef2f2', color: '#ef4444' }}>Reject</button>
+                    <button onClick={() => reject(a.id)} disabled={updating === a.id} className="px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-60" style={{ background: '#fef2f2', color: '#ef4444' }}>Reject</button>
                   </>
                 )}
-                {a.isApproved && a.isActive && (
+                {a.isApproved && (
                   <button onClick={() => suspend(a.id)} disabled={updating === a.id} className="px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-60" style={{ background: '#fef2f2', color: '#ef4444' }}>{updating === a.id ? '…' : 'Suspend'}</button>
                 )}
                 <Link href={`/ops/affiliates/${a.id}`} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: '#3b82f6' }}>

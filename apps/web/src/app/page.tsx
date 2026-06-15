@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import type { Metadata } from 'next';
 import PublicLayout from '@/components/layout/PublicLayout';
 import BookingWidget from '@/components/home/BookingWidget';

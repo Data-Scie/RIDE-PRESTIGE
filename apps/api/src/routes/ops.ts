@@ -507,6 +507,7 @@ router.get('/affiliates', async (_req: Request, res: Response) => {
       ...a,
       driverCount:  await prisma.driver.count({ where: { affiliateId: a.id } }),
       vehicleCount: await prisma.fleetVehicle.count({ where: { affiliateId: a.id } }),
+      totalJobs:    await prisma.job.count({ where: { affiliateId: a.id } }),
     })));
     res.json({ success: true, data: list });
   } catch (e) {

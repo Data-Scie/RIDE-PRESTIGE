@@ -338,7 +338,10 @@ async function main() {
   }
 
   // ─── Jobs ──────────────────────────────────────────────────────────────────
+  // Seed creates NO fake jobs. All jobs/bookings come from real usage of the platform.
+  // To delete the old mock jobs (job-1 to job-4) run: npm run db:cleanup-mocks
 
+  if (false) { // kept for reference only — never executed
   const jobs = [
     {
       id: 'job-1',
@@ -456,9 +459,12 @@ async function main() {
       create: j,
     });
   }
+  } // end if(false)
 
   // ─── Bookings ──────────────────────────────────────────────────────────────
+  // Also disabled — bookings are created by real usage
 
+  if (false) { // kept for reference only — never executed
   const bookings = [
     {
       id: 'bk-001',
@@ -510,42 +516,10 @@ async function main() {
       create: b,
     });
   }
+  } // end if(false)
 
   // ─── Earnings ──────────────────────────────────────────────────────────────
-
-  await prisma.earningEntry.upsert({
-    where: { id: 'earn-1' },
-    update: {},
-    create: {
-      id: 'earn-1',
-      jobId: 'job-4',
-      bookingRef: 'RP-2026-0950',
-      entityId: 'aff-1',
-      entityType: 'affiliate',
-      date: new Date('2026-06-01T08:00:00Z'),
-      grossAmount: 252,
-      commissionDeducted: 0,
-      netAmount: 252,
-      status: 'paid',
-    },
-  });
-
-  await prisma.earningEntry.upsert({
-    where: { id: 'earn-2' },
-    update: {},
-    create: {
-      id: 'earn-2',
-      jobId: 'job-4',
-      bookingRef: 'RP-2026-0950',
-      entityId: 'drv-1',
-      entityType: 'driver',
-      date: new Date('2026-06-01T08:00:00Z'),
-      grossAmount: 252,
-      commissionDeducted: 0,
-      netAmount: 252,
-      status: 'paid',
-    },
-  });
+  // Earnings are created automatically when rides complete — no seed data needed
 
   // ─── Notifications ─────────────────────────────────────────────────────────
 

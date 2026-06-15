@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import type { Metadata } from 'next';
 import PublicLayout from '@/components/layout/PublicLayout';
 import CmsContentPage from '@/components/layout/CmsContentPage';

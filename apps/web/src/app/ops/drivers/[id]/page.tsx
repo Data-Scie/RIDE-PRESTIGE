@@ -6,6 +6,27 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle, Mail, Phone, Star, XCircle } from 'lucide-react';
 import { opsApi } from '@/lib/api-client';
 
+function RejectDocModal({ onConfirm, onCancel }: { onConfirm: (reason: string) => void; onCancel: () => void }) {
+  const [reason, setReason] = useState('');
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md mx-4">
+        <h3 className="font-bold text-slate-800 mb-1">Reject Document</h3>
+        <p className="text-sm text-slate-500 mb-4">Provide a reason so the driver knows what to resubmit.</p>
+        <textarea
+          autoFocus value={reason} onChange={e => setReason(e.target.value)}
+          placeholder="e.g. Document is blurry, please resubmit a clear scan."
+          rows={3} className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 outline-none focus:border-red-400 resize-none"
+        />
+        <div className="flex gap-2 mt-4">
+          <button onClick={() => onConfirm(reason || 'Document was not approved')} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500">Reject Document</button>
+          <button onClick={onCancel} className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface Driver {
   id: string;
   fullName: string;
@@ -42,6 +63,7 @@ export default function DriverDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [rejectDocId, setRejectDocId] = useState<string | null>(null);
 
   const load = async () => {
     const result = await opsApi.get<{ success: boolean; data: Driver; jobs: RecentJob[]; vehicles: Vehicle[] }>(`/api/ops/drivers/${id}`);
@@ -50,8 +72,7 @@ export default function DriverDetailPage() {
     setVehicles(result.vehicles ?? []);
   };
 
-  const updateDocument = async (documentId: string, action: 'approve' | 'reject') => {
-    const reason = action === 'reject' ? window.prompt('Reason for rejection') || 'Document was not approved' : undefined;
+  const updateDocument = async (documentId: string, action: 'approve' | 'reject', reason?: string) => {
     await opsApi.put(`/api/ops/drivers/${id}/documents/${documentId}/${action}`, { reason });
     await load();
   };
@@ -80,6 +101,15 @@ export default function DriverDetailPage() {
 
   return (
     <div className="max-w-4xl space-y-5">
+      {rejectDocId && (
+        <RejectDocModal
+          onConfirm={async (reason) => {
+            setRejectDocId(null);
+            await updateDocument(rejectDocId, 'reject', reason);
+          }}
+          onCancel={() => setRejectDocId(null)}
+        />
+      )}
       <Link href="/ops/drivers" className="flex items-center gap-1.5 text-slate-500 text-sm"><ArrowLeft size={15} /> Back to Driver Applications</Link>
       {error && <div className="px-4 py-3 rounded-xl text-sm text-red-600 bg-red-50">{error}</div>}
 
@@ -127,8 +157,8 @@ export default function DriverDetailPage() {
                 <span className="flex items-center justify-end gap-1 text-xs capitalize">{document.status === 'approved' ? <CheckCircle size={16} className="text-green-500" /> : <XCircle size={16} className="text-amber-500" />}{document.status}</span>
                 {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600">View document</a>}
                 <div className="flex gap-1 mt-1">
-                  <button onClick={() => updateDocument(document.id, 'approve')} className="text-[10px] px-2 py-1 rounded bg-green-600 text-white">Approve</button>
-                  <button onClick={() => updateDocument(document.id, 'reject')} className="text-[10px] px-2 py-1 rounded bg-red-50 text-red-600">Reject</button>
+                  <button onClick={() => void updateDocument(document.id, 'approve')} className="text-[10px] px-2 py-1 rounded bg-green-600 text-white">Approve</button>
+                  <button onClick={() => setRejectDocId(document.id)} className="text-[10px] px-2 py-1 rounded bg-red-50 text-red-600">Reject</button>
                 </div>
               </div>
             </div>
@@ -153,7 +183,7 @@ export default function DriverDetailPage() {
             <Link key={ride.id} href={`/ops/rides/${ride.id}`} className="grid grid-cols-3 gap-3 p-3 rounded-xl hover:bg-slate-50">
               <span className="font-mono text-sm">{ride.bookingRef}</span>
               <span className="text-xs text-slate-500 truncate">{ride.pickupAddress}</span>
-              <span className="font-semibold text-right">GBP {ride.fareAmount}</span>
+              <span className="font-semibold text-right">£{ride.fareAmount}</span>
             </Link>
           ))}
         </div>

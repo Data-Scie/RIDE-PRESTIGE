@@ -9,6 +9,7 @@ import swaggerUi from 'swagger-ui-express';
 import path from 'path';
 import { initIO } from './lib/socket';
 import { reconcileIndependentDispatch } from './services/dispatchService';
+import { startReminderScheduler } from './services/reminderService';
 
 import authRouter     from './routes/auth';
 import publicRouter   from './routes/public';
@@ -173,6 +174,7 @@ app.use(errorHandler);
 server.listen(PORT, () => {
   void reconcileDispatch();
   setInterval(() => void reconcileDispatch(), 30_000).unref();
+  startReminderScheduler();
   console.log('');
   console.log('  ╔══════════════════════════════════════════════════════╗');
   console.log('  ║         RIDE PRESTIGE — CORPORATE BACKEND API        ║');

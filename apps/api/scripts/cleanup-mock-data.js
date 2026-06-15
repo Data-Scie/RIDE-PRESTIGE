@@ -1,92 +1,44 @@
-const { PrismaClient } = require('@prisma/client');
+/**
+ * Safe cleanup: removes ONLY fake transactional data from the seed script.
+ * All accounts (admin, ops, affiliate, driver, customer) and fleet vehicles
+ * are kept intact so you can still log in and use the system.
+ *
+ * Run: node scripts/cleanup-mock-data.js
+ */
 
+const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-const SEEDED = {
-  bookings: ['bk-001', 'bk-002', 'bk-003'],
-  jobs: ['job-1', 'job-2', 'job-3', 'job-4'],
-  customers: ['cust-1', 'cust-2'],
-  affiliates: ['aff-1', 'aff-2'],
-  drivers: ['drv-1', 'drv-2'],
-  vehicles: ['fv-1', 'fv-2', 'fv-3', 'fv-4'],
-  driverDocuments: ['doc-1a', 'doc-1b', 'doc-1c', 'doc-1d', 'doc-2a', 'doc-2b', 'doc-2c', 'doc-2d'],
-  earnings: ['earn-1', 'earn-2'],
-  supportTickets: ['tk-001', 'tk-002'],
-  promotions: ['promo-1', 'promo-2', 'promo-3'],
-};
+const MOCK_JOB_IDS     = ['job-1', 'job-2', 'job-3', 'job-4'];
+const MOCK_BOOKING_IDS = ['bk-001', 'bk-002', 'bk-003', 'bk-004'];
+const MOCK_EARNING_IDS = ['earn-1', 'earn-2'];
+const MOCK_NOTIF_IDS   = ['notif-1', 'notif-2'];
+const MOCK_TICKET_IDS  = ['tk-001', 'tk-002'];
 
 async function main() {
-  const seededJobs = await prisma.job.findMany({
-    where: { id: { in: SEEDED.jobs } },
-    select: { assignedDriverId: true },
-  });
-  const userDriverIdsOnSeededJobs = seededJobs
-    .map(job => job.assignedDriverId)
-    .filter(id => id && !SEEDED.drivers.includes(id));
-  const demoAffiliates = await prisma.affiliate.findMany({
-    where: {
-      OR: [
-        { companyName: { startsWith: 'Codex Live Demo Transport' } },
-        { email: { startsWith: 'affiliate.live.' } },
-      ],
-    },
-    select: { id: true },
-  });
-  const demoAffiliateIds = demoAffiliates.map(affiliate => affiliate.id);
-  const demoDrivers = demoAffiliateIds.length
-    ? await prisma.driver.findMany({
-        where: { affiliateId: { in: demoAffiliateIds } },
-        select: { id: true },
-      })
-    : [];
-  const demoDriverIds = demoDrivers.map(driver => driver.id);
+  console.log('Removing mock/seed transactional data from Supabase...\n');
+  console.log('NOTE: All accounts, vehicles, and website content are kept.\n');
 
-  const jobIds = SEEDED.jobs;
-  const driverIds = [...SEEDED.drivers, ...demoDriverIds];
-  const affiliateIds = [...SEEDED.affiliates, ...demoAffiliateIds];
+  // Must delete in dependency order
+  const statusHistory = await prisma.rideStatusHistory.deleteMany({ where: { jobId: { in: MOCK_JOB_IDS } } });
+  const locationHistory = await prisma.driverLocationHistory.deleteMany({ where: { jobId: { in: MOCK_JOB_IDS } } });
+  const earnings = await prisma.earningEntry.deleteMany({ where: { id: { in: MOCK_EARNING_IDS } } });
+  const notifications = await prisma.notification.deleteMany({ where: { id: { in: MOCK_NOTIF_IDS } } });
+  const tickets = await prisma.supportTicket.deleteMany({ where: { id: { in: MOCK_TICKET_IDS } } });
+  const bookings = await prisma.booking.deleteMany({ where: { id: { in: MOCK_BOOKING_IDS } } });
+  const jobs = await prisma.job.deleteMany({ where: { id: { in: MOCK_JOB_IDS } } });
 
-  const deleted = await prisma.$transaction(async tx => ({
-    locationHistory: (await tx.driverLocationHistory.deleteMany({
-      where: { OR: [{ jobId: { in: jobIds } }, { driverId: { in: driverIds } }] },
-    })).count,
-    statusHistory: (await tx.rideStatusHistory.deleteMany({ where: { jobId: { in: jobIds } } })).count,
-    earnings: (await tx.earningEntry.deleteMany({
-      where: { OR: [{ id: { in: SEEDED.earnings } }, { jobId: { in: jobIds } }] },
-    })).count,
-    notifications: (await tx.notification.deleteMany({
-      where: { recipientId: { in: [...driverIds, ...affiliateIds, ...SEEDED.customers] } },
-    })).count,
-    bookings: (await tx.booking.deleteMany({ where: { id: { in: SEEDED.bookings } } })).count,
-    jobs: (await tx.job.deleteMany({ where: { id: { in: jobIds } } })).count,
-    driverDocuments: (await tx.driverDocument.deleteMany({
-      where: { OR: [{ id: { in: SEEDED.driverDocuments } }, { driverId: { in: driverIds } }] },
-    })).count,
-    vehicles: (await tx.fleetVehicle.deleteMany({
-      where: {
-        OR: [
-          { id: { in: SEEDED.vehicles } },
-          { affiliateId: { in: demoAffiliateIds } },
-          { assignedDriverId: { in: demoDriverIds } },
-        ],
-      },
-    })).count,
-    drivers: (await tx.driver.deleteMany({ where: { id: { in: driverIds } } })).count,
-    affiliates: (await tx.affiliate.deleteMany({ where: { id: { in: affiliateIds } } })).count,
-    customers: (await tx.customer.deleteMany({ where: { id: { in: SEEDED.customers } } })).count,
-    supportTickets: (await tx.supportTicket.deleteMany({ where: { id: { in: SEEDED.supportTickets } } })).count,
-    promotions: (await tx.promotion.deleteMany({ where: { id: { in: SEEDED.promotions } } })).count,
-    resetUserDrivers: (await tx.driver.updateMany({
-      where: { id: { in: userDriverIdsOnSeededJobs }, status: 'busy' },
-      data: { status: 'available' },
-    })).count,
-  }));
-
-  console.log(JSON.stringify({ success: true, deleted }, null, 2));
+  console.log(`✓ ${jobs.count} fake jobs deleted`);
+  console.log(`✓ ${bookings.count} fake bookings deleted`);
+  console.log(`✓ ${earnings.count} fake earnings deleted`);
+  console.log(`✓ ${notifications.count} mock notifications deleted`);
+  console.log(`✓ ${tickets.count} mock support tickets deleted`);
+  console.log(`✓ ${statusHistory.count} status history entries deleted`);
+  console.log(`✓ ${locationHistory.count} location history entries deleted`);
+  console.log('\nDone! All accounts, vehicles, and website content are untouched.');
+  console.log('The system is now clean — only real bookings will appear going forward.');
 }
 
 main()
-  .catch(error => {
-    console.error(error);
-    process.exitCode = 1;
-  })
+  .catch(e => { console.error(e); process.exit(1); })
   .finally(() => prisma.$disconnect());

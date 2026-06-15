@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import PublicLayout from '@/components/layout/PublicLayout';
 import { getVehicles, getCategories } from '@/lib/cms';
 import FleetClient from './FleetClient';

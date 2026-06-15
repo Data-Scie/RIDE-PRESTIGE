@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import PublicLayout from '@/components/layout/PublicLayout';
 import { getContact } from '@/lib/cms';
 import ContactClient from './ContactClient';
