@@ -109,13 +109,20 @@ export async function cancelBooking(id: string): Promise<void> {
   await req('PUT', `/api/customer/bookings/${id}/cancel`, {});
 }
 
-export async function trackBooking(id: string): Promise<{ status: string; driverName?: string; driverPhone?: string; licencePlate?: string; eta?: string }> {
+export async function trackBooking(id: string): Promise<{
+  status: string;
+  driverName?: string;
+  driverPhone?: string;
+  driverLatitude?: number | null;
+  driverLongitude?: number | null;
+  lastLocationUpdate?: string | null;
+}> {
   const r = await req<{
     success: boolean;
     data: {
       bookingStatus: string;
       jobStatus: string | null;
-      driver: { name: string; phone: string } | null;
+      driver: { name: string; phone: string; latitude?: number | null; longitude?: number | null; lastLocationUpdate?: string | null } | null;
     };
   }>(
     'GET', `/api/customer/bookings/${id}/track`
@@ -124,6 +131,9 @@ export async function trackBooking(id: string): Promise<{ status: string; driver
     status: r.data.jobStatus ?? r.data.bookingStatus,
     driverName: r.data.driver?.name,
     driverPhone: r.data.driver?.phone,
+    driverLatitude: r.data.driver?.latitude,
+    driverLongitude: r.data.driver?.longitude,
+    lastLocationUpdate: r.data.driver?.lastLocationUpdate,
   };
 }
 

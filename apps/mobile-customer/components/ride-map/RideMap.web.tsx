@@ -1,8 +1,13 @@
 import { StyleSheet, Text, View } from "react-native";
 
+type LatLng = { latitude: number; longitude: number };
+
 type RideMapProps = {
   stops: string[];
   showRoute: boolean;
+  driverCoordinate?: LatLng | null;
+  pickupCoordinate?: LatLng | null;
+  dropoffCoordinate?: LatLng | null;
 };
 
 export function RideMap({ stops, showRoute }: RideMapProps) {

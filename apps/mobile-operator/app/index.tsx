@@ -15,6 +15,6 @@ export default function Index() {
   }
 
   if (!user) return <Redirect href="/(auth)/welcome" />;
-  if (user.role === 'affiliate') return <Redirect href="/(affiliate)/" />;
-  return <Redirect href="/(driver)/" />;
+  if (user.role === 'affiliate') return <Redirect href="/(affiliate)" />;
+  return <Redirect href="/(driver)" />;
 }

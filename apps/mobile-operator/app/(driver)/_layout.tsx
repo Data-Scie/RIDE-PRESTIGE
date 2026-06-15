@@ -7,7 +7,7 @@ export default function DriverLayout() {
   const { user } = useAuth();
 
   if (!user) return <Redirect href="/(auth)/welcome" />;
-  if (user.role === 'affiliate') return <Redirect href="/(affiliate)/" />;
+  if (user.role === 'affiliate') return <Redirect href="/(affiliate)" />;
 
   return (
     <Tabs

@@ -7,7 +7,7 @@ export default function AffiliateLayout() {
   const { user } = useAuth();
 
   if (!user) return <Redirect href="/(auth)/welcome" />;
-  if (user.role !== 'affiliate') return <Redirect href="/(driver)/" />;
+  if (user.role !== 'affiliate') return <Redirect href="/(driver)" />;
 
   return (
     <Tabs

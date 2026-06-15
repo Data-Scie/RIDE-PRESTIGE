@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createBooking, getBookings, getProfile, updateProfile, submitSupportTicket, cancelBooking } from "../../services/api";
+import { createBooking, getBookings, getProfile, updateProfile, submitSupportTicket, cancelBooking, getQuote, trackBooking } from "../../services/api";
 import {
   Alert,
   Animated,
@@ -78,6 +78,9 @@ export default function RidePrestigeApp() {
   const [payment, setPayment] = useState("Apple Pay");
   const [notes, setNotes] = useState("Any special instructions");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
+  const [fare, setFare] = useState({ miles: 7.8, minutes: 22, total: 28 });
+  const quoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (screen === "splash") {
@@ -86,15 +89,25 @@ export default function RidePrestigeApp() {
     }
   }, [screen]);
 
-  const fare = useMemo(() => {
-    const base = selectedVehicle === "Coach" ? 95 : selectedVehicle === "Minibus" ? 45 : selectedVehicle === "Executive XL" ? 38 : 28;
-    const miles = 7.8 + stops.length * 2.1;
-    const minutes = 22 + stops.length * 8;
-    const rate = selectedVehicle === "Coach" ? 5.2 : selectedVehicle === "Minibus" ? 3.4 : 2.6;
-    const service = 3.5 + stops.length;
-    const subtotal = base + miles * rate + minutes * 0.35 + service;
-    return { miles, minutes, total: subtotal * 1.28 };
-  }, [selectedVehicle, stops.length]);
+  // Debounced quote fetch whenever pickup/dropoff/vehicle changes
+  useEffect(() => {
+    if (quoteTimer.current) clearTimeout(quoteTimer.current);
+    quoteTimer.current = setTimeout(async () => {
+      try {
+        const q = await getQuote({
+          pickupAddress: pickupAddress,
+          dropoffAddress: dropoffAddress,
+          vehicleCategory: selectedVehicle,
+          passengers: 1,
+          bookingType: "current",
+        });
+        setFare({ miles: parseFloat(q.distance), minutes: parseInt(q.duration) || 22, total: q.fareAmount });
+      } catch {
+        // Keep previous fare estimate if API unavailable
+      }
+    }, 800);
+    return () => { if (quoteTimer.current) clearTimeout(quoteTimer.current); };
+  }, [pickupAddress, dropoffAddress, selectedVehicle]);
 
   const isScheduledBooking = pickupDate !== "Pickup now" || pickupTime !== "ETA: 3 min";
 
@@ -125,7 +138,7 @@ export default function RidePrestigeApp() {
     setModal(null);
     setScreen("searching");
     try {
-      await createBooking({
+      const booking = await createBooking({
         pickupAddress,
         dropoffAddress,
         passengers: 1,
@@ -135,8 +148,9 @@ export default function RidePrestigeApp() {
         time: isScheduledBooking ? pickupTime : undefined,
         notes: notes !== "Any special instructions" ? notes : undefined,
       });
+      setActiveBookingId(booking.id);
     } catch {
-      // Keep the demo flow usable while the local API is unavailable.
+      // Keep the demo flow usable while the local API is unavailable
     }
   }, [pickupAddress, dropoffAddress, selectedVehicle, isScheduledBooking, pickupDate, pickupTime, notes]);
 
@@ -172,8 +186,8 @@ export default function RidePrestigeApp() {
           />
         )}
 
-        {screen === "searching" && <SearchingScreen onFound={() => setScreen("tracking")} />}
-        {screen === "tracking" && <TrackingScreen go={setScreen} />}
+        {screen === "searching" && <SearchingScreen bookingId={activeBookingId} onFound={() => setScreen("tracking")} />}
+        {screen === "tracking" && <TrackingScreen bookingId={activeBookingId} go={setScreen} />}
         {screen === "bookings" && <BookingsScreen go={setScreen} />}
         {screen === "favourites" && <FavouritesScreen go={setScreen} onAdd={() => setModal("addFavourite")} />}
         {screen === "payments" && <PaymentsScreen go={setScreen} setPayment={setPayment} payment={payment} />}
@@ -425,10 +439,13 @@ function HomeBookingScreen({
   );
 }
 
-function MapArea({ title, subtitle, stops, showRoute, expanded }: { title: string; subtitle: string; stops: string[]; showRoute: boolean; expanded?: boolean }) {
+function MapArea({ title, subtitle, stops, showRoute, expanded, driverCoordinate }: {
+  title: string; subtitle: string; stops: string[]; showRoute: boolean; expanded?: boolean;
+  driverCoordinate?: { latitude: number; longitude: number } | null;
+}) {
   return (
     <View style={[styles.mapArea, expanded && styles.mapAreaExpanded]}>
-      <RideMap stops={stops} showRoute={showRoute} />
+      <RideMap stops={stops} showRoute={showRoute} driverCoordinate={driverCoordinate} />
       <LinearGradient colors={["rgba(3,3,3,0.78)", "rgba(3,3,3,0.20)", "transparent"]} style={styles.mapShade} />
       <View style={styles.mapTitleBlock}>
         <Text style={styles.mapSmall}>{subtitle}</Text>
@@ -558,14 +575,32 @@ function BookingModals({
   );
 }
 
-function SearchingScreen({ onFound }: { onFound: () => void }) {
+function SearchingScreen({ bookingId, onFound }: { bookingId: string | null; onFound: () => void }) {
   useEffect(() => {
-    const t = setTimeout(onFound, 2600);
-    return () => clearTimeout(t);
-  }, [onFound]);
+    if (!bookingId) {
+      // No real booking yet (demo mode) — auto-advance after 2.6s
+      const t = setTimeout(onFound, 2600);
+      return () => clearTimeout(t);
+    }
+    // Poll until a driver is assigned
+    const interval = setInterval(async () => {
+      try {
+        const data = await trackBooking(bookingId);
+        const activeStatuses = ["driver_assigned", "vehicle_assigned", "driver_accepted", "on_route", "arrived_pickup", "passenger_onboard", "in_progress"];
+        if (data.status && activeStatuses.includes(data.status)) {
+          clearInterval(interval);
+          onFound();
+        }
+      } catch {
+        // Keep polling
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [bookingId, onFound]);
+
   return (
     <View style={styles.screen}>
-      <MapArea title="Finding your driver" subtitle="Payment authorised" stops={[]} showRoute={true} expanded />
+      <MapArea title="Finding your driver" subtitle="Booking confirmed" stops={[]} showRoute={false} expanded />
       <View style={styles.searchingCard}>
         <View style={styles.spinner} />
         <Text style={styles.searchingTitle}>Looking for a nearby driver</Text>
@@ -575,18 +610,80 @@ function SearchingScreen({ onFound }: { onFound: () => void }) {
   );
 }
 
-function TrackingScreen({ go }: { go: (s: Screen) => void }) {
-  const statuses = ["Driver assigned", "On the way", "Arrived", "Trip started", "Drop-off", "Completed"];
+const STATUS_STEPS = [
+  { key: "driver_assigned",    label: "Driver assigned" },
+  { key: "vehicle_assigned",   label: "Vehicle assigned" },
+  { key: "driver_accepted",    label: "Driver accepted" },
+  { key: "on_route",           label: "On the way" },
+  { key: "arrived_pickup",     label: "Arrived at pickup" },
+  { key: "passenger_onboard",  label: "Passenger onboard" },
+  { key: "in_progress",        label: "Trip in progress" },
+  { key: "completed",          label: "Completed" },
+];
+
+function TrackingScreen({ bookingId, go }: { bookingId: string | null; go: (s: Screen) => void }) {
+  const [tracking, setTracking] = useState<{
+    status: string;
+    driverName?: string;
+    driverPhone?: string;
+    driverLat?: number | null;
+    driverLng?: number | null;
+  }>({ status: "driver_assigned" });
+
+  useEffect(() => {
+    if (!bookingId) return;
+    const fetchTracking = async () => {
+      try {
+        const data = await trackBooking(bookingId);
+        setTracking({
+          status: data.status,
+          driverName: data.driverName,
+          driverPhone: data.driverPhone,
+        });
+      } catch {
+        // Keep last known state
+      }
+    };
+    fetchTracking();
+    const interval = setInterval(fetchTracking, 5000);
+    return () => clearInterval(interval);
+  }, [bookingId]);
+
+  const currentStepIndex = STATUS_STEPS.findIndex(s => s.key === tracking.status);
+  const driverCoordinate = null; // Real coords come once Google Maps is wired
+
+  const statusLabel = STATUS_STEPS.find(s => s.key === tracking.status)?.label ?? tracking.status.replace(/_/g, " ");
+
   return (
     <View style={styles.screen}>
-      <MapArea title="Driver on the way" subtitle="ETA 8 min" stops={["Sheffield Station"]} showRoute expanded />
+      <MapArea
+        title={statusLabel}
+        subtitle={tracking.driverName ? `Driver: ${tracking.driverName}` : "Waiting for driver"}
+        stops={[]}
+        showRoute={tracking.status !== "driver_assigned"}
+        driverCoordinate={driverCoordinate}
+        expanded
+      />
       <View style={styles.trackingSheet}>
         <View style={styles.handle} />
         <View style={styles.driverCard}>
-          <View style={styles.driverAvatar}><Text style={styles.driverAvatarText}>RP</Text></View>
-          <View style={{ flex: 1 }}><Text style={styles.driverName}>Driver details pending</Text><Text style={styles.driverSub}>Live driver and vehicle details will appear after assignment</Text></View>
+          <View style={styles.driverAvatar}><Text style={styles.driverAvatarText}>{tracking.driverName ? tracking.driverName.slice(0, 2).toUpperCase() : "RP"}</Text></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.driverName}>{tracking.driverName ?? "Awaiting driver assignment"}</Text>
+            <Text style={styles.driverSub}>{tracking.driverPhone ? `📞 ${tracking.driverPhone}` : "Driver will be assigned shortly"}</Text>
+          </View>
         </View>
-        {statuses.map((s, i) => <View key={s} style={styles.statusRow}><View style={[styles.statusDot, i <= 1 && styles.statusDotActive]} /><Text style={[styles.statusText, i <= 1 && styles.statusTextActive]}>{s}</Text></View>)}
+        {STATUS_STEPS.map((s, i) => (
+          <View key={s.key} style={styles.statusRow}>
+            <View style={[styles.statusDot, i <= currentStepIndex && styles.statusDotActive]} />
+            <Text style={[styles.statusText, i <= currentStepIndex && styles.statusTextActive]}>{s.label}</Text>
+          </View>
+        ))}
+        {tracking.status === "completed" && (
+          <Pressable style={[styles.sheetMainButton, { marginTop: 12 }]} onPress={() => go("bookings")}>
+            <Text style={styles.sheetMainText}>View receipt</Text>
+          </Pressable>
+        )}
         <Pressable style={styles.secondaryDarkButton} onPress={() => go("home")}><Text style={styles.secondaryDarkText}>Back to home</Text></Pressable>
       </View>
     </View>
