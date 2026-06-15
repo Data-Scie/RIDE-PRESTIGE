@@ -3,7 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { Prisma } from '@prisma/client';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
-import { applyCommission } from '../services/fareService';
+import { applyCommission, getPricingConfig } from '../services/fareService';
 import { pushNotification } from '../services/notificationService';
 import type { Job, JobStatus, Stop } from '../types';
 
@@ -183,7 +183,8 @@ router.post('/rides', async (req: Request, res: Response) => {
     if (!b.customerName || !b.customerPhone || !b.pickupAddress || !b.dropoffAddress || !b.dateTime || !b.fareAmount) {
       res.status(400).json({ success: false, message: 'Missing required fields' }); return;
     }
-    const { commission, affiliatePayout, driverPayout } = applyCommission(b.fareAmount!);
+    const pricing = await getPricingConfig();
+    const { commission, affiliatePayout, driverPayout } = applyCommission(b.fareAmount!, pricing);
     const totalJobs = await prisma.job.count();
     const ref = `RP-${new Date().getFullYear()}-${String(totalJobs + 2000).padStart(4, '0')}`;
     const job = await prisma.job.create({

@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
-import { estimateDistance, estimateHours, calculateFare, applyCommission } from '../services/fareService';
+import { estimateDistance, estimateHours, calculateFare, applyCommission, getPricingConfig } from '../services/fareService';
+import { createIndependentRideOffers } from '../services/dispatchService';
 import { pushNotification } from '../services/notificationService';
 import type { VehicleCategory, VehicleType, BookingType, Stop } from '../types';
 
@@ -147,7 +148,7 @@ router.put('/profile', async (req: Request, res: Response) => {
  *     responses:
  *       200: { description: Quote }
  */
-router.post('/quote', (req: Request, res: Response) => {
+router.post('/quote', async (req: Request, res: Response) => {
   const { pickupPostcode, dropoffPostcode, vehicleCategory, passengers, bookingType, date, time, notes, couponCode } =
     req.body as {
       pickupPostcode: string; dropoffPostcode: string; vehicleCategory: VehicleCategory;
@@ -156,11 +157,12 @@ router.post('/quote', (req: Request, res: Response) => {
   if (!pickupPostcode || !dropoffPostcode || !vehicleCategory || !passengers || !bookingType) {
     res.status(400).json({ success: false, message: 'Missing required fields' }); return;
   }
-  const miles  = estimateDistance(pickupPostcode, dropoffPostcode);
-  const hours  = estimateHours(miles);
-  const calc   = calculateFare(vehicleCategory, miles, hours, passengers, couponCode);
-  const ref    = `RP-QUOTE-${Date.now()}`;
-  const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const pricing = await getPricingConfig();
+  const miles   = estimateDistance(pickupPostcode, dropoffPostcode);
+  const hours   = estimateHours(miles);
+  const calc    = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
+  const ref     = `RP-QUOTE-${Date.now()}`;
+  const expiry  = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const quote = {
     id: `qt-${uuid()}`,
     bookingRef: ref,
@@ -289,9 +291,10 @@ router.post('/bookings', async (req: Request, res: Response) => {
       res.status(400).json({ success: false, message: 'Missing required fields' }); return;
     }
 
-    const miles = estimateDistance(pickupPostcode, dropoffPostcode);
-    const hours = estimateHours(miles);
-    const calc  = calculateFare(vehicleCategory, miles, hours, passengers, couponCode);
+    const pricing = await getPricingConfig();
+    const miles   = estimateDistance(pickupPostcode, dropoffPostcode);
+    const hours   = estimateHours(miles);
+    const calc    = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
 
     const ref = `RP-${new Date().getFullYear()}-${uuid().split('-')[0].toUpperCase()}`;
 
@@ -323,7 +326,7 @@ router.post('/bookings', async (req: Request, res: Response) => {
       prestige: 'Executive', minibus: 'Minibus', coaches: 'Coach', taxi: 'Saloon',
     };
     const jobDateTime = (date && time) ? new Date(`${date}T${time}:00Z`) : new Date(Date.now() + 30 * 60 * 1000);
-    const { commission, affiliatePayout, driverPayout } = applyCommission(calc.total);
+    const { commission, affiliatePayout, driverPayout } = applyCommission(calc.total, pricing);
 
     const jobRow = await prisma.job.create({
       data: {
@@ -359,12 +362,21 @@ router.post('/bookings', async (req: Request, res: Response) => {
       data: { jobId: jobRow.id },
     });
 
-    // Notify all approved affiliates
-    const approvedAffiliates = await prisma.affiliate.findMany({ where: { isApproved: true } });
-    for (const a of approvedAffiliates) {
-      await pushNotification(a.id, 'affiliate', 'New Job Available', `Job ${ref} — ${pickupPostcode} → ${dropoffPostcode}`, 'job');
-    }
-    await pushNotification('admin-1', 'admin', 'New Booking', `${c.fullName} booked ${ref} — £${calc.total}`, 'booking');
+    // Notify only affiliates with matching vehicle category + dispatch to independent drivers
+    const matchingAffiliates = await prisma.affiliate.findMany({
+      where: {
+        isApproved: true,
+        fleetVehicles: { some: { vehicleCategory, isApproved: true, approvalStatus: 'approved', status: 'available' } },
+      },
+      select: { id: true },
+    });
+    const notifTitle = 'New Job Available';
+    const notifBody  = `Job ${ref} — ${pickupPostcode} → ${dropoffPostcode} — £${calc.total}`;
+    await Promise.all([
+      ...matchingAffiliates.map(a => pushNotification(a.id, 'affiliate', notifTitle, notifBody, 'job')),
+      pushNotification('admin-1', 'admin', 'New Booking', `${c.fullName} booked ${ref} — £${calc.total}`, 'booking'),
+      createIndependentRideOffers(jobRow.id),
+    ]);
 
     const booking = shapeBooking({ ...bookingRow, jobId: jobRow.id });
     const job = shapeJob(jobRow);

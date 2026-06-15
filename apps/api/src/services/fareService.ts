@@ -1,9 +1,7 @@
+import { prisma } from '../lib/db';
 import type { VehicleCategory } from '../types';
 
-// Default pricing — overridden at runtime via admin /pricing endpoint which updates DB.
-// For quote/fare calculation these defaults are used synchronously.
-// If you need DB-driven pricing, make calculateFare async and fetch from prisma.pricingConfig.
-const defaultPricing = {
+const hardcodedDefaults = {
   prestige: { ratePerMile: 4.40, hourlyRate: 70 },
   minibus:  { ratePerMile: 4.00, rate16Seater: 420, rate24Seater: 520, rate32Seater: 620 },
   coaches:  { ratePerMile: 4.00, hourlyRate: 110 },
@@ -12,15 +10,28 @@ const defaultPricing = {
   driverPayoutPercentage: 60,
 };
 
-// Simulated distance lookup — in production wire to Google Maps Distance Matrix API
+export type PricingConfig = typeof hardcodedDefaults;
+
+export async function getPricingConfig(): Promise<PricingConfig> {
+  const p = await prisma.pricingConfig.findUnique({ where: { id: 'default' } });
+  if (!p) return hardcodedDefaults;
+  return {
+    prestige: { ratePerMile: p.prestigeRatePerMile, hourlyRate: p.prestigeHourlyRate },
+    minibus:  { ratePerMile: p.minibusRatePerMile, rate16Seater: p.minibusRate16Seater, rate24Seater: p.minibusRate24Seater, rate32Seater: p.minibusRate32Seater },
+    coaches:  { ratePerMile: p.coachesRatePerMile, hourlyRate: p.coachesHourlyRate },
+    taxi:     { ratePerMile: p.taxiRatePerMile, minimumFare: p.taxiMinimumFare },
+    commissionPercentage: p.commissionPercentage,
+    driverPayoutPercentage: p.driverPayoutPercentage,
+  };
+}
+
+// Simulated distance lookup — replace with Google Maps Distance Matrix API in production
 export function estimateDistance(fromPostcode: string, toPostcode: string): number {
-  // Very simple hash-based mock: returns 10–200 miles deterministically
   const seed = (fromPostcode + toPostcode).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   return Math.max(5, (seed % 190) + 10);
 }
 
 export function estimateHours(miles: number): number {
-  // Assume average 40 mph including urban sections
   return Math.round((miles / 40) * 100) / 100;
 }
 
@@ -42,8 +53,9 @@ export function calculateFare(
   hours: number,
   passengers?: number,
   couponCode?: string,
+  pricing: PricingConfig = hardcodedDefaults,
 ): FareBreakdown {
-  const cfg = defaultPricing;
+  const cfg = pricing;
   let mileageCharge = 0;
   let timeCharge    = 0;
   let breakdownText = '';
@@ -81,15 +93,10 @@ export function calculateFare(
   }
 
   const subtotal = parseFloat((mileageCharge + timeCharge).toFixed(2));
-
-  // Coupon: for a full DB-driven coupon lookup, make this function async.
-  // For now we do a no-op discount unless the code is provided (DB lookup happens async in routes).
   let discount = 0;
   if (couponCode) {
-    // Placeholder: discount logic is intentionally simplified here.
-    // The public/customer quote routes can call prisma.promotion.findFirst if needed.
+    // Coupon lookup happens in the calling route via prisma.promotion.findFirst
   }
-
   const total = parseFloat(Math.max(0, subtotal - discount).toFixed(2));
 
   return {
@@ -105,14 +112,14 @@ export function calculateFare(
   };
 }
 
-export function applyCommission(fareAmount: number): {
+export function applyCommission(fareAmount: number, pricing: PricingConfig = hardcodedDefaults): {
   commission: number;
   affiliatePayout: number;
   driverPayout: number;
 } {
-  const commission      = parseFloat(((fareAmount * defaultPricing.commissionPercentage) / 100).toFixed(2));
+  const commission      = parseFloat(((fareAmount * pricing.commissionPercentage) / 100).toFixed(2));
   const net             = fareAmount - commission;
-  const driverPayout    = parseFloat(((net * defaultPricing.driverPayoutPercentage) / 100).toFixed(2));
+  const driverPayout    = parseFloat(((net * pricing.driverPayoutPercentage) / 100).toFixed(2));
   const affiliatePayout = parseFloat((net - driverPayout).toFixed(2));
   return { commission, affiliatePayout, driverPayout };
 }

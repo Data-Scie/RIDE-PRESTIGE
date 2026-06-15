@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { prisma } from '../lib/db';
-import { estimateDistance, estimateHours, calculateFare, applyCommission } from '../services/fareService';
+import { estimateDistance, estimateHours, calculateFare, applyCommission, getPricingConfig } from '../services/fareService';
 import { pushNotification } from '../services/notificationService';
 import { DEFAULT_HOME_SECTIONS, DEFAULT_WEBSITE_PAGES } from '../data/cmsDefaults';
 import { createIndependentRideOffers } from '../services/dispatchService';
@@ -277,7 +277,7 @@ router.get('/pages/:slug', async (req: Request, res: Response) => {
  *     responses:
  *       200: { description: Quote result }
  */
-router.post('/quote', (req: Request, res: Response) => {
+router.post('/quote', async (req: Request, res: Response) => {
   const { pickupPostcode, dropoffPostcode, vehicleCategory, passengers, bookingType, date, time, notes, couponCode } =
     req.body as {
       pickupPostcode: string; dropoffPostcode: string; vehicleCategory: VehicleCategory;
@@ -289,9 +289,10 @@ router.post('/quote', (req: Request, res: Response) => {
     return;
   }
 
-  const miles  = estimateDistance(pickupPostcode, dropoffPostcode);
-  const hours  = estimateHours(miles);
-  const calc   = calculateFare(vehicleCategory, miles, hours, passengers, couponCode);
+  const pricing = await getPricingConfig();
+  const miles   = estimateDistance(pickupPostcode, dropoffPostcode);
+  const hours   = estimateHours(miles);
+  const calc    = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
   const quoteId = `qt-${uuid()}`;
   const ref     = `RP-QUOTE-${Date.now()}`;
   const expiry  = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -356,10 +357,11 @@ router.post('/booking', async (req: Request, res: Response) => {
   }
 
   try {
+    const pricing = await getPricingConfig();
     const miles = estimateDistance(pickupPostcode, dropoffPostcode);
     const hours = estimateHours(miles);
-    const calc  = calculateFare(vehicleCategory, miles, hours, passengers, couponCode);
-    const { commission, affiliatePayout, driverPayout } = applyCommission(calc.total);
+    const calc  = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
+    const { commission, affiliatePayout, driverPayout } = applyCommission(calc.total, pricing);
 
     const ref = `RP-${new Date().getFullYear()}-${uuid().split('-')[0].toUpperCase()}`;
     const existingCustomer = await prisma.customer.findUnique({ where: { email } });
