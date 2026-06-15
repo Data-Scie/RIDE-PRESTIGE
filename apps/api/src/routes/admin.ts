@@ -1220,6 +1220,14 @@ const DEFAULT_PAGES = [
           description: 'Dependable coach and minibus transport across Sheffield and the UK. Professional drivers, seamless airport transfers, corporate travel and event logistics.',
           primaryCtaLabel: 'Book Now',
           secondaryCtaLabel: 'View our fleet',
+          stat1Value: '10K+',
+          stat1Label: 'Journeys',
+          stat2Value: '4.9★',
+          stat2Label: 'Rating',
+          stat3Value: '24/7',
+          stat3Label: 'Service',
+          stat4Value: '50+',
+          stat4Label: 'Drivers',
         },
       },
       {
@@ -1249,14 +1257,33 @@ router.get('/pages', async (_req: Request, res: Response) => {
   try {
     await prisma.websitePage.createMany({ data: DEFAULT_PAGES, skipDuplicates: true });
     let pages = await prisma.websitePage.findMany({ orderBy: { slug: 'asc' } });
+
+    // Merge any newly-added default fields into the stored hero section
+    // (so adding new CMS fields doesn't require a manual DB reset)
     const home = pages.find(page => page.slug === 'home');
-    if (home && Array.isArray(home.sectionsJson) && home.sectionsJson.length === 0) {
-      await prisma.websitePage.update({
-        where: { id: home.id },
-        data: { sectionsJson: DEFAULT_PAGES[0].sectionsJson },
-      });
-      pages = await prisma.websitePage.findMany({ orderBy: { slug: 'asc' } });
+    if (home) {
+      const stored = Array.isArray(home.sectionsJson) ? home.sectionsJson as Record<string, unknown>[] : [];
+      const defaultHero = (DEFAULT_PAGES[0].sectionsJson as Record<string, unknown>[]).find((s: Record<string, unknown>) => s.id === 'home-hero');
+      const storedHero = stored.find((s: Record<string, unknown>) => s.id === 'home-hero');
+      if (defaultHero && storedHero) {
+        const defaultContent = defaultHero.content as Record<string, unknown>;
+        const storedContent = storedHero.content as Record<string, unknown>;
+        const merged = { ...defaultContent, ...storedContent };
+        const hasNew = Object.keys(defaultContent).some(k => !(k in storedContent));
+        if (hasNew || stored.length === 0) {
+          const updatedSections = stored.length === 0
+            ? DEFAULT_PAGES[0].sectionsJson
+            : stored.map((s: Record<string, unknown>) => s.id === 'home-hero' ? { ...s, content: merged } : s);
+          await prisma.websitePage.update({
+            where: { id: home.id },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            data: { sectionsJson: updatedSections as any },
+          });
+          pages = await prisma.websitePage.findMany({ orderBy: { slug: 'asc' } });
+        }
+      }
     }
+
     const shaped = pages.map(p => ({ ...p, sections: p.sectionsJson }));
     res.json({ success: true, data: shaped });
   } catch (e) {

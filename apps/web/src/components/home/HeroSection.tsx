@@ -32,7 +32,12 @@ export default function HeroSection({ content = {} }: { content?: Record<string,
               </Link>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', marginTop: '2.5rem', paddingTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-              {[{ v: '10K+', l: 'Journeys' }, { v: '4.9★', l: 'Rating' }, { v: '24/7', l: 'Service' }, { v: '50+', l: 'Drivers' }].map(s => (
+              {[
+                { v: String(content.stat1Value || '10K+'), l: String(content.stat1Label || 'Journeys') },
+                { v: String(content.stat2Value || '4.9★'), l: String(content.stat2Label || 'Rating') },
+                { v: String(content.stat3Value || '24/7'), l: String(content.stat3Label || 'Service') },
+                { v: String(content.stat4Value || '50+'), l: String(content.stat4Label || 'Drivers') },
+              ].map(s => (
                 <div key={s.l}>
                   <p style={{ color: '#ffffff', fontWeight: 700, fontSize: '1rem' }}>{s.v}</p>
                   <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.72rem' }}>{s.l}</p>
