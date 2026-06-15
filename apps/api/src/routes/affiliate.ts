@@ -51,21 +51,28 @@ function shapeJob(j: {
 router.get('/dashboard', async (req: Request, res: Response) => {
   try {
     const affId = getAffId(req);
+    // Get affiliate's vehicle categories first (needed to filter available jobs)
+    const myVehiclesRaw = await prisma.fleetVehicle.findMany({ where: { affiliateId: affId } });
+    const myCategories = [...new Set(
+      myVehiclesRaw.filter(v => v.isApproved && v.approvalStatus === 'approved' && v.status === 'available')
+        .map(v => v.vehicleCategory),
+    )];
+    const categoryFilter = myCategories.length > 0 ? { vehicleCategory: { in: myCategories } } : {};
     const [
-      aff, pendingJobsList, myJobs, myDrivers, myVehicles, myEarnings,
+      aff, pendingJobsList, myJobs, myDrivers, myEarnings,
     ] = await Promise.all([
       prisma.affiliate.findUnique({ where: { id: affId } }),
-      prisma.job.findMany({ where: { status: 'awaiting_affiliate' }, orderBy: { dateTime: 'asc' }, take: 1 }),
+      prisma.job.findMany({ where: { status: 'awaiting_affiliate', ...categoryFilter }, orderBy: { dateTime: 'asc' }, take: 1 }),
       prisma.job.findMany({ where: { affiliateId: affId } }),
       prisma.driver.findMany({ where: { affiliateId: affId } }),
-      prisma.fleetVehicle.findMany({ where: { affiliateId: affId } }),
       prisma.earningEntry.findMany({ where: { entityId: affId, entityType: 'affiliate' } }),
     ]);
+    const myVehicles = myVehiclesRaw;
     const today = new Date().toISOString().slice(0, 10);
     const activeRides     = myJobs.filter(j => !['completed', 'cancelled', 'rejected', 'awaiting_affiliate'].includes(j.status)).length;
     const completedJobs   = myJobs.filter(j => j.status === 'completed').length;
     const pendingAllocations = myJobs.filter(j => j.status === 'needs_allocation').length;
-    const pendingRidesAll = await prisma.job.count({ where: { status: 'awaiting_affiliate' } });
+    const pendingRidesAll = await prisma.job.count({ where: { status: 'awaiting_affiliate', ...categoryFilter } });
     const totalEarnings   = parseFloat(myEarnings.reduce((s, e) => s + e.netAmount, 0).toFixed(2));
     const todayEarnings   = parseFloat(myEarnings.filter(e => e.date.toISOString().startsWith(today)).reduce((s, e) => s + e.netAmount, 0).toFixed(2));
     const pendingPayout   = parseFloat(myEarnings.filter(e => e.status === 'pending').reduce((s, e) => s + e.netAmount, 0).toFixed(2));
@@ -117,10 +124,21 @@ router.get('/dashboard', async (req: Request, res: Response) => {
  *     responses:
  *       200: { description: New available jobs }
  */
-router.get('/jobs/new', async (_req: Request, res: Response) => {
+router.get('/jobs/new', async (req: Request, res: Response) => {
   try {
+    const affId = getAffId(req);
+    // Only show jobs whose vehicle category matches a vehicle this affiliate has
+    const myVehicleCategories = await prisma.fleetVehicle.findMany({
+      where: { affiliateId: affId, isApproved: true, approvalStatus: 'approved', status: 'available' },
+      select: { vehicleCategory: true },
+      distinct: ['vehicleCategory'],
+    });
+    const categories = myVehicleCategories.map(v => v.vehicleCategory);
     const jobs = await prisma.job.findMany({
-      where: { status: 'awaiting_affiliate' },
+      where: {
+        status: 'awaiting_affiliate',
+        ...(categories.length > 0 ? { vehicleCategory: { in: categories } } : {}),
+      },
       orderBy: { dateTime: 'asc' },
     });
     const list = jobs.map(shapeJob);

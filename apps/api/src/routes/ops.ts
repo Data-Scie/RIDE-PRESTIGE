@@ -211,8 +211,14 @@ router.post('/rides', async (req: Request, res: Response) => {
         status: 'awaiting_affiliate',
       },
     });
-    // Notify all approved affiliates
-    const approvedAffiliates = await prisma.affiliate.findMany({ where: { isApproved: true } });
+    // Notify only affiliates with a matching vehicle category
+    const jobCategory = b.vehicleCategory ?? 'prestige';
+    const approvedAffiliates = await prisma.affiliate.findMany({
+      where: {
+        isApproved: true,
+        vehicles: { some: { vehicleCategory: jobCategory, isApproved: true, approvalStatus: 'approved', status: 'available' } },
+      },
+    });
     for (const a of approvedAffiliates) {
       await pushNotification(a.id, 'affiliate', 'New Job Available', `Job ${ref} is available — ${job.pickupAddress} → ${job.dropoffAddress}`, 'job');
     }

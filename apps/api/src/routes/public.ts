@@ -434,9 +434,12 @@ router.post('/booking', async (req: Request, res: Response) => {
     // Notify admin
     await pushNotification('admin-1', 'admin', 'New Booking', `New booking ${ref} from ${fullName} — £${calc.total}`, 'booking');
 
-    // Dispatch — notify all approved affiliates and approved independent drivers
+    // Dispatch — notify only affiliates/drivers who have a matching vehicle category
     const affiliates = await prisma.affiliate.findMany({
-      where: { isApproved: true },
+      where: {
+        isApproved: true,
+        vehicles: { some: { vehicleCategory, isApproved: true, approvalStatus: 'approved', status: 'available' } },
+      },
       select: { id: true },
     });
 
