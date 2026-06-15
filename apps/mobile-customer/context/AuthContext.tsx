@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { login as apiLogin, getProfile, clearToken, storeToken } from '@/services/api';
+import { login as apiLogin, getProfile, clearToken } from '@/services/api';
+import { registerCustomerPushToken } from '@/services/pushNotifications';
 
 interface Customer {
   id: string;
@@ -35,6 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const profile = await getProfile();
           setCustomer({ id: profile.id, name: profile.fullName, email: profile.email, phone: profile.phone });
+          registerCustomerPushToken().catch(() => {});
         } catch {
           await clearToken();
         }
@@ -46,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     const user = await apiLogin(email, password);
     setCustomer(user);
+    registerCustomerPushToken().catch(() => {});
   };
 
   const logout = async () => {

@@ -438,7 +438,7 @@ router.post('/booking', async (req: Request, res: Response) => {
     const affiliates = await prisma.affiliate.findMany({
       where: {
         isApproved: true,
-        vehicles: { some: { vehicleCategory, isApproved: true, approvalStatus: 'approved', status: 'available' } },
+        fleetVehicles: { some: { vehicleCategory, isApproved: true, approvalStatus: 'approved', status: 'available' } },
       },
       select: { id: true },
     });

@@ -46,11 +46,39 @@ async function sendRideReminders() {
   }
 }
 
+async function expireStaleOffers() {
+  const now = new Date();
+  const stale = await prisma.rideOffer.findMany({
+    where: { status: 'pending', expiresAt: { lt: now } },
+    select: { id: true, driverId: true, jobId: true },
+  });
+
+  if (stale.length === 0) return;
+
+  await prisma.rideOffer.updateMany({
+    where: { id: { in: stale.map(o => o.id) } },
+    data: { status: 'expired' },
+  });
+
+  // Notify drivers whose offers expired so the mobile app can update UI
+  for (const offer of stale) {
+    await pushNotification(
+      offer.driverId,
+      'driver',
+      'Ride offer expired',
+      'A ride offer has expired. Stay available for new offers.',
+      'job',
+    );
+  }
+}
+
 export function startReminderScheduler() {
-  // Runs every minute
   cron.schedule('* * * * *', () => {
     sendRideReminders().catch(err =>
       console.error('[Reminders] Failed to send ride reminders:', err),
+    );
+    expireStaleOffers().catch(err =>
+      console.error('[Reminders] Failed to expire stale offers:', err),
     );
   });
   console.log('[Reminders] Ride reminder scheduler started');

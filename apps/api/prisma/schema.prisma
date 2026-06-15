@@ -22,14 +22,15 @@ model Admin {
 // ─── Customers ────────────────────────────────────────────────────────────────
 
 model Customer {
-  id            String   @id
-  fullName      String
-  email         String   @unique
-  phone         String
-  passwordHash  String
-  isVerified    Boolean  @default(false)
-  totalBookings Int      @default(0)
-  createdAt     DateTime @default(now())
+  id             String   @id
+  fullName       String
+  email          String   @unique
+  phone          String
+  passwordHash   String
+  isVerified     Boolean  @default(false)
+  totalBookings  Int      @default(0)
+  expoPushToken  String?
+  createdAt      DateTime @default(now())
 }
 
 // ─── Affiliates ───────────────────────────────────────────────────────────────
@@ -56,6 +57,7 @@ model Affiliate {
   rating                Float    @default(0)
   totalJobs             Int      @default(0)
   totalEarnings         Float    @default(0)
+  expoPushToken         String?
   createdAt             DateTime @default(now())
 
   drivers       Driver[]
@@ -93,6 +95,7 @@ model Driver {
   longitude              Float?
   lastLocationUpdate     DateTime?
   serviceAreas           String[]  @default([])
+  expoPushToken          String?
   updatedAt              DateTime  @updatedAt
 
   documents DriverDocument[]

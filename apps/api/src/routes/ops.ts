@@ -52,7 +52,7 @@ router.get('/dashboard', async (_req: Request, res: Response) => {
     const [
       activeRides, awaitingAffiliate, needsAllocation, completedToday,
       totalDrivers, availableDrivers, totalAffiliates,
-      pendingDriverCount, pendingAffCount,
+      pendingDriverCount, pendingAffCount, pendingVehicleCount,
     ] = await Promise.all([
       prisma.job.count({ where: { status: { in: ['on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress'] } } }),
       prisma.job.count({ where: { status: 'awaiting_affiliate' } }),
@@ -63,13 +63,15 @@ router.get('/dashboard', async (_req: Request, res: Response) => {
       prisma.affiliate.count(),
       prisma.driver.count({ where: { applicationStatus: 'pending' } }),
       prisma.affiliate.count({ where: { isApproved: false } }),
+      prisma.fleetVehicle.count({ where: { approvalStatus: 'pending' } }),
     ]);
     res.json({
       success: true,
       data: {
         activeRides, awaitingAffiliate, needsAllocation, completedToday,
         totalDrivers, availableDrivers, totalAffiliates,
-        pendingApprovals: pendingDriverCount + pendingAffCount,
+        pendingApprovals: pendingDriverCount + pendingAffCount + pendingVehicleCount,
+        pendingVehicles: pendingVehicleCount,
       },
     });
   } catch (e) {
@@ -216,7 +218,7 @@ router.post('/rides', async (req: Request, res: Response) => {
     const approvedAffiliates = await prisma.affiliate.findMany({
       where: {
         isApproved: true,
-        vehicles: { some: { vehicleCategory: jobCategory, isApproved: true, approvalStatus: 'approved', status: 'available' } },
+        fleetVehicles: { some: { vehicleCategory: jobCategory, isApproved: true, approvalStatus: 'approved', status: 'available' } },
       },
     });
     for (const a of approvedAffiliates) {
@@ -359,10 +361,24 @@ router.put('/rides/:id/assign-affiliate', async (req: Request, res: Response) =>
  *     responses:
  *       200: { description: Fleet vehicles }
  */
-router.get('/vehicles', async (_req: Request, res: Response) => {
+router.get('/vehicles', async (req: Request, res: Response) => {
   try {
-    const vehicles = await prisma.fleetVehicle.findMany();
-    res.json({ success: true, data: vehicles, total: vehicles.length });
+    const { ownerType } = req.query as Record<string, string>;
+    const where: Record<string, unknown> = {};
+    if (ownerType === 'independent') where.ownerDriverId = { not: null };
+    else if (ownerType === 'affiliate') where.affiliateId = { not: null };
+
+    const vehicles = await prisma.fleetVehicle.findMany({ where });
+    const enriched = await Promise.all(vehicles.map(async v => {
+      const ownerDriver = v.ownerDriverId
+        ? await prisma.driver.findUnique({ where: { id: v.ownerDriverId }, select: { id: true, fullName: true, email: true, phone: true } })
+        : null;
+      const ownerAffiliate = v.affiliateId
+        ? await prisma.affiliate.findUnique({ where: { id: v.affiliateId }, select: { id: true, tradingName: true, companyName: true } })
+        : null;
+      return { ...v, ownerDriver, ownerAffiliate };
+    }));
+    res.json({ success: true, data: enriched, total: enriched.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 import type { AuthContextType, User, UserRole, Affiliate, Driver } from '@/types';
 import { authService } from '@/services/authService';
 import { api } from '@/services/apiClient';
+import { registerPushToken } from '@/services/pushNotifications';
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -24,6 +25,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const r = await api.get<{ success: boolean; data: Driver }>('/api/driver/profile').catch(() => null);
         if (r) setDriver(r.data);
       }
+
+      // Register device push token in background — non-blocking
+      registerPushToken(role).catch(() => {});
     } finally {
       setIsLoading(false);
     }

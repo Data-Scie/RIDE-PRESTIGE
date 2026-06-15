@@ -894,4 +894,18 @@ router.post('/jobs/:id/rate', async (req: Request, res: Response) => {
   }
 });
 
+// ─── Push Token ───────────────────────────────────────────────────────────────
+
+router.put('/push-token', async (req: Request, res: Response) => {
+  try {
+    const drvId = getDrvId(req);
+    const { token } = req.body as { token?: string };
+    if (!token) { res.status(400).json({ success: false, message: 'Token required' }); return; }
+    await prisma.driver.update({ where: { id: drvId }, data: { expoPushToken: token } });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
 export default router;
