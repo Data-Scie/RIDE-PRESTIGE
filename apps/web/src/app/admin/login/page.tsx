@@ -26,7 +26,6 @@ export default function AdminLoginPage() {
       });
       const data = await res.json();
       if (res.ok && data.token) {
-        document.cookie = `rp_admin_jwt=${encodeURIComponent(data.token)}; path=/; max-age=${60 * 60 * 24 * 7}; samesite=lax`;
         window.location.href = '/admin/dashboard';
       } else {
         setError(data.error || data.message || 'Invalid email or password. Please try again.');

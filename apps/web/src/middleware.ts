@@ -8,7 +8,7 @@ function hasJwt(request: NextRequest, cookieName: string): boolean {
   return !!token && token.split('.').length === 3;
 }
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Website CMS admin panel (backend JWT cookie)
