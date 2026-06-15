@@ -18,7 +18,11 @@ interface Driver {
   rating: number;
   totalJobs: number;
   joinedDate: string;
-  documents?: Array<{ id: string; label: string; status: string }>;
+  documents?: Array<{ id: string; label: string; status: string; expiryDate?: string; fileUrl?: string; rejectionReason?: string }>;
+}
+
+interface Vehicle {
+  id: string; make: string; model: string; registration: string; approvalStatus: string;
 }
 
 interface RecentJob {
@@ -34,14 +38,22 @@ export default function DriverDetailPage() {
   const { id } = useParams() as { id: string };
   const [driver, setDriver] = useState<Driver | null>(null);
   const [rides, setRides] = useState<RecentJob[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState(false);
 
   const load = async () => {
-    const result = await opsApi.get<{ success: boolean; data: Driver; jobs: RecentJob[] }>(`/api/ops/drivers/${id}`);
+    const result = await opsApi.get<{ success: boolean; data: Driver; jobs: RecentJob[]; vehicles: Vehicle[] }>(`/api/ops/drivers/${id}`);
     setDriver(result.data);
     setRides(result.jobs ?? []);
+    setVehicles(result.vehicles ?? []);
+  };
+
+  const updateDocument = async (documentId: string, action: 'approve' | 'reject') => {
+    const reason = action === 'reject' ? window.prompt('Reason for rejection') || 'Document was not approved' : undefined;
+    await opsApi.put(`/api/ops/drivers/${id}/documents/${documentId}/${action}`, { reason });
+    await load();
   };
 
   useEffect(() => {
@@ -111,12 +123,28 @@ export default function DriverDetailPage() {
           {(driver.documents ?? []).map(document => (
             <div key={document.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
               <span className="text-sm">{document.label}</span>
-              <span className="flex items-center gap-1 text-xs capitalize">{document.status === 'approved' ? <CheckCircle size={16} className="text-green-500" /> : <XCircle size={16} className="text-amber-500" />}{document.status}</span>
+              <div className="text-right">
+                <span className="flex items-center justify-end gap-1 text-xs capitalize">{document.status === 'approved' ? <CheckCircle size={16} className="text-green-500" /> : <XCircle size={16} className="text-amber-500" />}{document.status}</span>
+                {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600">View document</a>}
+                <div className="flex gap-1 mt-1">
+                  <button onClick={() => updateDocument(document.id, 'approve')} className="text-[10px] px-2 py-1 rounded bg-green-600 text-white">Approve</button>
+                  <button onClick={() => updateDocument(document.id, 'reject')} className="text-[10px] px-2 py-1 rounded bg-red-50 text-red-600">Reject</button>
+                </div>
+              </div>
             </div>
           ))}
           {!driver.documents?.length && <p className="text-sm text-slate-400">No documents uploaded yet.</p>}
         </div>
       </div>
+
+      {driver.driverType === 'independentDriver' && (
+        <div className="bg-white rounded-2xl border border-slate-100 p-5">
+          <h2 className="font-semibold text-slate-800 mb-3">Independent Vehicles</h2>
+          {vehicles.map(vehicle => <div key={vehicle.id} className="p-3 rounded-xl bg-slate-50 mb-2"><p className="font-semibold text-sm">{vehicle.make} {vehicle.model}</p><p className="text-xs text-slate-500">{vehicle.registration} · {vehicle.approvalStatus}</p></div>)}
+          {!vehicles.length && <p className="text-sm text-slate-400">No vehicle submitted.</p>}
+          <Link href="/ops/vehicles" className="inline-block mt-3 text-sm text-blue-600">Open vehicle approvals</Link>
+        </div>
+      )}
 
       {rides.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-100 p-5">

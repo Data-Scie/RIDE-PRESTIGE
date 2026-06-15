@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "test:ride-lifecycle": "node scripts/test-ride-lifecycle.js",
     "test:driver-applications": "node scripts/test-driver-applications.js",
+    "test:independent-dispatch": "node scripts/test-independent-dispatch.js",
     "db:cleanup-mocks": "node scripts/cleanup-mock-data.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

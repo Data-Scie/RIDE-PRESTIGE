@@ -1,0 +1,138 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Car, FileCheck2, Plus } from 'lucide-react';
+import { driverApi } from '@/lib/api-client';
+
+type DocumentRecord = {
+  id: string;
+  label: string;
+  status: string;
+  expiryDate?: string;
+  fileUrl?: string;
+  rejectionReason?: string;
+};
+
+type Vehicle = {
+  id: string;
+  make: string;
+  model: string;
+  registration: string;
+  vehicleCategory: string;
+  passengerCapacity: number;
+  approvalStatus: string;
+  rejectionReason?: string;
+};
+
+const emptyVehicle = {
+  make: '', model: '', year: new Date().getFullYear(), registration: '',
+  vehicleType: 'Executive', vehicleCategory: 'prestige', colour: '',
+  passengerCapacity: 4, luggageCapacity: 2,
+  motExpiry: '', insuranceExpiry: '', phvLicenceExpiry: '',
+};
+
+export default function DriverCompliancePage() {
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehicle, setVehicle] = useState(emptyVehicle);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    const [docs, fleet] = await Promise.all([
+      driverApi.get<{ data: DocumentRecord[] }>('/api/driver/documents'),
+      driverApi.get<{ data: Vehicle[] }>('/api/driver/vehicles').catch(() => ({ data: [] })),
+    ]);
+    setDocuments(docs.data);
+    setVehicles(fleet.data);
+  };
+
+  useEffect(() => { load().catch(e => setError(e.message)); }, []);
+
+  const submitDocument = async (document: DocumentRecord, fileUrl: string, expiryDate: string) => {
+    setError('');
+    await driverApi.put(`/api/driver/documents/${document.id}`, { fileUrl, expiryDate });
+    setMessage(`${document.label} submitted for review.`);
+    await load();
+  };
+
+  const submitVehicle = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    try {
+      await driverApi.post('/api/driver/vehicles', vehicle);
+      setVehicle(emptyVehicle);
+      setMessage('Vehicle submitted to Operations for approval.');
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  return (
+    <div className="max-w-5xl space-y-6">
+      <div><h1 className="text-2xl font-bold text-slate-800">Compliance & Vehicle</h1><p className="text-sm text-slate-500">Independent drivers need an approved account, current documents, and an approved vehicle before receiving direct rides.</p></div>
+      {message && <div className="p-3 rounded-xl bg-green-50 text-green-700 text-sm">{message}</div>}
+      {error && <div className="p-3 rounded-xl bg-red-50 text-red-600 text-sm">{error}</div>}
+
+      <section className="bg-white rounded-2xl border border-slate-100 p-5">
+        <h2 className="font-semibold text-slate-800 flex items-center gap-2 mb-4"><FileCheck2 size={17} /> Driver Documents</h2>
+        <div className="grid md:grid-cols-2 gap-4">
+          {documents.map(document => <DocumentForm key={document.id} document={document} onSubmit={submitDocument} />)}
+        </div>
+      </section>
+
+      <section className="bg-white rounded-2xl border border-slate-100 p-5">
+        <h2 className="font-semibold text-slate-800 flex items-center gap-2 mb-4"><Car size={17} /> Registered Vehicles</h2>
+        <div className="grid md:grid-cols-2 gap-3 mb-6">
+          {vehicles.map(item => (
+            <div key={item.id} className="p-4 rounded-xl bg-slate-50">
+              <p className="font-semibold">{item.make} {item.model}</p>
+              <p className="text-sm text-slate-500">{item.registration} · {item.vehicleCategory} · {item.passengerCapacity} passengers</p>
+              <span className="inline-block mt-2 text-xs font-semibold capitalize">{item.approvalStatus}</span>
+              {item.rejectionReason && <p className="text-xs text-red-600 mt-1">{item.rejectionReason}</p>}
+            </div>
+          ))}
+          {!vehicles.length && <p className="text-sm text-slate-400">No independent vehicle registered.</p>}
+        </div>
+
+        <form onSubmit={submitVehicle} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {([
+            ['make', 'Make'], ['model', 'Model'], ['registration', 'Registration'], ['colour', 'Colour'],
+            ['year', 'Year'], ['passengerCapacity', 'Passenger capacity'], ['luggageCapacity', 'Luggage capacity'],
+            ['motExpiry', 'MOT expiry'], ['insuranceExpiry', 'Insurance expiry'], ['phvLicenceExpiry', 'PHV licence expiry'],
+          ] as const).map(([key, label]) => (
+            <label key={key} className="text-xs font-semibold text-slate-500">{label}
+              <input required type={key.includes('Expiry') ? 'date' : ['year','passengerCapacity','luggageCapacity'].includes(key) ? 'number' : 'text'} value={vehicle[key]} onChange={e => setVehicle(current => ({ ...current, [key]: ['year','passengerCapacity','luggageCapacity'].includes(key) ? Number(e.target.value) : e.target.value }))} className="mt-1 w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm" />
+            </label>
+          ))}
+          <label className="text-xs font-semibold text-slate-500">Vehicle type
+            <select value={vehicle.vehicleType} onChange={e => setVehicle(current => ({ ...current, vehicleType: e.target.value }))} className="mt-1 w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm">
+              {['Saloon','Estate','MPV','Executive','Minibus','Coach','Luxury'].map(value => <option key={value}>{value}</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-500">Booking category
+            <select value={vehicle.vehicleCategory} onChange={e => setVehicle(current => ({ ...current, vehicleCategory: e.target.value }))} className="mt-1 w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm">
+              {['prestige','minibus','coaches','taxi'].map(value => <option key={value}>{value}</option>)}
+            </select>
+          </label>
+          <button className="self-end py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-sm flex items-center justify-center gap-2"><Plus size={15} /> Submit vehicle</button>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function DocumentForm({ document, onSubmit }: { document: DocumentRecord; onSubmit: (document: DocumentRecord, fileUrl: string, expiryDate: string) => Promise<void> }) {
+  const [fileUrl, setFileUrl] = useState(document.fileUrl || '');
+  const [expiryDate, setExpiryDate] = useState(document.expiryDate || '');
+  return (
+    <div className="p-4 rounded-xl bg-slate-50">
+      <div className="flex justify-between gap-3"><p className="font-semibold text-sm">{document.label}</p><span className="text-xs capitalize">{document.status}</span></div>
+      {document.rejectionReason && <p className="text-xs text-red-600 mt-1">{document.rejectionReason}</p>}
+      <input type="url" required value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="Secure document URL" className="mt-3 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+      <input required type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className="mt-2 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+      <button onClick={() => onSubmit(document, fileUrl, expiryDate)} className="mt-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs font-semibold">Submit for review</button>
+    </div>
+  );
+}

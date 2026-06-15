@@ -1,6 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { prisma } from '../lib/db';
 import type { PortalRole } from '../types';
+import { emitToRoom } from '../lib/socket';
 
 export async function pushNotification(
   recipientId: string,
@@ -9,7 +10,7 @@ export async function pushNotification(
   body: string,
   type: 'job' | 'system' | 'earnings' | 'document' | 'booking',
 ): Promise<void> {
-  await prisma.notification.create({
+  const notification = await prisma.notification.create({
     data: {
       id: `notif-${uuid()}`,
       recipientId,
@@ -19,6 +20,10 @@ export async function pushNotification(
       type,
       isRead: false,
     },
+  });
+  emitToRoom(`${recipientRole}:${recipientId}`, 'notification:new', {
+    ...notification,
+    createdAt: notification.createdAt.toISOString(),
   });
 }
 

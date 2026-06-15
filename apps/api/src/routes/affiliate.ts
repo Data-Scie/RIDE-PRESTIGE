@@ -4,6 +4,7 @@ import { v4 as uuid } from 'uuid';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
 import { pushNotification } from '../services/notificationService';
+import { isDriverDocumentEligible, isVehicleEligible } from '../services/dispatchService';
 import type { Stop } from '../types';
 
 const router = Router();
@@ -236,9 +237,15 @@ router.post('/jobs/:id/accept', async (req: Request, res: Response) => {
       res.status(409).json({ success: false, message: `Cannot accept job in status: ${job.status}` }); return;
     }
     const updated = await prisma.$transaction(async tx => {
-      const updatedJob = await tx.job.update({
-        where: { id: job.id },
+      const claimed = await tx.job.updateMany({
+        where: { id: job.id, status: 'awaiting_affiliate', affiliateId: null, assignedDriverId: null },
         data: { affiliateId: affId, status: 'needs_allocation' },
+      });
+      if (claimed.count !== 1) throw new Error('RIDE_ALREADY_CLAIMED');
+      const updatedJob = await tx.job.findUniqueOrThrow({ where: { id: job.id } });
+      await tx.rideOffer.updateMany({
+        where: { jobId: job.id, status: 'pending' },
+        data: { status: 'withdrawn', respondedAt: new Date() },
       });
       await tx.booking.updateMany({
         where: { OR: [{ id: job.bookingId ?? '' }, { jobId: job.id }] },
@@ -251,6 +258,10 @@ router.post('/jobs/:id/accept', async (req: Request, res: Response) => {
     });
     res.json({ success: true, message: 'Job accepted', data: shapeJob(updated) });
   } catch (e) {
+    if (e instanceof Error && e.message === 'RIDE_ALREADY_CLAIMED') {
+      res.status(409).json({ success: false, message: 'This ride has already been claimed' });
+      return;
+    }
     res.status(500).json({ success: false, message: 'Database error' });
   }
 });
@@ -317,8 +328,12 @@ router.post('/jobs/:id/assign-driver', async (req: Request, res: Response) => {
     const { driverId } = req.body as { driverId: string };
     const driver = await prisma.driver.findFirst({
       where: { id: driverId, affiliateId: affId, isApproved: true },
+      include: { documents: true },
     });
     if (!driver) { res.status(404).json({ success: false, message: 'Driver not found or not approved' }); return; }
+    if (driver.documentsStatus !== 'approved' || !isDriverDocumentEligible(driver.documents)) {
+      res.status(409).json({ success: false, message: 'Driver documents are not approved and current' }); return;
+    }
     if (driver.status !== 'available' && job.assignedDriverId !== driverId) {
       res.status(409).json({ success: false, message: 'Driver is not available' }); return;
     }
@@ -372,9 +387,12 @@ router.post('/jobs/:id/assign-vehicle', async (req: Request, res: Response) => {
     }
     const { vehicleId } = req.body as { vehicleId: string };
     const vehicle = await prisma.fleetVehicle.findFirst({
-      where: { id: vehicleId, affiliateId: affId, status: 'available' },
+      where: { id: vehicleId, affiliateId: affId, status: 'available', isApproved: true, approvalStatus: 'approved' },
     });
     if (!vehicle) { res.status(404).json({ success: false, message: 'Vehicle not found' }); return; }
+    if (!isVehicleEligible(vehicle, job)) {
+      res.status(409).json({ success: false, message: 'Vehicle does not meet category, capacity, or compliance requirements' }); return;
+    }
     const updated = await prisma.$transaction(async tx => {
       const updatedJob = await tx.job.update({ where: { id: job.id }, data: { assignedVehicleId: vehicleId, status: 'vehicle_assigned' } });
       await tx.fleetVehicle.update({ where: { id: vehicleId }, data: { status: 'in_use' } });

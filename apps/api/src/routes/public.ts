@@ -4,6 +4,7 @@ import { prisma } from '../lib/db';
 import { estimateDistance, estimateHours, calculateFare, applyCommission } from '../services/fareService';
 import { pushNotification } from '../services/notificationService';
 import { DEFAULT_HOME_SECTIONS, DEFAULT_WEBSITE_PAGES } from '../data/cmsDefaults';
+import { createIndependentRideOffers } from '../services/dispatchService';
 import type { VehicleCategory, BookingType } from '../types';
 
 const router = Router();
@@ -434,18 +435,18 @@ router.post('/booking', async (req: Request, res: Response) => {
     await pushNotification('admin-1', 'admin', 'New Booking', `New booking ${ref} from ${fullName} — £${calc.total}`, 'booking');
 
     // Dispatch — notify all approved affiliates and approved independent drivers
-    const [affiliates, independentDrivers] = await Promise.all([
-      prisma.affiliate.findMany({ where: { isApproved: true }, select: { id: true } }),
-      prisma.driver.findMany({ where: { isApproved: true, driverType: 'independentDriver', status: { not: 'busy' } }, select: { id: true } }),
-    ]);
+    const affiliates = await prisma.affiliate.findMany({
+      where: { isApproved: true },
+      select: { id: true },
+    });
 
     const notifTitle = 'New Job Available';
     const notifBody  = `Job ${ref}: ${pickupPostcode} → ${dropoffPostcode} — £${calc.total} — ${rideDateTime.toLocaleDateString('en-GB')}`;
 
     await Promise.all([
       ...affiliates.map(a => pushNotification(a.id, 'affiliate', notifTitle, notifBody, 'job')),
-      ...independentDrivers.map(d => pushNotification(d.id, 'driver', notifTitle, notifBody, 'job')),
     ]);
+    await createIndependentRideOffers(jobRow.id);
 
     const booking = {
       id: bookingRow.id, reference: bookingRow.reference, status: bookingRow.status,

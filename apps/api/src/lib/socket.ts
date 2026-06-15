@@ -1,4 +1,5 @@
 import { Server } from 'socket.io';
+import { verifyToken } from '../middleware/auth';
 
 let _io: Server | null = null;
 
@@ -8,17 +9,31 @@ export function initIO(server: import('http').Server): Server {
     transports: ['websocket', 'polling'],
   });
 
+  _io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token || typeof token !== 'string') return next(new Error('Unauthorized'));
+    try {
+      socket.data.user = verifyToken(token);
+      next();
+    } catch {
+      next(new Error('Unauthorized'));
+    }
+  });
+
   _io.on('connection', (socket) => {
     console.log(`[Socket.IO] Client connected: ${socket.id}`);
 
-    socket.on('join-room', (room: string) => {
-      socket.join(room);
-    });
+    const user = socket.data.user;
+    socket.join(`${user.role}:${user.id}`);
+    if (user.role === 'ops') socket.join('ops');
+    if (user.role === 'admin') socket.join('admin');
 
-    socket.on('driver:location', (payload: { driverId: string; jobId?: string; lat: number; lng: number; speed?: number; heading?: number }) => {
-      _io?.to('ops').emit('driver:location', payload);
+    socket.on('driver:location', (payload: { jobId?: string; lat: number; lng: number; speed?: number; heading?: number }) => {
+      if (user.role !== 'driver') return;
+      const securedPayload = { ...payload, driverId: user.id };
+      _io?.to('ops').emit('driver:location', securedPayload);
       if (payload.jobId) {
-        _io?.to(`job:${payload.jobId}`).emit('driver:location', payload);
+        _io?.to(`job:${payload.jobId}`).emit('driver:location', securedPayload);
       }
     });
 

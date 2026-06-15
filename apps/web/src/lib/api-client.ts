@@ -17,6 +17,10 @@ function getToken(role: 'admin' | 'ops' | 'affiliate' | 'driver' | 'customer'): 
   return getCookie(`rp_${role}_jwt`);
 }
 
+export function getPortalToken(role: 'admin' | 'ops' | 'affiliate' | 'driver' | 'customer'): string | null {
+  return getToken(role);
+}
+
 async function request<T>(
   path: string,
   role: 'admin' | 'ops' | 'affiliate' | 'driver' | 'customer',

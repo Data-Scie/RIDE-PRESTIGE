@@ -224,6 +224,9 @@ router.post('/register/driver', async (req: Request, res: Response): Promise<voi
         privateHireBadgeNumber: b.privateHireBadgeNumber, nationalInsurance: b.nationalInsurance,
         driverType: b.driverType,
         affiliateId: b.driverType === 'affiliateDriver' ? b.affiliateId : null,
+        serviceAreas: b.driverType === 'independentDriver' && b.postcode
+          ? [b.postcode.trim().toUpperCase().split(/\s+/)[0]]
+          : [],
         status: 'offline',
         rating: 0, totalJobs: 0, totalEarnings: 0,
         documentsStatus: 'missing',

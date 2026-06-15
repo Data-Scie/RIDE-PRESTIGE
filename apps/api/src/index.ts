@@ -8,6 +8,7 @@ import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import path from 'path';
 import { initIO } from './lib/socket';
+import { reconcileIndependentDispatch } from './services/dispatchService';
 
 import authRouter     from './routes/auth';
 import publicRouter   from './routes/public';
@@ -23,6 +24,19 @@ const app    = express();
 const server = createServer(app);
 const PORT   = process.env.PORT ? parseInt(process.env.PORT) : 4000;
 initIO(server);
+
+let dispatchReconciliationRunning = false;
+async function reconcileDispatch() {
+  if (dispatchReconciliationRunning) return;
+  dispatchReconciliationRunning = true;
+  try {
+    await reconcileIndependentDispatch();
+  } catch (error) {
+    console.error('Dispatch reconciliation failed:', error);
+  } finally {
+    dispatchReconciliationRunning = false;
+  }
+}
 
 // ─── Security & Parsing ───────────────────────────────────────────────────────
 
@@ -157,6 +171,8 @@ app.use(errorHandler);
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 server.listen(PORT, () => {
+  void reconcileDispatch();
+  setInterval(() => void reconcileDispatch(), 30_000).unref();
   console.log('');
   console.log('  ╔══════════════════════════════════════════════════════╗');
   console.log('  ║         RIDE PRESTIGE — CORPORATE BACKEND API        ║');

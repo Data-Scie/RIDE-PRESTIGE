@@ -3,6 +3,12 @@ import { v4 as uuid } from 'uuid';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
 import { pushNotification } from '../services/notificationService';
+import {
+  claimIndependentRide,
+  createIndependentRideOffers,
+  expireRideOffers,
+  isDriverDocumentEligible,
+} from '../services/dispatchService';
 import type { JobStatus, Stop } from '../types';
 
 const router = Router();
@@ -99,8 +105,25 @@ router.get('/jobs/available', async (req: Request, res: Response) => {
     if (!driver || driver.driverType !== 'independentDriver') {
       res.status(403).json({ success: false, message: 'Only independent drivers can view open jobs' }); return;
     }
-    const jobs = await prisma.job.findMany({ where: { status: 'awaiting_affiliate', affiliateId: null } });
-    const list = jobs.map(shapeJob);
+    if (!driver.isApproved || driver.applicationStatus !== 'approved' || driver.status !== 'available') {
+      res.json({ success: true, data: [], total: 0 });
+      return;
+    }
+    await expireRideOffers();
+    const offers = await prisma.rideOffer.findMany({
+      where: { driverId: drvId, status: 'pending', expiresAt: { gt: new Date() } },
+      include: { job: true },
+      orderBy: { expiresAt: 'asc' },
+    });
+    const list = offers.map(offer => ({
+      ...shapeJob(offer.job),
+      id: offer.id,
+      jobId: offer.jobId,
+      offerId: offer.id,
+      offerStatus: offer.status,
+      expiresAt: offer.expiresAt.toISOString(),
+      vehicleId: offer.vehicleId,
+    }));
     res.json({ success: true, data: list, total: list.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
@@ -285,30 +308,35 @@ router.post('/jobs/:id/accept', async (req: Request, res: Response) => {
 router.post('/jobs/:id/claim', async (req: Request, res: Response) => {
   try {
     const drvId = getDrvId(req);
-    const driver = await prisma.driver.findUnique({ where: { id: drvId } });
-    if (!driver) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
-    if (driver.driverType !== 'independentDriver') {
-      res.status(403).json({ success: false, message: 'Only independent drivers can claim jobs directly' }); return;
-    }
-    if (!driver.isApproved) {
-      res.status(403).json({ success: false, message: 'Your account must be approved before accepting jobs' }); return;
-    }
-    const job = await prisma.job.findFirst({ where: { id: req.params.id, status: 'awaiting_affiliate', affiliateId: null } });
-    if (!job) { res.status(404).json({ success: false, message: 'Job not available for claiming' }); return; }
-    const updated = await prisma.$transaction(async tx => {
-      const updatedJob = await tx.job.update({ where: { id: job.id }, data: { assignedDriverId: drvId, status: 'driver_accepted' } });
-      await tx.driver.update({ where: { id: drvId }, data: { status: 'busy' } });
-      await tx.booking.updateMany({
-        where: { OR: [{ id: job.bookingId ?? '' }, { jobId: job.id }] },
-        data: { status: 'accepted' },
-      });
-      await tx.rideStatusHistory.create({
-        data: { jobId: job.id, fromStatus: 'awaiting_affiliate', toStatus: 'driver_accepted', changedBy: drvId, changedByRole: 'driver', notes: 'Independent driver claimed job' },
-      });
-      return updatedJob;
-    });
+    const updated = await claimIndependentRide(drvId, req.params.id);
     res.json({ success: true, message: 'Job claimed', data: shapeJob(updated) });
   } catch (e) {
+    const reason = e instanceof Error ? e.message : '';
+    if (['OFFER_UNAVAILABLE', 'RIDE_ALREADY_CLAIMED'].includes(reason)) {
+      res.status(409).json({ success: false, message: 'This ride offer is no longer available' });
+      return;
+    }
+    if (['DRIVER_INELIGIBLE', 'VEHICLE_INELIGIBLE', 'OUTSIDE_SERVICE_AREA'].includes(reason)) {
+      res.status(403).json({ success: false, message: reason.replace(/_/g, ' ').toLowerCase() });
+      return;
+    }
+    console.error('Independent ride claim failed:', e);
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.post('/jobs/:id/decline', async (req: Request, res: Response) => {
+  try {
+    const result = await prisma.rideOffer.updateMany({
+      where: { id: req.params.id, driverId: getDrvId(req), status: 'pending' },
+      data: { status: 'declined', respondedAt: new Date() },
+    });
+    if (result.count !== 1) {
+      res.status(409).json({ success: false, message: 'This ride offer is no longer available' });
+      return;
+    }
+    res.json({ success: true, message: 'Ride offer declined' });
+  } catch {
     res.status(500).json({ success: false, message: 'Database error' });
   }
 });
@@ -435,9 +463,144 @@ router.put('/status', async (req: Request, res: Response) => {
     const { status } = req.body as { status: 'available' | 'busy' | 'offline' };
     const driver = await prisma.driver.findUnique({ where: { id: drvId } });
     if (!driver) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+    if (!['available', 'busy', 'offline'].includes(status)) {
+      res.status(400).json({ success: false, message: 'Invalid driver status' });
+      return;
+    }
+    if (status === 'available') {
+      const documents = await prisma.driverDocument.findMany({ where: { driverId: drvId } });
+      if (!driver.isApproved || driver.applicationStatus !== 'approved') {
+        res.status(403).json({ success: false, message: 'Your driver account is not approved' });
+        return;
+      }
+      if (driver.documentsStatus !== 'approved' || !isDriverDocumentEligible(documents)) {
+        res.status(403).json({ success: false, message: 'All required driver documents must be approved and current' });
+        return;
+      }
+      if (driver.driverType === 'independentDriver') {
+        const vehicles = await prisma.fleetVehicle.findMany({ where: { ownerDriverId: drvId } });
+        const isCurrent = (value: string) => {
+          const expiry = new Date(`${value}T23:59:59.999Z`);
+          return !Number.isNaN(expiry.getTime()) && expiry.getTime() >= Date.now();
+        };
+        const hasApprovedVehicle = vehicles.some(vehicle =>
+          vehicle.isApproved
+          && vehicle.approvalStatus === 'approved'
+          && vehicle.status === 'available'
+          && isCurrent(vehicle.motExpiry)
+          && isCurrent(vehicle.insuranceExpiry)
+          && isCurrent(vehicle.phvLicenceExpiry));
+        if (!hasApprovedVehicle) {
+          res.status(403).json({ success: false, message: 'An approved, compliant vehicle is required before going online' });
+          return;
+        }
+      }
+    }
     await prisma.driver.update({ where: { id: drvId }, data: { status } });
+    if (status === 'available' && driver.driverType === 'independentDriver') {
+      const openJobs = await prisma.job.findMany({
+        where: { status: 'awaiting_affiliate', affiliateId: null, assignedDriverId: null },
+        select: { id: true },
+      });
+      await Promise.all(openJobs.map(job => createIndependentRideOffers(job.id)));
+    }
     res.json({ success: true, message: `Status set to ${status}`, status });
   } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.get('/vehicles', async (req: Request, res: Response) => {
+  try {
+    const driver = await prisma.driver.findUnique({ where: { id: getDrvId(req) } });
+    if (!driver || driver.driverType !== 'independentDriver') {
+      res.status(403).json({ success: false, message: 'Vehicle management is for independent drivers' });
+      return;
+    }
+    const vehicles = await prisma.fleetVehicle.findMany({
+      where: { ownerDriverId: driver.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ success: true, data: vehicles });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.post('/vehicles', async (req: Request, res: Response) => {
+  try {
+    const driver = await prisma.driver.findUnique({ where: { id: getDrvId(req) } });
+    if (!driver || driver.driverType !== 'independentDriver') {
+      res.status(403).json({ success: false, message: 'Only independent drivers can register vehicles' });
+      return;
+    }
+    const {
+      make, model, year, registration, vehicleType, vehicleCategory, colour,
+      passengerCapacity, luggageCapacity, motExpiry, insuranceExpiry, phvLicenceExpiry,
+    } = req.body;
+    const validCategories = ['prestige', 'minibus', 'coaches', 'taxi'];
+    const expiryValues = [motExpiry, insuranceExpiry, phvLicenceExpiry];
+    if (!make || !model || !year || !registration || !vehicleType || !vehicleCategory || !colour
+      || !passengerCapacity || luggageCapacity === undefined || !motExpiry || !insuranceExpiry || !phvLicenceExpiry) {
+      res.status(400).json({ success: false, message: 'All vehicle and compliance fields are required' });
+      return;
+    }
+    if (!validCategories.includes(vehicleCategory)) {
+      res.status(400).json({ success: false, message: 'Invalid vehicle category' });
+      return;
+    }
+    if (expiryValues.some(value => {
+      const timestamp = new Date(`${value}T23:59:59.999Z`).getTime();
+      return Number.isNaN(timestamp) || timestamp < Date.now();
+    })) {
+      res.status(400).json({ success: false, message: 'Vehicle compliance dates must be current' });
+      return;
+    }
+    const vehicle = await prisma.fleetVehicle.create({
+      data: {
+        id: `fv-${uuid()}`,
+        make, model, year: Number(year), registration: String(registration).trim().toUpperCase(),
+        vehicleType, vehicleCategory, colour,
+        passengerCapacity: Number(passengerCapacity), luggageCapacity: Number(luggageCapacity),
+        motExpiry, insuranceExpiry, phvLicenceExpiry,
+        ownerDriverId: driver.id,
+        assignedDriverId: driver.id,
+        status: 'offline',
+        approvalStatus: 'pending',
+        isApproved: false,
+      },
+    });
+    res.status(201).json({ success: true, data: vehicle });
+  } catch (e) {
+    res.status(409).json({ success: false, message: 'Vehicle could not be registered; check the registration is unique' });
+  }
+});
+
+router.put('/documents/:id', async (req: Request, res: Response) => {
+  try {
+    const { fileUrl, expiryDate } = req.body as { fileUrl?: string; expiryDate?: string };
+    const expiry = expiryDate ? new Date(`${expiryDate}T23:59:59.999Z`) : null;
+    if (!fileUrl || !fileUrl.startsWith('https://') || !expiryDate || !expiry || expiry.getTime() < Date.now()) {
+      res.status(400).json({ success: false, message: 'A secure HTTPS document URL and current expiry date are required' });
+      return;
+    }
+    const document = await prisma.driverDocument.findFirst({
+      where: { id: req.params.id, driverId: getDrvId(req) },
+    });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    const updated = await prisma.driverDocument.update({
+      where: { id: document.id },
+      data: { fileUrl, expiryDate, status: 'pending', uploadedAt: new Date(), rejectionReason: null },
+    });
+    await prisma.driver.update({
+      where: { id: getDrvId(req) },
+      data: { documentsStatus: 'pending', status: 'offline' },
+    });
+    res.json({ success: true, data: updated });
+  } catch {
     res.status(500).json({ success: false, message: 'Database error' });
   }
 });
@@ -530,10 +693,19 @@ router.get('/profile', async (req: Request, res: Response) => {
 router.put('/profile', async (req: Request, res: Response) => {
   try {
     const drvId = getDrvId(req);
-    const { passwordHash: _ph, id: _id, isApproved: _ia, totalJobs: _tj, totalEarnings: _te, rating: _r, documents: _docs, ...allowed } = req.body;
+    const { fullName, phone, address, city, postcode, serviceAreas } = req.body;
     const d = await prisma.driver.update({
       where: { id: drvId },
-      data: allowed,
+      data: {
+        ...(fullName !== undefined ? { fullName } : {}),
+        ...(phone !== undefined ? { phone } : {}),
+        ...(address !== undefined ? { address } : {}),
+        ...(city !== undefined ? { city } : {}),
+        ...(postcode !== undefined ? { postcode } : {}),
+        ...(Array.isArray(serviceAreas)
+          ? { serviceAreas: serviceAreas.map(String).map(area => area.trim().toUpperCase()).filter(Boolean) }
+          : {}),
+      },
       include: { documents: true },
     });
     const { passwordHash: _, ...safe } = d;

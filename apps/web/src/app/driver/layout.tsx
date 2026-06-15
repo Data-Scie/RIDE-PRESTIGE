@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   Car, ChevronRight, CircleUserRound, History, LayoutDashboard, LogOut,
   Menu, Navigation, TrendingUp, X,
+  ShieldCheck,
 } from 'lucide-react';
 import { driverApi } from '@/lib/api-client';
 
@@ -19,7 +20,7 @@ interface DriverIdentity {
 
 const NAV = [
   { label: 'Overview', items: [{ href: '/driver/dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
-  { label: 'Work', items: [{ href: '/driver/ride', label: 'Active Ride', icon: Navigation }, { href: '/driver/history', label: 'Ride History', icon: History }] },
+  { label: 'Work', items: [{ href: '/driver/ride', label: 'Active Ride', icon: Navigation }, { href: '/driver/history', label: 'Ride History', icon: History }, { href: '/driver/compliance', label: 'Compliance & Vehicle', icon: ShieldCheck }] },
   { label: 'Finance', items: [{ href: '/driver/earnings', label: 'Earnings', icon: TrendingUp }] },
 ];
 

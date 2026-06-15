@@ -43,7 +43,7 @@ Use these settings:
 Branch: main
 Root Directory: apps/api
 Runtime: Node
-Build Command: npm install && npx prisma generate && npm run build
+Build Command: npm install && npx prisma generate && npx prisma db push && npm run build
 Start Command: npm start
 Health Check Path: /health
 ```
@@ -59,6 +59,9 @@ NODE_ENV=production
 ```
 
 Do not manually set `PORT`; Render supplies it.
+
+`prisma db push` keeps Supabase aligned with the deployed API. Review schema
+changes before deployment and never use `--force-reset` in production.
 
 After deployment, open:
 
@@ -121,3 +124,15 @@ Test in this order:
 
 If Render uses a free service, its first request after inactivity can take longer
 while the service starts.
+
+## 5. Cloud Operation
+
+The live system does not depend on the development computer:
+
+- Vercel serves the website and browser portals.
+- Render runs the API, dispatch rules, websocket events, and ride lifecycle.
+- Supabase stores accounts, vehicles, offers, rides, CMS content, and earnings.
+
+The development computer can be switched off after both deployments are healthy.
+Free Render services may sleep during inactivity, but requests wake the service
+and all persistent dispatch state remains in Supabase.

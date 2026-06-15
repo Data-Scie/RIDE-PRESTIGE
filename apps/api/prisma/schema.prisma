@@ -92,9 +92,12 @@ model Driver {
   latitude               Float?
   longitude              Float?
   lastLocationUpdate     DateTime?
+  serviceAreas           String[]  @default([])
   updatedAt              DateTime  @updatedAt
 
   documents DriverDocument[]
+  vehicles  FleetVehicle[] @relation("IndependentDriverVehicles")
+  rideOffers RideOffer[]
 }
 
 // ─── Driver Documents ─────────────────────────────────────────────────────────
@@ -107,6 +110,7 @@ model DriverDocument {
   label            String
   status           String   @default("missing") // approved | pending | rejected | expired | missing
   expiryDate       String?
+  fileUrl          String?
   uploadedAt       DateTime?
   rejectionReason  String?
 }
@@ -130,7 +134,14 @@ model FleetVehicle {
   status            String    @default("available") // available | in_use | maintenance | offline
   affiliateId       String?
   affiliate         Affiliate? @relation(fields: [affiliateId], references: [id])
+  ownerDriverId     String?
+  ownerDriver       Driver?     @relation("IndependentDriverVehicles", fields: [ownerDriverId], references: [id], onDelete: SetNull)
   assignedDriverId  String?
+  approvalStatus    String      @default("pending") // pending | approved | rejected | suspended
+  isApproved        Boolean     @default(false)
+  rejectionReason   String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @default(now()) @updatedAt
 }
 
 // ─── Website Fleet (CMS) ─────────────────────────────────────────────────────
@@ -171,6 +182,8 @@ model Job {
   customerPhone         String
   customerEmail         String?
   pickupAddress         String
+  pickupLatitude        Float?
+  pickupLongitude       Float?
   dropoffAddress        String
   stops                 Json      @default("[]")
   dateTime              DateTime
@@ -197,6 +210,26 @@ model Job {
   driverRating          Float?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+
+  rideOffers RideOffer[]
+}
+
+model RideOffer {
+  id         String   @id @default(uuid())
+  jobId      String
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  driverId   String
+  driver     Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicleId  String
+  status     String   @default("pending") // pending | accepted | declined | expired | withdrawn
+  expiresAt  DateTime
+  respondedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([jobId, driverId])
+  @@index([driverId, status, expiresAt])
+  @@index([jobId, status])
 }
 
 // ─── Bookings (website-originated) ──────────────────────────────────────────

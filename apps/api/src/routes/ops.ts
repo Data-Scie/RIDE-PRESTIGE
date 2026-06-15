@@ -317,13 +317,25 @@ router.put('/rides/:id/assign-affiliate', async (req: Request, res: Response) =>
     const { affiliateId } = req.body as { affiliateId: string };
     const aff = await prisma.affiliate.findFirst({ where: { id: affiliateId, isApproved: true } });
     if (!aff) { res.status(404).json({ success: false, message: 'Affiliate not found or not approved' }); return; }
-    const updated = await prisma.job.update({
-      where: { id: job.id },
-      data: { affiliateId, status: 'needs_allocation' },
+    const updated = await prisma.$transaction(async tx => {
+      const claimed = await tx.job.updateMany({
+        where: { id: job.id, status: 'awaiting_affiliate', affiliateId: null, assignedDriverId: null },
+        data: { affiliateId, status: 'needs_allocation' },
+      });
+      if (claimed.count !== 1) throw new Error('RIDE_ALREADY_CLAIMED');
+      await tx.rideOffer.updateMany({
+        where: { jobId: job.id, status: 'pending' },
+        data: { status: 'withdrawn', respondedAt: new Date() },
+      });
+      return tx.job.findUniqueOrThrow({ where: { id: job.id } });
     });
     await pushNotification(affiliateId, 'affiliate', 'Job Assigned', `Job ${job.bookingRef} has been assigned to you. Please allocate driver and vehicle.`, 'job');
     res.json({ success: true, data: shapeJob(updated) });
   } catch (e) {
+    if (e instanceof Error && e.message === 'RIDE_ALREADY_CLAIMED') {
+      res.status(409).json({ success: false, message: 'This ride has already been claimed' });
+      return;
+    }
     res.status(500).json({ success: false, message: 'Database error' });
   }
 });
@@ -416,6 +428,61 @@ router.put('/vehicles/:id', async (req: Request, res: Response) => {
     const v = await prisma.fleetVehicle.update({ where: { id: req.params.id }, data });
     res.json({ success: true, data: v });
   } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/vehicles/:id/approve', async (req: Request, res: Response) => {
+  try {
+    const vehicle = await prisma.fleetVehicle.findUnique({ where: { id: req.params.id } });
+    if (!vehicle) {
+      res.status(404).json({ success: false, message: 'Vehicle not found' });
+      return;
+    }
+    const complianceDates = [vehicle.motExpiry, vehicle.insuranceExpiry, vehicle.phvLicenceExpiry];
+    if (complianceDates.some(value => {
+      const timestamp = new Date(`${value}T23:59:59.999Z`).getTime();
+      return Number.isNaN(timestamp) || timestamp < Date.now();
+    })) {
+      res.status(409).json({ success: false, message: 'Expired vehicle compliance cannot be approved' });
+      return;
+    }
+    const updated = await prisma.fleetVehicle.update({
+      where: { id: vehicle.id },
+      data: { isApproved: true, approvalStatus: 'approved', rejectionReason: null, status: 'available' },
+    });
+    if (updated.ownerDriverId) {
+      await pushNotification(updated.ownerDriverId, 'driver', 'Vehicle Approved', `${updated.make} ${updated.model} (${updated.registration}) is approved for direct rides.`, 'document');
+    }
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/vehicles/:id/reject', async (req: Request, res: Response) => {
+  try {
+    const { reason } = req.body as { reason?: string };
+    const vehicle = await prisma.fleetVehicle.findUnique({ where: { id: req.params.id } });
+    if (!vehicle) {
+      res.status(404).json({ success: false, message: 'Vehicle not found' });
+      return;
+    }
+    const updated = await prisma.fleetVehicle.update({
+      where: { id: vehicle.id },
+      data: {
+        isApproved: false,
+        approvalStatus: 'rejected',
+        rejectionReason: reason || 'Vehicle compliance was not approved',
+        status: 'offline',
+      },
+    });
+    if (updated.ownerDriverId) {
+      await prisma.driver.update({ where: { id: updated.ownerDriverId }, data: { status: 'offline' } });
+      await pushNotification(updated.ownerDriverId, 'driver', 'Vehicle Requires Attention', updated.rejectionReason || 'Vehicle rejected', 'document');
+    }
+    res.json({ success: true, data: updated });
+  } catch {
     res.status(500).json({ success: false, message: 'Database error' });
   }
 });
@@ -569,11 +636,13 @@ router.get('/drivers/:id', async (req: Request, res: Response) => {
       prisma.job.findMany({ where: { assignedDriverId: d.id } }),
       prisma.earningEntry.findMany({ where: { entityId: d.id } }),
     ]);
+    const vehicles = await prisma.fleetVehicle.findMany({ where: { ownerDriverId: d.id } });
     res.json({
       success: true,
       data: safe,
       jobs: driverJobs.map(shapeJob),
       earnings: driverEarnings.map(e => ({ ...e, date: e.date.toISOString(), createdAt: e.createdAt.toISOString() })),
+      vehicles,
     });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
@@ -586,12 +655,68 @@ router.put('/drivers/:id/approve', async (req: Request, res: Response) => {
     if (!exists) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
     const d = await prisma.driver.update({
       where: { id: req.params.id },
-      data: { isApproved: true, applicationStatus: 'approved', status: 'available' },
+      data: { isApproved: true, applicationStatus: 'approved', status: 'offline' },
       include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
     });
     const { passwordHash: _, ...safe } = d;
     res.json({ success: true, message: 'Driver approved', data: safe });
   } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/drivers/:driverId/documents/:documentId/approve', async (req: Request, res: Response) => {
+  try {
+    const document = await prisma.driverDocument.findFirst({
+      where: { id: req.params.documentId, driverId: req.params.driverId },
+    });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    if (!document.fileUrl || !document.fileUrl.startsWith('https://') || !document.expiryDate
+      || new Date(`${document.expiryDate}T23:59:59.999Z`).getTime() < Date.now()) {
+      res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
+      return;
+    }
+    await prisma.driverDocument.update({
+      where: { id: document.id },
+      data: { status: 'approved', rejectionReason: null },
+    });
+    const documents = await prisma.driverDocument.findMany({ where: { driverId: req.params.driverId } });
+    const allApproved = documents.every(item => item.status === 'approved');
+    await prisma.driver.update({
+      where: { id: req.params.driverId },
+      data: { documentsStatus: allApproved ? 'approved' : 'pending', status: 'offline' },
+    });
+    await pushNotification(req.params.driverId, 'driver', 'Document Approved', `${document.label} has been approved.`, 'document');
+    res.json({ success: true, message: 'Document approved', allApproved });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/drivers/:driverId/documents/:documentId/reject', async (req: Request, res: Response) => {
+  try {
+    const { reason } = req.body as { reason?: string };
+    const document = await prisma.driverDocument.findFirst({
+      where: { id: req.params.documentId, driverId: req.params.driverId },
+    });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    await prisma.driverDocument.update({
+      where: { id: document.id },
+      data: { status: 'rejected', rejectionReason: reason || 'Document was not approved' },
+    });
+    await prisma.driver.update({
+      where: { id: req.params.driverId },
+      data: { documentsStatus: 'rejected', status: 'offline' },
+    });
+    await pushNotification(req.params.driverId, 'driver', 'Document Requires Attention', reason || `${document.label} was rejected.`, 'document');
+    res.json({ success: true, message: 'Document rejected' });
+  } catch {
     res.status(500).json({ success: false, message: 'Database error' });
   }
 });

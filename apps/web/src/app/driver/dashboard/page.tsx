@@ -7,6 +7,7 @@ import {
   Navigation, Phone, Star, TrendingUp, UserRound,
 } from 'lucide-react';
 import { driverApi } from '@/lib/api-client';
+import { getDriverSocket } from '@/lib/realtime';
 
 interface DriverProfile {
   id: string;
@@ -38,6 +39,7 @@ interface DashboardData {
 
 interface RideRequest {
   id: string;
+  jobId?: string;
   bookingRef: string;
   status: string;
   fareAmount: number;
@@ -46,6 +48,7 @@ interface RideRequest {
   passengerCount: number;
   pickupAddress: string;
   dropoffAddress: string;
+  expiresAt?: string;
 }
 
 export default function DriverDashboard() {
@@ -85,8 +88,24 @@ export default function DriverDashboard() {
 
   useEffect(() => {
     pollForRide();
-    const interval = setInterval(pollForRide, 5000);
-    return () => clearInterval(interval);
+    const interval = setInterval(pollForRide, 15000);
+    const socket = getDriverSocket();
+    const refresh = () => {
+      pollForRide();
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('New Ride Prestige offer', { body: 'Open the driver portal to review it.' });
+      }
+    };
+    socket?.on('ride:offer', refresh);
+    socket?.on('notification:new', pollForRide);
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+    return () => {
+      clearInterval(interval);
+      socket?.off('ride:offer', refresh);
+      socket?.off('notification:new', pollForRide);
+    };
   }, [pollForRide]);
 
   const toggleOnline = async () => {
@@ -103,6 +122,12 @@ export default function DriverDashboard() {
     await driverApi.post(`/api/driver/jobs/${rideRequest.id}/${action}`, {});
     setRideRequest(null);
     await load();
+  };
+
+  const declineRide = async () => {
+    if (!rideRequest) return;
+    await driverApi.post(`/api/driver/jobs/${rideRequest.id}/decline`, {});
+    setRideRequest(null);
   };
 
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-400">Loading dashboard...</div>;
@@ -132,6 +157,8 @@ export default function DriverDashboard() {
             <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center"><Navigation size={21} /></div>
             <div className="flex-1 min-w-60"><p className="font-bold">New ride assignment · {rideRequest.bookingRef}</p><p className="text-sm text-blue-100">{rideRequest.pickupAddress} → {rideRequest.dropoffAddress}</p><p className="text-xs text-blue-200 mt-1">{rideRequest.distance || 'Distance pending'} · {rideRequest.passengerCount} passengers</p></div>
             <div className="text-right"><p className="font-bold text-xl">£{rideRequest.driverPayoutAmount ?? rideRequest.fareAmount}</p><p className="text-xs text-blue-200">Driver payout</p></div>
+            {rideRequest.expiresAt && <p className="text-xs text-blue-100">Expires {new Date(rideRequest.expiresAt).toLocaleTimeString('en-GB')}</p>}
+            <button onClick={declineRide} className="px-4 py-2.5 rounded-xl bg-blue-700 text-white font-semibold text-sm">Decline</button>
             <button onClick={acceptRide} className="px-5 py-2.5 rounded-xl bg-white text-blue-700 font-semibold text-sm">Accept Ride</button>
           </div>
         </div>
