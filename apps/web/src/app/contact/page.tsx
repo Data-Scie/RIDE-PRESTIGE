@@ -1,7 +1,12 @@
-import { getContact } from '@/lib/kv';
+import PublicLayout from '@/components/layout/PublicLayout';
+import { getContact } from '@/lib/cms';
 import ContactClient from './ContactClient';
 
 export default async function ContactPage() {
   const contact = await getContact();
-  return <ContactClient contact={contact} />;
+  return (
+    <PublicLayout>
+      <ContactClient contact={contact} />
+    </PublicLayout>
+  );
 }

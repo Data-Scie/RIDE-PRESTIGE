@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import PublicLayout from '@/components/layout/PublicLayout';
 import type { FAQItem } from '@/types';
 
 export default function FaqClient({ faqs }: { faqs: FAQItem[] }) {
@@ -16,7 +15,7 @@ export default function FaqClient({ faqs }: { faqs: FAQItem[] }) {
   const filtered = active_faqs.filter(f => f.category === activeCategory).sort((a, b) => a.order - b.order);
 
   return (
-    <PublicLayout>
+    <>
       <div className="bg-brand-black pt-20 pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-brand-gold text-sm font-semibold uppercase tracking-widest mb-3">Help centre</p>
@@ -90,6 +89,6 @@ export default function FaqClient({ faqs }: { faqs: FAQItem[] }) {
           </div>
         </div>
       </div>
-    </PublicLayout>
+    </>
   );
 }

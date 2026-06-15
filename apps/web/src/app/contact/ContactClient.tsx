@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import { Phone, Mail, MapPin, Clock, AlertCircle, Send, CheckCircle } from 'lucide-react';
-import PublicLayout from '@/components/layout/PublicLayout';
-import type { ContactSettings } from '@/lib/kv';
+import type { ContactSettings } from '@/lib/cms';
 
 export default function ContactClient({ contact }: { contact: ContactSettings }) {
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const [form, setForm] = useState({
     name: '', email: '', phone: '', bookingRef: '',
     type: 'enquiry', message: '',
@@ -14,13 +15,36 @@ export default function ContactClient({ contact }: { contact: ContactSettings })
 
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await fetch('/api/backend/public/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          phone: form.phone || undefined,
+          subject: form.type.replace(/_/g, ' '),
+          message: form.message,
+          bookingReference: form.bookingRef || undefined,
+          type: form.type,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || 'Unable to send your message');
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to send your message');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <PublicLayout>
+    <>
       <div className="bg-brand-black pt-20 pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-brand-gold text-sm font-semibold uppercase tracking-widest mb-3">Get in touch</p>
@@ -119,9 +143,10 @@ export default function ContactClient({ contact }: { contact: ContactSettings })
                       <textarea required placeholder="Please describe your enquiry in detail..." value={form.message} onChange={e => set('message', e.target.value)} rows={5} className="input-field resize-none" />
                     </div>
 
-                    <button type="submit" className="btn-gold w-full flex items-center justify-center gap-2 py-4">
+                    {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+                    <button type="submit" disabled={submitting} className="btn-gold w-full flex items-center justify-center gap-2 py-4 disabled:opacity-60">
                       <Send size={16} />
-                      Send message
+                      {submitting ? 'Sending...' : 'Send message'}
                     </button>
                   </form>
                 )}
@@ -130,6 +155,6 @@ export default function ContactClient({ contact }: { contact: ContactSettings })
           </div>
         </div>
       </div>
-    </PublicLayout>
+    </>
   );
 }

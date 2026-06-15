@@ -13,7 +13,6 @@ const icons: Record<string, ReactNode> = {
   taxi: <Car size={18} />,
 };
 
-// Backend uses isAvailable/displayOrder, frontend uses available/order
 function mapCategory(c: Record<string, unknown>): FleetCategory {
   return {
     id:          c.id as string,
@@ -22,8 +21,8 @@ function mapCategory(c: Record<string, unknown>): FleetCategory {
     tagline:     (c.tagline ?? '') as string,
     description: (c.description ?? '') as string,
     icon:        (c.icon ?? '') as string,
-    available:   (c.isAvailable ?? c.available ?? true) as boolean,
-    order:       (c.displayOrder ?? c.order ?? 0) as number,
+    available:   (c.available ?? true) as boolean,
+    order:       (c.order ?? 0) as number,
   };
 }
 
@@ -43,7 +42,7 @@ export default function AdminFleetPage() {
   const toggleAvailability = async (id: string) => {
     const cat = fleet.find(f => f.id === id);
     if (!cat) return;
-    const updated = { isAvailable: !cat.available };
+    const updated = { available: !cat.available };
     await adminApi.put(`/api/admin/categories/${id}`, updated).catch(() => {});
     setFleet(prev => prev.map(f => f.id === id ? { ...f, available: !f.available } : f));
   };
@@ -52,7 +51,7 @@ export default function AdminFleetPage() {
     if (!editing) return;
     await adminApi.put(`/api/admin/categories/${editing.id}`, {
       name: editing.name, tagline: editing.tagline, description: editing.description,
-      displayOrder: editing.order, isAvailable: editing.available,
+      order: editing.order, available: editing.available,
     }).catch(() => {});
     setFleet(prev => prev.map(f => f.id === editing.id ? editing : f));
     setEditing(null);

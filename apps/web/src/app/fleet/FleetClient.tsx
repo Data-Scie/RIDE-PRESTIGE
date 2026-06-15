@@ -4,7 +4,6 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Bus, Car, CheckCircle, Star, Users, Van } from 'lucide-react';
-import PublicLayout from '@/components/layout/PublicLayout';
 import type { VehicleCategory, Vehicle, FleetCategory } from '@/types';
 
 type CategorySlug = VehicleCategory | 'all';
@@ -97,7 +96,7 @@ export default function FleetClient({ vehicles, fleetCategories }: { vehicles: V
   ];
 
   return (
-    <PublicLayout>
+    <>
       <div style={{ background:'#000000' }} className="pt-20 pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center">
           <p style={{ color:'#c9a84c' }} className="text-xs font-semibold uppercase tracking-widest mb-3">Our Fleet</p>
@@ -239,6 +238,6 @@ export default function FleetClient({ vehicles, fleetCategories }: { vehicles: V
           </div>
         </div>
       )}
-    </PublicLayout>
+    </>
   );
 }

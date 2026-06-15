@@ -12,6 +12,8 @@ const sectionTypeLabels: Record<string, string> = {
   how_it_works: 'How It Works',
   trust: 'Trust & Stats',
   promo_banner: 'Promotion Banner',
+  page_intro: 'Page Introduction',
+  legal_section: 'Legal Section',
 };
 
 export default function AdminContentPage() {

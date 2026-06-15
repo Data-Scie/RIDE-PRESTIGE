@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { Phone, Mail, MapPin } from 'lucide-react';
-import { siteSettings } from '@/lib/data';
 import BrandLogo from '@/components/common/BrandLogo';
+import type { SiteSettings } from '@/types';
 
 const GOLD = '#c9a84c';
 const BLACK = '#0a0f1e';
 
-export default function Footer() {
+export default function Footer({ settings }: { settings: SiteSettings }) {
   return (
     <footer style={{background:BLACK, color:'white'}}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -16,16 +16,16 @@ export default function Footer() {
           {/* Brand */}
           <div className="lg:col-span-1">
             <Link href="/" className="flex items-center gap-2.5 mb-5">
-              <BrandLogo width={180} />
+              <BrandLogo width={180} src={settings.logoUrl} alt={settings.siteName} />
             </Link>
             <p className="text-sm leading-relaxed mb-6" style={{color:'rgba(255,255,255,0.55)'}}>
-              Premium coach and minibus hire across the United Kingdom, with luxury transport options for groups, events and airport transfers.
+              {settings.heroSubtitle}
             </p>
             <div className="flex items-center gap-2.5">
               {[
-                { href: siteSettings.socialLinks.twitter, label: 'X' },
-                { href: siteSettings.socialLinks.instagram, label: 'IG' },
-                { href: siteSettings.socialLinks.linkedin, label: 'in' },
+                { href: settings.socialLinks.twitter, label: 'X' },
+                { href: settings.socialLinks.instagram, label: 'IG' },
+                { href: settings.socialLinks.linkedin, label: 'in' },
               ].filter(s => s.href).map(({ href, label }) => (
                 <a key={label} href={href} target="_blank" rel="noopener noreferrer"
                   className="w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 text-xs font-bold"
@@ -104,21 +104,21 @@ export default function Footer() {
             <ul className="space-y-4">
               <li className="flex items-start gap-3">
                 <Phone size={14} className="mt-0.5 shrink-0" style={{color:GOLD}} />
-                <a href={`tel:${siteSettings.phoneNumber}`} className="text-sm transition-colors hover:text-white"
+                <a href={`tel:${settings.phoneNumber}`} className="text-sm transition-colors hover:text-white"
                   style={{color:'rgba(255,255,255,0.55)'}}>
-                  {siteSettings.phoneNumber}
+                  {settings.phoneNumber}
                 </a>
               </li>
               <li className="flex items-start gap-3">
                 <Mail size={14} className="mt-0.5 shrink-0" style={{color:GOLD}} />
-                <a href={`mailto:${siteSettings.contactEmail}`} className="text-sm transition-colors hover:text-white"
+                <a href={`mailto:${settings.contactEmail}`} className="text-sm transition-colors hover:text-white"
                   style={{color:'rgba(255,255,255,0.55)'}}>
-                  {siteSettings.contactEmail}
+                  {settings.contactEmail}
                 </a>
               </li>
               <li className="flex items-start gap-3">
                 <MapPin size={14} className="mt-0.5 shrink-0" style={{color:GOLD}} />
-                <span className="text-sm" style={{color:'rgba(255,255,255,0.55)'}}>{siteSettings.address}</span>
+                <span className="text-sm" style={{color:'rgba(255,255,255,0.55)'}}>{settings.address}</span>
               </li>
             </ul>
           </div>
@@ -129,7 +129,7 @@ export default function Footer() {
       <div style={{borderTop:'1px solid rgba(255,255,255,0.07)'}}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm" style={{color:'rgba(255,255,255,0.35)'}}>
-            &copy; 2026 Ride Prestige Ltd. All rights reserved.
+            &copy; 2026 {settings.siteName}. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <Link href="/privacy-policy" className="text-xs transition-colors hover:text-white" style={{color:'rgba(255,255,255,0.35)'}}>Privacy Policy</Link>

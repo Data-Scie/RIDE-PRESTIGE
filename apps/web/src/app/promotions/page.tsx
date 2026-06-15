@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { Tag, ArrowRight, CheckCircle, Calendar } from 'lucide-react';
 import PublicLayout from '@/components/layout/PublicLayout';
-import { getPromotions } from '@/lib/kv';
+import { getPromotions } from '@/lib/cms';
 
 export const metadata: Metadata = {
   title: 'Promotions & Discounts',

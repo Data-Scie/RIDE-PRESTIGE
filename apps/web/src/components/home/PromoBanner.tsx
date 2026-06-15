@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { Tag, ArrowRight } from 'lucide-react';
-import { promotions } from '@/lib/data';
+import type { Promotion } from '@/types';
 
 const GOLD = '#c9a84c';
 const BLACK = '#0a0f1e';
 const CHARCOAL = '#1a1f2e';
 
-export default function PromoBanner() {
+export default function PromoBanner({ promotions, label = 'Limited Offer' }: { promotions: Promotion[]; label?: string }) {
   const activePromo = promotions.find(p => p.active);
   if (!activePromo) return null;
 
@@ -31,7 +31,7 @@ export default function PromoBanner() {
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{color:GOLD}}>
-                  Limited Offer
+                  {label}
                 </p>
                 <h3 className="font-semibold text-xl text-white mb-1.5"
                   style={{fontFamily:'Playfair Display,Georgia,serif'}}>

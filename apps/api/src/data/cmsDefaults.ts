@@ -1,0 +1,88 @@
+export const DEFAULT_HOME_SECTIONS = [
+  {
+    id: 'home-hero',
+    type: 'hero',
+    visible: true,
+    order: 1,
+    content: {
+      eyebrow: 'Sheffield & South Yorkshire',
+      title: 'Coach and minibus hire',
+      highlightedTitle: 'for every group journey.',
+      description: 'Dependable coach and minibus transport across Sheffield and the UK. Professional drivers, seamless airport transfers, corporate travel and event logistics.',
+      primaryCtaLabel: 'Book Now',
+      secondaryCtaLabel: 'View our fleet',
+    },
+  },
+  {
+    id: 'home-fleet',
+    type: 'fleet_strip',
+    visible: true,
+    order: 2,
+    content: {
+      eyebrow: 'Our fleet',
+      title: 'Choose your vehicle',
+      description: 'Four premium hire options, one booking platform. Whatever the journey, we have the right vehicle.',
+    },
+  },
+  {
+    id: 'home-promo',
+    type: 'promo_banner',
+    visible: true,
+    order: 3,
+    content: { label: 'Limited Offer' },
+  },
+];
+
+export const DEFAULT_HOME_PAGE = {
+  id: 'page-home',
+  slug: 'home',
+  title: 'Homepage',
+  seoTitle: 'Ride Prestige - Coach & Minibus Hire UK',
+  metaDescription: 'Coach and minibus hire across Sheffield and the UK. Reliable transport for groups, events and airport transfers.',
+  ogTitle: 'Ride Prestige',
+  ogDescription: 'Your local transport minutes away.',
+  sectionsJson: DEFAULT_HOME_SECTIONS,
+};
+
+export const DEFAULT_CONTENT_PAGES = [
+  {
+    id: 'page-terms',
+    slug: 'terms',
+    title: 'Terms & Conditions',
+    seoTitle: 'Terms & Conditions',
+    metaDescription: 'Ride Prestige terms and conditions for transport booking and hire services.',
+    ogTitle: 'Ride Prestige Terms & Conditions',
+    ogDescription: 'Terms governing Ride Prestige transport bookings.',
+    sectionsJson: [
+      { id: 'terms-intro', type: 'page_intro', visible: true, order: 1, content: { title: 'Terms & Conditions', lastUpdated: '1 January 2025', introduction: 'Please read these terms and conditions carefully before making a booking with Ride Prestige. By completing a booking, you agree to be bound by these terms.' } },
+      { id: 'terms-1', type: 'legal_section', visible: true, order: 2, content: { title: '1. Definitions', content: '"Ride Prestige", "we", and "us" refer to Ride Prestige Ltd. "Customer" and "you" refer to the individual or organisation making a booking. "Journey" refers to the transport service booked through our platform.' } },
+      { id: 'terms-2', type: 'legal_section', visible: true, order: 3, content: { title: '2. Booking and confirmation', content: 'All bookings are subject to vehicle availability and confirmation by Ride Prestige. A booking is confirmed only when you receive written confirmation. Quote estimates are indicative; final fares are confirmed at booking stage.' } },
+      { id: 'terms-3', type: 'legal_section', visible: true, order: 4, content: { title: '3. Payment terms', content: 'Payment terms are stated during booking or agreed separately for an approved corporate account. Any online payments are processed by the payment provider shown during checkout.' } },
+      { id: 'terms-4', type: 'legal_section', visible: true, order: 5, content: { title: '4. Cancellation policy', content: 'The cancellation window and refund processing period are published on the Refund & Cancellation page and form part of these terms.' } },
+      { id: 'terms-5', type: 'legal_section', visible: true, order: 6, content: { title: '5. Passenger conduct', content: 'Passengers must behave safely and lawfully. Ride Prestige may refuse or terminate transport where conduct is unsafe, abusive, or unlawful.' } },
+      { id: 'terms-6', type: 'legal_section', visible: true, order: 7, content: { title: '6. Luggage and property', content: 'Customers are responsible for luggage and personal property. Excess luggage must be declared when booking.' } },
+      { id: 'terms-7', type: 'legal_section', visible: true, order: 8, content: { title: '7. Force majeure', content: 'We are not liable for failure caused by circumstances beyond our reasonable control, including severe weather, traffic incidents, road closures, or civil emergencies.' } },
+      { id: 'terms-8', type: 'legal_section', visible: true, order: 9, content: { title: '8. Governing law', content: 'These terms are governed by the laws of England and Wales and disputes are subject to the jurisdiction of the English courts.' } },
+    ],
+  },
+  {
+    id: 'page-privacy',
+    slug: 'privacy-policy',
+    title: 'Privacy Policy',
+    seoTitle: 'Privacy Policy',
+    metaDescription: 'How Ride Prestige collects, uses, and protects personal data.',
+    ogTitle: 'Ride Prestige Privacy Policy',
+    ogDescription: 'How Ride Prestige handles personal data.',
+    sectionsJson: [
+      { id: 'privacy-intro', type: 'page_intro', visible: true, order: 1, content: { title: 'Privacy Policy', lastUpdated: '1 January 2025', introduction: 'Ride Prestige Ltd is committed to protecting your privacy. This policy explains how we collect, use, retain, and protect personal data when you use our services.' } },
+      { id: 'privacy-1', type: 'legal_section', visible: true, order: 2, content: { title: '1. Information we collect', content: 'We collect information supplied during bookings, registrations, and enquiries, including contact details and journey information. We may also collect essential technical information needed to operate and secure the service.' } },
+      { id: 'privacy-2', type: 'legal_section', visible: true, order: 3, content: { title: '2. How we use information', content: 'We use personal data to provide transport services, manage bookings, communicate service updates, respond to support requests, improve operations, and meet legal obligations.' } },
+      { id: 'privacy-3', type: 'legal_section', visible: true, order: 4, content: { title: '3. Data sharing', content: 'We do not sell personal data. Information may be shared with drivers, affiliates, payment providers, and technology suppliers where necessary to deliver the service.' } },
+      { id: 'privacy-4', type: 'legal_section', visible: true, order: 5, content: { title: '4. Data retention', content: 'Data is retained only for as long as operational, accounting, insurance, and legal requirements make necessary.' } },
+      { id: 'privacy-5', type: 'legal_section', visible: true, order: 6, content: { title: '5. Your rights', content: 'Under applicable UK data protection law, you may have rights to access, correct, delete, restrict, or object to processing of your personal data.' } },
+      { id: 'privacy-6', type: 'legal_section', visible: true, order: 7, content: { title: '6. Security and contact', content: 'We use appropriate technical and organisational safeguards. Contact Ride Prestige using the details published on the Contact page for privacy requests.' } },
+    ],
+  },
+];
+
+export const DEFAULT_WEBSITE_PAGES = [DEFAULT_HOME_PAGE, ...DEFAULT_CONTENT_PAGES];

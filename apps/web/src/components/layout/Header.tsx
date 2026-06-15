@@ -5,18 +5,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import BrandLogo from '@/components/common/BrandLogo';
+import type { NavigationItem, SiteSettings } from '@/types';
 
-const NAV = [
-  { label: 'Home', href: '/' },
-  { label: 'Book', href: '/book' },
-  { label: 'Fleet', href: '/fleet' },
-  { label: 'Promotions', href: '/promotions' },
-  { label: 'Contact', href: '/contact' },
-];
-
-export default function Header() {
+export default function Header({ navigation, settings }: { navigation: NavigationItem[]; settings: SiteSettings }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const nav = navigation.filter(item => item.visible).sort((a, b) => a.order - b.order);
 
   return (
     <header
@@ -28,12 +22,12 @@ export default function Header() {
 
           {/* Brand */}
           <Link href="/" className="shrink-0">
-          <BrandLogo variant="mark" width={48} />
+          <BrandLogo variant="mark" width={48} src={settings.logoUrl} alt={settings.siteName} />
           </Link>
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-0.5">
-            {NAV.map(item => {
+            {nav.map(item => {
               const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
               return (
                 <Link
@@ -79,7 +73,7 @@ export default function Header() {
       {open && (
         <div style={{ background: '#ffffff', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
           <div className="px-4 py-4 space-y-1">
-            {NAV.map(item => {
+            {nav.map(item => {
               const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
               return (
                 <Link

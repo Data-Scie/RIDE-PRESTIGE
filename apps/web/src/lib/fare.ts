@@ -9,7 +9,8 @@
 // ============================================================
 
 import type { VehicleCategory, QuoteResult, BookingFormData } from '@/types';
-import { pricingConfig } from './data';
+import { pricingConfig as defaultPricing } from './data';
+import type { PricingConfig } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -25,7 +26,7 @@ export interface FareBreakdown {
 
 function round2(n: number): number { return Math.round(n * 100) / 100; }
 
-export function calculatePrestigeFare(miles: number, hours: number): FareBreakdown {
+export function calculatePrestigeFare(miles: number, hours: number, pricingConfig: PricingConfig = defaultPricing): FareBreakdown {
   const mileageCharge = pricingConfig.prestige.ratePerMile * miles;
   const timeCharge = pricingConfig.prestige.hourlyRate * hours;
   const total = Math.max(mileageCharge + timeCharge, 50);
@@ -37,7 +38,7 @@ export function calculatePrestigeFare(miles: number, hours: number): FareBreakdo
   };
 }
 
-export function calculateMinibusFare(miles: number, hours: number, passengers: number): FareBreakdown {
+export function calculateMinibusFare(miles: number, hours: number, passengers: number, pricingConfig: PricingConfig = defaultPricing): FareBreakdown {
   const mileageCharge = pricingConfig.minibus.ratePerMile * miles;
   const dailyRate = passengers > 24
     ? pricingConfig.minibus.rate32Seater
@@ -55,7 +56,7 @@ export function calculateMinibusFare(miles: number, hours: number, passengers: n
   };
 }
 
-export function calculateCoachFare(miles: number, hours: number): FareBreakdown {
+export function calculateCoachFare(miles: number, hours: number, pricingConfig: PricingConfig = defaultPricing): FareBreakdown {
   const mileageCharge = pricingConfig.coaches.ratePerMile * miles;
   const timeCharge = pricingConfig.coaches.hourlyRate * hours;
   const total = Math.max(mileageCharge + timeCharge, 150);
@@ -67,7 +68,7 @@ export function calculateCoachFare(miles: number, hours: number): FareBreakdown 
   };
 }
 
-export function calculateTaxiFare(miles: number): FareBreakdown {
+export function calculateTaxiFare(miles: number, pricingConfig: PricingConfig = defaultPricing): FareBreakdown {
   const mileageCharge = pricingConfig.taxi.ratePerMile * miles;
   const total = Math.max(mileageCharge, pricingConfig.taxi.minimumFare);
   return {
@@ -79,13 +80,13 @@ export function calculateTaxiFare(miles: number): FareBreakdown {
 }
 
 export function calculateFareForCategory(
-  category: VehicleCategory, miles: number, hours: number, passengers: number,
+  category: VehicleCategory, miles: number, hours: number, passengers: number, pricingConfig: PricingConfig = defaultPricing,
 ): FareBreakdown {
   switch (category) {
-    case 'prestige': return calculatePrestigeFare(miles, hours);
-    case 'minibus': return calculateMinibusFare(miles, hours, passengers);
-    case 'coaches': return calculateCoachFare(miles, hours);
-    case 'taxi': return calculateTaxiFare(miles);
+    case 'prestige': return calculatePrestigeFare(miles, hours, pricingConfig);
+    case 'minibus': return calculateMinibusFare(miles, hours, passengers, pricingConfig);
+    case 'coaches': return calculateCoachFare(miles, hours, pricingConfig);
+    case 'taxi': return calculateTaxiFare(miles, pricingConfig);
   }
 }
 

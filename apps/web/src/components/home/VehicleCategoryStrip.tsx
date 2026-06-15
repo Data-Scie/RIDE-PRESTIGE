@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ArrowRight, Bus, Car, Star, Users, Van } from 'lucide-react';
-import { fleetCategories } from '@/lib/data';
+import type { FleetCategory } from '@/types';
 
 const GOLD = '#c9a84c';
 const BLACK = '#0a0f1e';
@@ -14,17 +14,23 @@ const icons: Record<string, ReactNode> = {
   taxi: <Car size={24} />,
 };
 
-export default function VehicleCategoryStrip() {
+export default function VehicleCategoryStrip({
+  fleetCategories,
+  content = {},
+}: {
+  fleetCategories: FleetCategory[];
+  content?: Record<string, unknown>;
+}) {
   return (
     <section className="py-24" style={{background:'#f4f5f8'}}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-14">
-          <p className="text-sm font-semibold uppercase tracking-widest mb-3" style={{color:GOLD}}>Our fleet</p>
+          <p className="text-sm font-semibold uppercase tracking-widest mb-3" style={{color:GOLD}}>{String(content.eyebrow || 'Our fleet')}</p>
           <h2 className="text-3xl md:text-4xl font-semibold mb-4" style={{fontFamily:'Playfair Display,Georgia,serif',color:BLACK}}>
-            Choose your vehicle
+            {String(content.title || 'Choose your vehicle')}
           </h2>
           <p className="text-lg max-w-lg mx-auto leading-relaxed" style={{color:GREY}}>
-            Four premium hire options, one booking platform. Whatever the journey, we have the right vehicle.
+            {String(content.description || 'Four premium hire options, one booking platform. Whatever the journey, we have the right vehicle.')}
           </p>
         </div>
 

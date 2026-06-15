@@ -6,6 +6,9 @@ Production services:
 - Render: Express and Prisma API from `apps/api`
 - Vercel: Next.js website from `apps/web`
 
+All website CMS content is stored in Supabase and accessed through the Render
+API. No separate Redis or Upstash database is required.
+
 Never paste database passwords, JWT secrets, or API tokens into GitHub.
 
 ## 1. Supabase
@@ -94,13 +97,10 @@ AUTH_GOOGLE_ID=<Google OAuth client ID>
 AUTH_GOOGLE_SECRET=<Google OAuth client secret>
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=<browser-restricted Google Maps key>
 GOOGLE_MAPS_DISTANCE_MATRIX_API_KEY=<server-restricted Google Maps key>
-UPSTASH_REDIS_REST_URL=<Upstash REST URL>
-UPSTASH_REDIS_REST_TOKEN=<Upstash REST token>
 ```
 
-Google login, live maps, and persistent website CMS editing remain unavailable
-until their optional variables are configured. Core booking and portal flows use
-the Render API and Supabase.
+Google login and live maps remain unavailable until their optional variables are
+configured. Website CMS content is stored in Supabase through the Render API.
 
 Redeploy after adding or changing Vercel environment variables.
 

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
+import { DEFAULT_CONTENT_PAGES } from '../data/cmsDefaults';
 import type { WebsiteVehicle, Promotion, FAQItem, NavigationItem, SupportTicket } from '../types';
 
 const router = Router();
@@ -1206,15 +1207,54 @@ const DEFAULT_PAGES = [
     seoTitle: 'Ride Prestige — Coach & Minibus Hire UK',
     metaDescription: 'Coach and minibus hire across Sheffield and the UK. Reliable transport for groups, events and airport transfers.',
     ogTitle: 'Ride Prestige', ogDescription: 'Your local transport minutes away.',
-    sectionsJson: [],
+    sectionsJson: [
+      {
+        id: 'home-hero',
+        type: 'hero',
+        visible: true,
+        order: 1,
+        content: {
+          eyebrow: 'Sheffield & South Yorkshire',
+          title: 'Coach and minibus hire',
+          highlightedTitle: 'for every group journey.',
+          description: 'Dependable coach and minibus transport across Sheffield and the UK. Professional drivers, seamless airport transfers, corporate travel and event logistics.',
+          primaryCtaLabel: 'Book Now',
+          secondaryCtaLabel: 'View our fleet',
+        },
+      },
+      {
+        id: 'home-fleet',
+        type: 'fleet_strip',
+        visible: true,
+        order: 2,
+        content: {
+          eyebrow: 'Our fleet',
+          title: 'Choose your vehicle',
+          description: 'Four premium hire options, one booking platform. Whatever the journey, we have the right vehicle.',
+        },
+      },
+      {
+        id: 'home-promo',
+        type: 'promo_banner',
+        visible: true,
+        order: 3,
+        content: { label: 'Limited Offer' },
+      },
+    ],
   },
+  ...DEFAULT_CONTENT_PAGES,
 ];
 
 router.get('/pages', async (_req: Request, res: Response) => {
   try {
+    await prisma.websitePage.createMany({ data: DEFAULT_PAGES, skipDuplicates: true });
     let pages = await prisma.websitePage.findMany({ orderBy: { slug: 'asc' } });
-    if (pages.length === 0) {
-      await prisma.websitePage.createMany({ data: DEFAULT_PAGES, skipDuplicates: true });
+    const home = pages.find(page => page.slug === 'home');
+    if (home && Array.isArray(home.sectionsJson) && home.sectionsJson.length === 0) {
+      await prisma.websitePage.update({
+        where: { id: home.id },
+        data: { sectionsJson: DEFAULT_PAGES[0].sectionsJson },
+      });
       pages = await prisma.websitePage.findMany({ orderBy: { slug: 'asc' } });
     }
     const shaped = pages.map(p => ({ ...p, sections: p.sectionsJson }));

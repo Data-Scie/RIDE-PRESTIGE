@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Users, CheckCircle, Clock, MapPin, Bus, Car, Van, Star } from 'lucide-react';
 import { calculateFareForCategory, formatCurrency } from '@/lib/fare';
 import { estimateDistance } from '@/lib/distance';
-import type { VehicleCategory } from '@/types';
+import type { PricingConfig, VehicleCategory } from '@/types';
 
 const GOLD = '#c9a84c';
 const BLACK = '#000000';
@@ -18,7 +18,7 @@ const VEHICLES: { value: VehicleCategory; label: string; icon: ReactNode; capaci
   { value:'taxi',     label:'Taxi',    icon:<Car size={26} />, capacity:'1–4 persons', description:'Reliable saloon taxis for everyday journeys and fast local transfers.', features:['Card payments','GPS navigation','Licensed driver','Quick pickup'] },
 ];
 
-export default function PricesClient() {
+export default function PricesClient({ pricing }: { pricing: PricingConfig }) {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -103,7 +103,7 @@ export default function PricesClient() {
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
               {VEHICLES.map(v => {
-                const fare = calculateFareForCategory(v.value, distance.distanceMiles, distance.durationHours, passengers);
+                const fare = calculateFareForCategory(v.value, distance.distanceMiles, distance.durationHours, passengers, pricing);
                 const isSel = selected === v.value;
                 return (
                   <div key={v.value} className="relative rounded-2xl overflow-hidden flex flex-col transition-all duration-200"

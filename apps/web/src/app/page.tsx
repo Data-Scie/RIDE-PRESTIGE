@@ -1,23 +1,37 @@
 import type { Metadata } from 'next';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
+import PublicLayout from '@/components/layout/PublicLayout';
 import BookingWidget from '@/components/home/BookingWidget';
 import HeroSection from '@/components/home/HeroSection';
+import VehicleCategoryStrip from '@/components/home/VehicleCategoryStrip';
+import PromoBanner from '@/components/home/PromoBanner';
+import { getCategories, getPage, getPromotions } from '@/lib/cms';
 
-export const metadata: Metadata = {
-  title: 'Ride Prestige — Coach & Minibus Hire UK',
-  description: 'Coach and minibus hire across Sheffield and the UK. Professional group transport for events, airport transfers and corporate journeys.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const page = await getPage('home');
+  return {
+    title: page.seoTitle,
+    description: page.metaDescription,
+    openGraph: { title: page.ogTitle, description: page.ogDescription },
+  };
+}
 
-export default function HomePage() {
+export default async function HomePage() {
+  const [page, categories, promotions] = await Promise.all([
+    getPage('home'),
+    getCategories(),
+    getPromotions(),
+  ]);
+  const sections = page.sections.filter(section => section.visible).sort((a, b) => a.order - b.order);
+  const hero = sections.find(section => section.type === 'hero');
+  const fleet = sections.find(section => section.type === 'fleet_strip');
+  const promo = sections.find(section => section.type === 'promo_banner');
+
   return (
-    <>
-      <Header />
-      <main>
-        <BookingWidget />
-        <HeroSection />
-      </main>
-      <Footer />
-    </>
+    <PublicLayout>
+      <BookingWidget />
+      {hero && <HeroSection content={hero.content} />}
+      {fleet && <VehicleCategoryStrip fleetCategories={categories} content={fleet.content} />}
+      {promo && <PromoBanner promotions={promotions} label={String(promo.content.label || 'Limited Offer')} />}
+    </PublicLayout>
   );
 }

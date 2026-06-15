@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { prisma } from '../lib/db';
 import { estimateDistance, estimateHours, calculateFare, applyCommission } from '../services/fareService';
 import { pushNotification } from '../services/notificationService';
+import { DEFAULT_HOME_SECTIONS, DEFAULT_WEBSITE_PAGES } from '../data/cmsDefaults';
 import type { VehicleCategory, BookingType } from '../types';
 
 const router = Router();
@@ -143,7 +144,14 @@ router.get('/fleet/:id', async (req: Request, res: Response) => {
  */
 router.get('/pricing', async (_req: Request, res: Response) => {
   try {
-    const p = await prisma.pricingConfig.findUnique({ where: { id: 'default' } });
+    const [p, cancellationPolicy] = await Promise.all([
+      prisma.pricingConfig.findUnique({ where: { id: 'default' } }),
+      prisma.cancellationPolicy.upsert({
+        where: { id: 'default' },
+        create: { id: 'default' },
+        update: {},
+      }),
+    ]);
     const shaped = p ? {
       prestige: { ratePerMile: p.prestigeRatePerMile, hourlyRate: p.prestigeHourlyRate },
       minibus:  { ratePerMile: p.minibusRatePerMile, rate16Seater: p.minibusRate16Seater, rate24Seater: p.minibusRate24Seater, rate32Seater: p.minibusRate32Seater },
@@ -153,13 +161,21 @@ router.get('/pricing', async (_req: Request, res: Response) => {
       commissionPercentage: p.commissionPercentage,
       driverPayoutPercentage: p.driverPayoutPercentage,
     } : null;
-    const cancellationPolicy = {
-      minHoursBeforeRide: 8,
-      refundWindowHours: 48,
-      message: 'Cancellations must be made at least 8 hours before your ride. Refunds processed within 48 hours of approval.',
-    };
     res.json({ success: true, data: { pricing: shaped, cancellationPolicy } });
   } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.get('/cancellation-policy', async (_req: Request, res: Response) => {
+  try {
+    const policy = await prisma.cancellationPolicy.upsert({
+      where: { id: 'default' },
+      create: { id: 'default' },
+      update: {},
+    });
+    res.json({ success: true, data: policy });
+  } catch {
     res.status(500).json({ success: false, message: 'Database error' });
   }
 });
@@ -206,6 +222,28 @@ router.get('/faqs', async (_req: Request, res: Response) => {
     });
     res.json({ success: true, data: faqs });
   } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.get('/pages/:slug', async (req: Request, res: Response) => {
+  try {
+    let page = await prisma.websitePage.findUnique({ where: { slug: req.params.slug } });
+    if (!page) {
+      const defaultPage = DEFAULT_WEBSITE_PAGES.find(candidate => candidate.slug === req.params.slug);
+      if (defaultPage) page = await prisma.websitePage.create({ data: defaultPage });
+    } else if (page?.slug === 'home' && Array.isArray(page.sectionsJson) && page.sectionsJson.length === 0) {
+      page = await prisma.websitePage.update({
+        where: { id: page.id },
+        data: { sectionsJson: DEFAULT_HOME_SECTIONS },
+      });
+    }
+    if (!page) {
+      res.status(404).json({ success: false, message: 'Page not found' });
+      return;
+    }
+    res.json({ success: true, data: { ...page, sections: page.sectionsJson } });
+  } catch {
     res.status(500).json({ success: false, message: 'Database error' });
   }
 });
