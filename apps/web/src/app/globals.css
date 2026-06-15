@@ -149,8 +149,49 @@
     grid-template-columns: 1fr;
     max-width: 560px;
     min-height: 0;
+    gap: 22px;
   }
-  .fleet-motion-scene { display: none; }
+  .fleet-motion-scene {
+    display: block;
+    height: 240px;
+    border-radius: 22px;
+  }
+  .fleet-motion-road {
+    top: 188px;
+  }
+  .fleet-motion-minibus {
+    top: 38px;
+    width: min(360px, 88%);
+  }
+  .fleet-motion-coach {
+    top: 34px;
+    width: min(390px, 94%);
+  }
+}
+
+@media (max-width: 640px) {
+  .booking-showcase {
+    padding: 56px 1rem 2.75rem;
+  }
+  .fleet-motion-scene {
+    height: 190px;
+    border-radius: 18px;
+  }
+  .fleet-motion-road {
+    top: 150px;
+  }
+  .fleet-motion-road span {
+    width: 46px;
+    margin-right: 26px;
+  }
+  .fleet-motion-minibus {
+    top: 32px;
+    width: min(300px, 90%);
+  }
+  .fleet-motion-coach {
+    top: 30px;
+    width: min(330px, 96%);
+  }
 }
 
 * { box-sizing: border-box; }
