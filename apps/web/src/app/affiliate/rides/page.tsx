@@ -7,7 +7,7 @@ interface Job {
   id: string; bookingRef: string; status: string;
   customerName: string; customerPhone: string;
   pickupAddress: string; dropoffAddress: string;
-  fareAmount: number; vehicleCategory: string;
+  yourEarnings: number; vehicleCategory: string;
   passengerCount: number; distance?: string; dateTime: string;
 }
 interface Driver  { id: string; fullName: string; status: string; }
@@ -93,7 +93,7 @@ export default function AffiliateRidesPage() {
                     <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
                       {ride.distance && <span className="flex items-center gap-1"><Route size={11} /> {ride.distance}</span>}
                       <span className="flex items-center gap-1"><Clock size={11} /> {new Date(ride.dateTime).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</span>
-                      <span className="font-bold text-lg text-green-700">£{ride.fareAmount}</span>
+                      <span className="font-bold text-lg text-green-700">Payout £{ride.yourEarnings}</span>
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 shrink-0">
@@ -125,7 +125,7 @@ export default function AffiliateRidesPage() {
                     </div>
                     <p className="text-sm text-slate-600">{ride.pickupAddress} → {ride.dropoffAddress}</p>
                   </div>
-                  <div className="text-right"><p className="font-bold text-xl text-slate-800">£{ride.fareAmount}</p>{ride.distance && <p className="text-xs text-slate-400">{ride.distance}</p>}</div>
+                  <div className="text-right"><p className="font-bold text-xl text-slate-800">£{ride.yourEarnings}</p><p className="text-xs text-slate-400">Partner payout</p>{ride.distance && <p className="text-xs text-slate-400">{ride.distance}</p>}</div>
                 </div>
               </div>
             ))}

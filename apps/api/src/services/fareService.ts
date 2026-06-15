@@ -6,8 +6,8 @@ const hardcodedDefaults = {
   minibus:  { ratePerMile: 4.00, rate16Seater: 420, rate24Seater: 520, rate32Seater: 620 },
   coaches:  { ratePerMile: 4.00, hourlyRate: 110 },
   taxi:     { ratePerMile: 3.00, minimumFare: 8 },
-  commissionPercentage: 27.5,
-  driverPayoutPercentage: 60,
+  commissionPercentage: 15,
+  driverPayoutPercentage: 100,
 };
 
 export type PricingConfig = typeof hardcodedDefaults;
@@ -117,9 +117,10 @@ export function applyCommission(fareAmount: number, pricing: PricingConfig = har
   affiliatePayout: number;
   driverPayout: number;
 } {
+  // RP takes commissionPercentage. The operator (affiliate or independent driver) gets the rest.
+  // For fleet drivers the affiliate decides their internal pay — RP does not split it further.
   const commission      = parseFloat(((fareAmount * pricing.commissionPercentage) / 100).toFixed(2));
-  const net             = fareAmount - commission;
-  const driverPayout    = parseFloat(((net * pricing.driverPayoutPercentage) / 100).toFixed(2));
-  const affiliatePayout = parseFloat((net - driverPayout).toFixed(2));
+  const affiliatePayout = parseFloat((fareAmount - commission).toFixed(2));
+  const driverPayout    = affiliatePayout; // stored for independent-driver jobs; unused for fleet-driver jobs
   return { commission, affiliatePayout, driverPayout };
 }

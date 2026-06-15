@@ -11,7 +11,6 @@ interface PricingData {
   taxi: { ratePerMile: number; minimumFare: number };
   driverSearchRadiusMiles: number;
   commissionPercentage: number;
-  driverPayoutPercentage: number;
 }
 
 const DEFAULT_PRICING: PricingData = {
@@ -20,8 +19,7 @@ const DEFAULT_PRICING: PricingData = {
   coaches:  { ratePerMile: 4.00, hourlyRate: 110 },
   taxi:     { ratePerMile: 3.00, minimumFare: 8 },
   driverSearchRadiusMiles: 20,
-  commissionPercentage: 27.5,
-  driverPayoutPercentage: 60,
+  commissionPercentage: 15,
 };
 
 export default function AdminPricingPage() {
@@ -103,7 +101,7 @@ export default function AdminPricingPage() {
             <p className="text-xs text-brand-grey">Costs combine distance and a fixed daily vehicle charge.</p>
           </div>
         </div>
-        <div className="grid sm:grid-cols-3 gap-5">
+        <div className="grid sm:grid-cols-2 gap-5">
           <div>
             <label className="label">Distance tariff (£/mile)</label>
             <input type="number" step="0.10" min="0" value={pricing.minibus.ratePerMile}
@@ -197,13 +195,11 @@ export default function AdminPricingPage() {
               onChange={e => setPricing(p => ({ ...p, commissionPercentage: parseFloat(e.target.value) || 0 }))}
               className="input-field" />
           </div>
-          <div>
-            <label className="label">Driver payout (%)</label>
-            <input type="number" step="0.5" min="0" max="100" value={pricing.driverPayoutPercentage}
-              onChange={e => setPricing(p => ({ ...p, driverPayoutPercentage: parseFloat(e.target.value) || 0 }))}
-              className="input-field" />
-          </div>
         </div>
+        <p className="text-xs text-brand-grey mt-4">
+          Partner payout is calculated automatically as customer fare minus Ride Prestige commission.
+          Affiliates and independent drivers receive this partner payout; affiliate-employed drivers are paid by their affiliate.
+        </p>
       </div>
 
       {/* Live preview */}

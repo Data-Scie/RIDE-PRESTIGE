@@ -371,7 +371,7 @@ router.post('/bookings', async (req: Request, res: Response) => {
       select: { id: true },
     });
     const notifTitle = 'New Job Available';
-    const notifBody  = `Job ${ref} — ${pickupPostcode} → ${dropoffPostcode} — £${calc.total}`;
+    const notifBody  = `Job ${ref} — ${pickupPostcode} → ${dropoffPostcode} — payout £${affiliatePayout}`;
     await Promise.all([
       ...matchingAffiliates.map(a => pushNotification(a.id, 'affiliate', notifTitle, notifBody, 'job')),
       pushNotification('admin-1', 'admin', 'New Booking', `${c.fullName} booked ${ref} — £${calc.total}`, 'booking'),

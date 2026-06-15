@@ -8,6 +8,7 @@ interface DashboardData {
   activeRides: number; awaitingAffiliate: number; needsAllocation: number;
   completedToday: number; totalDrivers: number; availableDrivers: number;
   totalAffiliates: number; pendingApprovals: number;
+  todayGrossRevenue: number; todayRpCommission: number;
 }
 interface RecentJob {
   id: string; bookingRef: string; status: string; customerName: string;
@@ -73,6 +74,21 @@ export default function OpsDashboard() {
         <Link href="/ops/map" className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)' }}>
           <MapPin size={15} /> Open Live Map
         </Link>
+      </div>
+
+      {/* Today's revenue strip */}
+      <div className="rounded-2xl p-5 grid grid-cols-2 gap-4"
+        style={{ background: 'linear-gradient(135deg,#0d1424 0%,#111827 100%)', border: '1px solid rgba(59,130,246,0.2)' }}>
+        <div className="flex flex-col gap-0.5">
+          <p className="text-xs uppercase tracking-widest" style={{ color: 'rgba(201,168,76,0.7)' }}>RP Commission — Today</p>
+          <p className="text-3xl font-bold text-white">£{(stats.todayRpCommission ?? 0).toLocaleString()}</p>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>Ride Prestige net income today</p>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <p className="text-xs uppercase tracking-widest" style={{ color: 'rgba(74,222,128,0.6)' }}>Gross Turnover — Today</p>
+          <p className="text-3xl font-bold" style={{ color: '#4ade80' }}>£{(stats.todayGrossRevenue ?? 0).toLocaleString()}</p>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>Total customer fares today</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

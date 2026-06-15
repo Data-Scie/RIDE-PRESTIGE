@@ -160,7 +160,6 @@ router.get('/pricing', async (_req: Request, res: Response) => {
       taxi:     { ratePerMile: p.taxiRatePerMile, minimumFare: p.taxiMinimumFare },
       driverSearchRadiusMiles: p.driverSearchRadiusMiles,
       commissionPercentage: p.commissionPercentage,
-      driverPayoutPercentage: p.driverPayoutPercentage,
     } : null;
     res.json({ success: true, data: { pricing: shaped, cancellationPolicy } });
   } catch (e) {
@@ -446,7 +445,7 @@ router.post('/booking', async (req: Request, res: Response) => {
     });
 
     const notifTitle = 'New Job Available';
-    const notifBody  = `Job ${ref}: ${pickupPostcode} → ${dropoffPostcode} — £${calc.total} — ${rideDateTime.toLocaleDateString('en-GB')}`;
+    const notifBody  = `Job ${ref}: ${pickupPostcode} → ${dropoffPostcode} — payout £${affiliatePayout} — ${rideDateTime.toLocaleDateString('en-GB')}`;
 
     await Promise.all([
       ...affiliates.map(a => pushNotification(a.id, 'affiliate', notifTitle, notifBody, 'job')),
@@ -466,7 +465,7 @@ router.post('/booking', async (req: Request, res: Response) => {
       jobId: jobRow.id,
     };
 
-    res.status(201).json({ success: true, data: { booking, quote: { calculation: calc, commission, affiliatePayout, driverPayout } } });
+    res.status(201).json({ success: true, data: { booking, quote: { calculation: calc, commission, partnerPayout: affiliatePayout } } });
   } catch (e) {
     console.error('Booking creation error:', e);
     res.status(500).json({ success: false, message: 'Database error' });

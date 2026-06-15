@@ -6,7 +6,7 @@ import StarRating from '@/components/common/StarRating';
 interface Job {
   id: string; bookingRef: string; status: string;
   customerName: string; pickupAddress: string; dropoffAddress: string;
-  fareAmount: number; affiliatePayoutAmount?: number; distance?: string;
+  yourEarnings?: number; distance?: string;
   passengerCount: number; completedAt?: string; dateTime: string;
   driverName?: string;
   customerRating?: number | null; customerFeedback?: string | null;
@@ -27,7 +27,7 @@ export default function AffiliateHistoryPage() {
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-400">Loading history…</div>;
   if (error)   return <div className="p-6 text-red-500">Error: {error}</div>;
 
-  const totalEarned = rides.reduce((s, r) => s + (r.affiliatePayoutAmount ?? r.fareAmount), 0);
+  const totalEarned = rides.reduce((s, r) => s + (r.yourEarnings ?? 0), 0);
 
   return (
     <div className="space-y-5">
@@ -53,7 +53,7 @@ export default function AffiliateHistoryPage() {
               <p className="text-xs text-slate-400">{new Date(r.dateTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
             </div>
             <div className="text-right shrink-0">
-              <p className="font-bold text-slate-800">£{r.affiliatePayoutAmount ?? r.fareAmount}</p>
+              <p className="font-bold text-slate-800">£{r.yourEarnings ?? 0}</p>
               {r.distance && <p className="text-xs text-slate-400">{r.distance}</p>}
               <p className="text-xs text-slate-400">{r.passengerCount} pax</p>
             </div>

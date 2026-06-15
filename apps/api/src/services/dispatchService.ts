@@ -137,6 +137,7 @@ export async function createIndependentRideOffers(jobId: string): Promise<number
       bookingRef: job.bookingRef,
       pickupAddress: job.pickupAddress,
       dropoffAddress: job.dropoffAddress,
+      yourEarnings: job.affiliatePayoutAmount,
       expiresAt: expiresAt.toISOString(),
     };
     emitToRoom(`driver:${driver.id}`, 'ride:offer', offer);
@@ -144,7 +145,7 @@ export async function createIndependentRideOffers(jobId: string): Promise<number
       driver.id,
       'driver',
       'New Direct Ride Offer',
-      `${job.bookingRef}: ${job.pickupAddress} to ${job.dropoffAddress}. Offer expires in 2 minutes.`,
+      `${job.bookingRef}: ${job.pickupAddress} to ${job.dropoffAddress}. Payout £${job.affiliatePayoutAmount}. Offer expires in 2 minutes.`,
       'job',
     );
   }));
@@ -204,7 +205,7 @@ export async function claimIndependentRide(driverId: string, offerId: string) {
         assignedDriverId: driverId,
         assignedVehicleId: vehicle.id,
         status: 'driver_accepted',
-        affiliatePayoutAmount: 0,
+        affiliatePayoutAmount: parseFloat((offer.job.fareAmount - offer.job.commissionAmount).toFixed(2)),
         driverPayoutAmount: parseFloat((offer.job.fareAmount - offer.job.commissionAmount).toFixed(2)),
       },
     });
@@ -246,13 +247,13 @@ export async function claimIndependentRide(driverId: string, offerId: string) {
     });
     return tx.job.findUniqueOrThrow({ where: { id: offer.jobId } });
       }, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        maxWait: 15_000,
-        timeout: 60_000,
+        maxWait: 3_000,
+        timeout: 10_000,
       });
     } catch (error) {
       const retryable = ['P2034', 'P2028'].includes((error as { code?: string }).code ?? '');
       if (retryable && attempt < 2) continue;
+      if (retryable) throw new Error('RIDE_ALREADY_CLAIMED');
       throw error;
     }
   }

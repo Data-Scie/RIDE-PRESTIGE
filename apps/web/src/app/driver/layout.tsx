@@ -24,11 +24,12 @@ const NAV = [
   { label: 'Finance', items: [{ href: '/driver/earnings', label: 'Earnings', icon: TrendingUp }] },
 ];
 
-function DriverNav({ onNav }: { onNav?: () => void }) {
+function DriverNav({ profile, onNav }: { profile: DriverIdentity | null; onNav?: () => void }) {
   const pathname = usePathname();
+  const groups = NAV.filter(group => profile?.driverType === 'affiliateDriver' ? group.label !== 'Finance' : true);
   return (
     <nav className="flex-1 p-3 space-y-5">
-      {NAV.map(group => (
+      {groups.map(group => (
         <div key={group.label}>
           <p className="px-3 mb-1 text-[9px] font-semibold uppercase tracking-widest text-slate-400">{group.label}</p>
           <div className="space-y-0.5">
@@ -84,7 +85,7 @@ function Sidebar({ profile, onNav }: { profile: DriverIdentity | null; onNav?: (
           </div>
         </Link>
       </div>
-      <DriverNav onNav={onNav} />
+      <DriverNav profile={profile} onNav={onNav} />
       <DriverAccount profile={profile} />
     </aside>
   );

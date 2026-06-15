@@ -12,7 +12,7 @@ interface Job {
   pickupAddress: string; dropoffAddress: string; stops?: string[];
   dateTime: string; passengerCount: number; luggageCount: number;
   vehicleCategory: string; vehicleTypeRequested: string;
-  fareAmount: number; commissionAmount: number; affiliatePayoutAmount: number; driverPayoutAmount: number;
+  fareAmount: number; commissionAmount: number; affiliatePayoutAmount: number;
   distance: string; estimatedDuration: string;
   specialInstructions?: string; flightNumber?: string;
   affiliateId?: string; assignedDriverId?: string; assignedVehicleId?: string;
@@ -186,9 +186,13 @@ export default function RideDetailPage() {
 
           {/* Fare breakdown */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-            <h2 className="font-semibold text-slate-800 mb-3 text-sm">Fare Breakdown</h2>
+            <h2 className="font-semibold text-slate-800 mb-3 text-sm">Fare & ROI Breakdown</h2>
             <div className="space-y-2 text-xs">
-              {[{ label: 'Gross Fare', value: `£${job.fareAmount}` }, { label: 'Commission', value: `£${job.commissionAmount}` }, { label: 'Affiliate Payout', value: `£${job.affiliatePayoutAmount}` }, { label: 'Driver Payout', value: `£${job.driverPayoutAmount}` }].map(({ label, value }) => (
+              {[
+                { label: 'Customer Fare', value: `£${job.fareAmount}` },
+                { label: 'Ride Prestige ROI', value: `£${job.commissionAmount}` },
+                { label: affiliate ? 'Affiliate Payout' : 'Independent Driver Payout', value: `£${job.affiliatePayoutAmount}` },
+              ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between"><span className="text-slate-400">{label}</span><span className="font-medium text-slate-700">{value}</span></div>
               ))}
             </div>

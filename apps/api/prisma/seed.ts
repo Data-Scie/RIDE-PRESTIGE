@@ -607,8 +607,8 @@ async function main() {
       taxiRatePerMile: 3.00,
       taxiMinimumFare: 8,
       driverSearchRadiusMiles: 20,
-      commissionPercentage: 27.5,
-      driverPayoutPercentage: 60,
+      commissionPercentage: 15,
+      driverPayoutPercentage: 100,
     },
   });
 

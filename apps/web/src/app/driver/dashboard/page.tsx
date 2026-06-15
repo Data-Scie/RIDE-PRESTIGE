@@ -42,8 +42,7 @@ interface RideRequest {
   jobId?: string;
   bookingRef: string;
   status: string;
-  fareAmount: number;
-  driverPayoutAmount?: number;
+  yourEarnings?: number | null;
   distance?: string;
   passengerCount: number;
   pickupAddress: string;
@@ -156,7 +155,9 @@ export default function DriverDashboard() {
           <div className="flex flex-wrap items-center gap-4">
             <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center"><Navigation size={21} /></div>
             <div className="flex-1 min-w-60"><p className="font-bold">New ride assignment · {rideRequest.bookingRef}</p><p className="text-sm text-blue-100">{rideRequest.pickupAddress} → {rideRequest.dropoffAddress}</p><p className="text-xs text-blue-200 mt-1">{rideRequest.distance || 'Distance pending'} · {rideRequest.passengerCount} passengers</p></div>
-            <div className="text-right"><p className="font-bold text-xl">£{rideRequest.driverPayoutAmount ?? rideRequest.fareAmount}</p><p className="text-xs text-blue-200">Driver payout</p></div>
+            {profile.driverType === 'independentDriver' && (
+              <div className="text-right"><p className="font-bold text-xl">£{rideRequest.yourEarnings ?? 0}</p><p className="text-xs text-blue-200">Your payout</p></div>
+            )}
             {rideRequest.expiresAt && <p className="text-xs text-blue-100">Expires {new Date(rideRequest.expiresAt).toLocaleTimeString('en-GB')}</p>}
             <button onClick={declineRide} className="px-4 py-2.5 rounded-xl bg-blue-700 text-white font-semibold text-sm">Decline</button>
             <button onClick={acceptRide} className="px-5 py-2.5 rounded-xl bg-white text-blue-700 font-semibold text-sm">Accept Ride</button>
@@ -166,7 +167,9 @@ export default function DriverDashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Today's Earnings", value: `£${stats?.todayEarnings ?? 0}`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
+          ...(profile.driverType === 'independentDriver'
+            ? [{ label: "Today's Earnings", value: `£${stats?.todayEarnings ?? 0}`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' }]
+            : []),
           { label: "Today's Jobs", value: stats?.todayJobs ?? 0, icon: Navigation, color: 'text-blue-600', bg: 'bg-blue-50' },
           { label: 'Completed Rides', value: stats?.completedJobs ?? profile.totalJobs, icon: CheckCircle, color: 'text-violet-600', bg: 'bg-violet-50' },
           { label: 'Driver Rating', value: profile.rating ? profile.rating.toFixed(1) : 'New', icon: Star, color: 'text-amber-600', bg: 'bg-amber-50' },

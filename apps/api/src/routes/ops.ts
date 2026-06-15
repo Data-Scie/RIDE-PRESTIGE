@@ -48,22 +48,26 @@ function shapeJob(j: {
  */
 router.get('/dashboard', async (_req: Request, res: Response) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
     const [
       activeRides, awaitingAffiliate, needsAllocation, completedToday,
       totalDrivers, availableDrivers, totalAffiliates,
       pendingDriverCount, pendingAffCount, pendingVehicleCount,
+      todayRevenueAgg, todayCommissionAgg,
     ] = await Promise.all([
       prisma.job.count({ where: { status: { in: ['on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress'] } } }),
       prisma.job.count({ where: { status: 'awaiting_affiliate' } }),
       prisma.job.count({ where: { status: 'needs_allocation' } }),
-      prisma.job.count({ where: { status: 'completed', updatedAt: { gte: new Date(today) } } }),
+      prisma.job.count({ where: { status: 'completed', completedAt: { gte: todayStart } } }),
       prisma.driver.count(),
       prisma.driver.count({ where: { status: 'available', isApproved: true } }),
       prisma.affiliate.count(),
       prisma.driver.count({ where: { applicationStatus: 'pending' } }),
       prisma.affiliate.count({ where: { isApproved: false } }),
       prisma.fleetVehicle.count({ where: { approvalStatus: 'pending' } }),
+      prisma.job.aggregate({ _sum: { fareAmount: true }, where: { status: 'completed', completedAt: { gte: todayStart } } }),
+      prisma.job.aggregate({ _sum: { commissionAmount: true }, where: { status: 'completed', completedAt: { gte: todayStart } } }),
     ]);
     res.json({
       success: true,
@@ -72,6 +76,9 @@ router.get('/dashboard', async (_req: Request, res: Response) => {
         totalDrivers, availableDrivers, totalAffiliates,
         pendingApprovals: pendingDriverCount + pendingAffCount + pendingVehicleCount,
         pendingVehicles: pendingVehicleCount,
+        // today's RP financial picture
+        todayGrossRevenue: parseFloat((todayRevenueAgg._sum.fareAmount ?? 0).toFixed(2)),
+        todayRpCommission: parseFloat((todayCommissionAgg._sum.commissionAmount ?? 0).toFixed(2)),
       },
     });
   } catch (e) {
@@ -263,26 +270,27 @@ router.put('/rides/:id/status', async (req: Request, res: Response) => {
     const updated = await prisma.job.update({ where: { id: job.id }, data: { status } });
 
     // Auto-create earnings when completed
-    if (status === 'completed' && job.affiliateId && job.assignedDriverId) {
+    if (status === 'completed' && job.assignedDriverId) {
       const now = new Date();
-      await Promise.all([
-        prisma.earningEntry.create({
+      if (job.affiliateId) {
+        await prisma.earningEntry.create({
           data: {
             id: `earn-${uuid()}`, jobId: job.id, bookingRef: job.bookingRef,
-            entityId: job.affiliateId!, entityType: 'affiliate',
+            entityId: job.affiliateId, entityType: 'affiliate',
             date: now, grossAmount: job.affiliatePayoutAmount,
             commissionDeducted: 0, netAmount: job.affiliatePayoutAmount, status: 'pending',
           },
-        }),
-        prisma.earningEntry.create({
+        });
+      } else {
+        await prisma.earningEntry.create({
           data: {
             id: `earn-${uuid()}`, jobId: job.id, bookingRef: job.bookingRef,
-            entityId: job.assignedDriverId!, entityType: 'driver',
-            date: now, grossAmount: job.driverPayoutAmount,
-            commissionDeducted: 0, netAmount: job.driverPayoutAmount, status: 'pending',
+            entityId: job.assignedDriverId, entityType: 'driver',
+            date: now, grossAmount: job.affiliatePayoutAmount,
+            commissionDeducted: 0, netAmount: job.affiliatePayoutAmount, status: 'pending',
           },
-        }),
-      ]);
+        });
+      }
       // Update linked booking
       const bk = await prisma.booking.findFirst({ where: { jobId: job.id } });
       if (bk) {

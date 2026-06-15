@@ -29,13 +29,27 @@ function shapeJob(j: {
   completedAt: Date | null; customerRating: number | null; customerFeedback: string | null; driverRating: number | null;
   createdAt: Date; updatedAt: Date;
 }) {
+  // yourEarnings: independent drivers (no affiliateId on job) earn affiliatePayoutAmount.
+  // Fleet drivers (job has affiliateId) are paid by their affiliate — RP does not set that rate.
+  const yourEarnings = j.affiliateId === null ? j.affiliatePayoutAmount : null;
   return {
-    ...j,
+    id: j.id, bookingRef: j.bookingRef, bookingId: j.bookingId,
+    customerId: j.customerId, customerName: j.customerName, customerPhone: j.customerPhone,
+    pickupAddress: j.pickupAddress, dropoffAddress: j.dropoffAddress,
     stops: j.stops as Stop[],
     dateTime: j.dateTime.toISOString(),
+    passengerCount: j.passengerCount, luggageCount: j.luggageCount,
+    vehicleTypeRequested: j.vehicleTypeRequested, vehicleCategory: j.vehicleCategory,
+    distance: j.distance, estimatedDuration: j.estimatedDuration,
+    specialInstructions: j.specialInstructions,
+    flightNumber: j.flightNumber, trainNumber: j.trainNumber,
+    status: j.status,
+    assignedDriverId: j.assignedDriverId, assignedVehicleId: j.assignedVehicleId,
     completedAt: j.completedAt?.toISOString() ?? null,
-    createdAt: j.createdAt.toISOString(),
-    updatedAt: j.updatedAt.toISOString(),
+    customerRating: j.customerRating, customerFeedback: j.customerFeedback, driverRating: j.driverRating,
+    createdAt: j.createdAt.toISOString(), updatedAt: j.updatedAt.toISOString(),
+    // Earnings visibility: independent drivers see their payout; fleet drivers see null (affiliate sets their rate)
+    yourEarnings,
   };
 }
 
@@ -59,7 +73,9 @@ router.get('/dashboard', async (req: Request, res: Response) => {
     if (!driver) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
     const [myJobs, myEarnings] = await Promise.all([
       prisma.job.findMany({ where: { assignedDriverId: drvId } }),
-      prisma.earningEntry.findMany({ where: { entityId: drvId, entityType: 'driver' } }),
+      driver.driverType === 'independentDriver'
+        ? prisma.earningEntry.findMany({ where: { entityId: drvId, entityType: 'driver' } })
+        : Promise.resolve([]),
     ]);
     const today = new Date().toISOString().slice(0, 10);
     const thisWeekStart = new Date(); thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay());
@@ -370,26 +386,34 @@ router.put('/jobs/:id/status', async (req: Request, res: Response) => {
           where: { id: job.id },
           data: { status: 'completed', completedAt: now },
         });
+        // Earning amount for this driver:
+        // - Independent driver (no affiliateId on job): earns the full operator payout (affiliatePayoutAmount)
+        // - Fleet driver (job has affiliateId): their pay is set by their affiliate, not by RP; record 0 from RP
+        const isIndependentJob = !job.affiliateId;
+        const driverEarn = isIndependentJob ? job.affiliatePayoutAmount : 0;
         await tx.driver.update({
           where: { id: drvId },
-          data: { status: 'available', totalJobs: { increment: 1 }, totalEarnings: { increment: job.driverPayoutAmount } },
+          data: { status: 'available', totalJobs: { increment: 1 }, totalEarnings: { increment: driverEarn } },
         });
         if (job.assignedVehicleId) {
           await tx.fleetVehicle.update({ where: { id: job.assignedVehicleId }, data: { status: 'available' } });
         }
-        await tx.earningEntry.create({
-          data: {
-            id: `earn-${uuid()}`, jobId: job.id, bookingRef: job.bookingRef,
-            entityId: drvId, entityType: 'driver',
-            date: now, grossAmount: job.driverPayoutAmount,
-            commissionDeducted: 0, netAmount: job.driverPayoutAmount, status: 'pending',
-          },
-        });
-        if (job.affiliateId) {
+        if (isIndependentJob) {
+          // Independent driver gets the payout recorded by RP
           await tx.earningEntry.create({
             data: {
               id: `earn-${uuid()}`, jobId: job.id, bookingRef: job.bookingRef,
-              entityId: job.affiliateId, entityType: 'affiliate',
+              entityId: drvId, entityType: 'driver',
+              date: now, grossAmount: job.affiliatePayoutAmount,
+              commissionDeducted: 0, netAmount: job.affiliatePayoutAmount, status: 'pending',
+            },
+          });
+        } else {
+          // Fleet driver job: affiliate earns the payout; fleet driver pay is handled by the affiliate
+          await tx.earningEntry.create({
+            data: {
+              id: `earn-${uuid()}`, jobId: job.id, bookingRef: job.bookingRef,
+              entityId: job.affiliateId!, entityType: 'affiliate',
               date: now, grossAmount: job.affiliatePayoutAmount,
               commissionDeducted: 0, netAmount: job.affiliatePayoutAmount, status: 'pending',
             },
@@ -621,6 +645,11 @@ router.put('/documents/:id', async (req: Request, res: Response) => {
 router.get('/earnings', async (req: Request, res: Response) => {
   try {
     const drvId = getDrvId(req);
+    const driver = await prisma.driver.findUnique({ where: { id: drvId }, select: { driverType: true } });
+    if (!driver || driver.driverType !== 'independentDriver') {
+      res.status(403).json({ success: false, message: 'Ride Prestige earnings are only available for independent drivers' });
+      return;
+    }
     const myEarnings = await prisma.earningEntry.findMany({
       where: { entityId: drvId, entityType: 'driver' },
       orderBy: { date: 'desc' },

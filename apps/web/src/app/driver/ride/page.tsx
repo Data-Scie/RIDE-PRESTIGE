@@ -13,10 +13,9 @@ interface ActiveRide {
   passengerCount: number;
   pickupAddress: string;
   dropoffAddress: string;
-  fareAmount: number;
+  yourEarnings?: number | null;
   distance?: string;
   estimatedDuration?: string;
-  driverPayoutAmount?: number;
   specialInstructions?: string;
 }
 
@@ -138,10 +137,17 @@ export default function DriverRidePage() {
             <div className="flex items-center gap-3"><div className="w-11 h-11 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center font-bold">{ride.customerName.charAt(0)}</div><div><p className="font-semibold text-slate-800">{ride.customerName}</p><p className="text-xs text-slate-400">{ride.passengerCount} passenger{ride.passengerCount !== 1 ? 's' : ''}</p></div></div>
             <a href={`tel:${ride.customerPhone}`} className="mt-4 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-50 text-slate-700 text-sm font-semibold"><Phone size={15} /> Call Passenger</a>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-            <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">Driver Payout</p><p className="text-3xl font-bold text-slate-800 mt-1">£{ride.driverPayoutAmount ?? ride.fareAmount}</p>
-            {ride.specialInstructions && <div className="mt-4 pt-4 border-t border-slate-100"><p className="text-xs font-semibold text-slate-400">SPECIAL INSTRUCTIONS</p><p className="text-sm text-slate-600 mt-1">{ride.specialInstructions}</p></div>}
-          </div>
+          {ride.yourEarnings !== null && ride.yourEarnings !== undefined && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+              <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">Your Payout</p><p className="text-3xl font-bold text-slate-800 mt-1">£{ride.yourEarnings}</p>
+            </div>
+          )}
+          {ride.specialInstructions && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+              <p className="text-xs font-semibold text-slate-400">SPECIAL INSTRUCTIONS</p>
+              <p className="text-sm text-slate-600 mt-1">{ride.specialInstructions}</p>
+            </div>
+          )}
           <a href={`https://maps.google.com/?q=${encodeURIComponent(currentIndex < 2 ? ride.pickupAddress : ride.dropoffAddress)}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-800 text-white font-semibold text-sm"><MapPin size={16} /> Open Navigation</a>
           {assigned ? <button onClick={acceptAssignment} disabled={updating} className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm disabled:opacity-50">{updating ? 'Accepting...' : 'Accept Assignment'}</button> : !completed && <button onClick={advance} disabled={updating} className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm disabled:opacity-50">{updating ? 'Updating...' : current?.action}</button>}
           {completed && <div className="p-5 rounded-2xl bg-green-50 border border-green-100 text-center"><CheckCircle size={30} className="mx-auto text-green-600 mb-2" /><p className="font-bold text-green-800">Ride Completed</p></div>}

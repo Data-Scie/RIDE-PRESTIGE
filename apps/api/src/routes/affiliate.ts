@@ -26,12 +26,23 @@ function shapeJob(j: {
   createdAt: Date; updatedAt: Date;
 }) {
   return {
-    ...j,
+    id: j.id, bookingRef: j.bookingRef, bookingId: j.bookingId,
+    customerId: j.customerId, customerName: j.customerName, customerPhone: j.customerPhone,
+    pickupAddress: j.pickupAddress, dropoffAddress: j.dropoffAddress,
     stops: j.stops as Stop[],
     dateTime: j.dateTime.toISOString(),
+    passengerCount: j.passengerCount, luggageCount: j.luggageCount,
+    vehicleTypeRequested: j.vehicleTypeRequested, vehicleCategory: j.vehicleCategory,
+    distance: j.distance, estimatedDuration: j.estimatedDuration,
+    specialInstructions: j.specialInstructions,
+    flightNumber: j.flightNumber, trainNumber: j.trainNumber,
+    status: j.status, affiliateId: j.affiliateId,
+    assignedDriverId: j.assignedDriverId, assignedVehicleId: j.assignedVehicleId,
     completedAt: j.completedAt?.toISOString() ?? null,
-    createdAt: j.createdAt.toISOString(),
-    updatedAt: j.updatedAt.toISOString(),
+    customerRating: j.customerRating, customerFeedback: j.customerFeedback, driverRating: j.driverRating,
+    createdAt: j.createdAt.toISOString(), updatedAt: j.updatedAt.toISOString(),
+    // What RP pays this affiliate after deducting commission. Customer fare is not exposed.
+    yourEarnings: j.affiliatePayoutAmount,
   };
 }
 
@@ -95,7 +106,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
           bookingRef:     firstPending.bookingRef,
           pickupAddress:  firstPending.pickupAddress,
           dropoffAddress: firstPending.dropoffAddress,
-          fareAmount:     firstPending.fareAmount,
+          yourEarnings:   firstPending.affiliatePayoutAmount,
         } : undefined,
         totalDrivers:     myDrivers.length,
         driversAvailable: myDrivers.filter(d => d.status === 'available').length,

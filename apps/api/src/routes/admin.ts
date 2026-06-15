@@ -70,11 +70,14 @@ function shapeJob(j: {
  */
 router.get('/dashboard', async (_req: Request, res: Response) => {
   try {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const [
       totalBookings, pendingBookings, completedJobs, activeJobs,
       totalCustomers, totalDrivers, approvedDrivers,
       totalAffiliates, approvedAffiliates,
-      earningsAgg, pendingTickets, fleetVehiclesCount,
+      revenueAgg, monthRevenueAgg, commissionAgg, monthCommissionAgg,
+      pendingTickets, fleetVehiclesCount,
     ] = await Promise.all([
       prisma.booking.count(),
       prisma.booking.count({ where: { status: 'pending' } }),
@@ -85,7 +88,10 @@ router.get('/dashboard', async (_req: Request, res: Response) => {
       prisma.driver.count({ where: { isApproved: true } }),
       prisma.affiliate.count(),
       prisma.affiliate.count({ where: { isApproved: true } }),
-      prisma.earningEntry.aggregate({ _sum: { grossAmount: true } }),
+      prisma.job.aggregate({ _sum: { fareAmount: true }, where: { status: 'completed' } }),
+      prisma.job.aggregate({ _sum: { fareAmount: true }, where: { status: 'completed', completedAt: { gte: monthStart } } }),
+      prisma.job.aggregate({ _sum: { commissionAmount: true }, where: { status: 'completed' } }),
+      prisma.job.aggregate({ _sum: { commissionAmount: true }, where: { status: 'completed', completedAt: { gte: monthStart } } }),
       prisma.supportTicket.count({ where: { status: 'open' } }),
       prisma.fleetVehicle.count(),
     ]);
@@ -95,7 +101,12 @@ router.get('/dashboard', async (_req: Request, res: Response) => {
         totalBookings, pendingBookings, completedJobs, activeJobs,
         totalCustomers, totalDrivers, approvedDrivers,
         totalAffiliates, approvedAffiliates,
-        totalRevenue: parseFloat((earningsAgg._sum.grossAmount ?? 0).toFixed(2)),
+        // totalRevenue = all customer fares from completed jobs (turnover)
+        totalRevenue: parseFloat((revenueAgg._sum.fareAmount ?? 0).toFixed(2)),
+        monthRevenue: parseFloat((monthRevenueAgg._sum.fareAmount ?? 0).toFixed(2)),
+        // rpCommission = Ride Prestige's actual earned income (after paying out operators)
+        totalRpCommission: parseFloat((commissionAgg._sum.commissionAmount ?? 0).toFixed(2)),
+        monthRpCommission: parseFloat((monthCommissionAgg._sum.commissionAmount ?? 0).toFixed(2)),
         pendingTickets, fleetVehicles: fleetVehiclesCount,
       },
     });
@@ -744,7 +755,6 @@ router.get('/pricing', async (_req: Request, res: Response) => {
       taxi:     { ratePerMile: p.taxiRatePerMile, minimumFare: p.taxiMinimumFare },
       driverSearchRadiusMiles: p.driverSearchRadiusMiles,
       commissionPercentage: p.commissionPercentage,
-      driverPayoutPercentage: p.driverPayoutPercentage,
     };
     res.json({ success: true, data: shaped });
   } catch (e) {
@@ -777,7 +787,6 @@ router.put('/pricing', async (req: Request, res: Response) => {
       taxi?: { ratePerMile?: number; minimumFare?: number };
       driverSearchRadiusMiles?: number;
       commissionPercentage?: number;
-      driverPayoutPercentage?: number;
     };
     const data: Record<string, number> = {};
     if (b.prestige?.ratePerMile !== undefined) data.prestigeRatePerMile = b.prestige.ratePerMile;
@@ -792,11 +801,10 @@ router.put('/pricing', async (req: Request, res: Response) => {
     if (b.taxi?.minimumFare !== undefined) data.taxiMinimumFare = b.taxi.minimumFare;
     if (b.driverSearchRadiusMiles !== undefined) data.driverSearchRadiusMiles = b.driverSearchRadiusMiles;
     if (b.commissionPercentage !== undefined) data.commissionPercentage = b.commissionPercentage;
-    if (b.driverPayoutPercentage !== undefined) data.driverPayoutPercentage = b.driverPayoutPercentage;
     const p = await prisma.pricingConfig.upsert({
       where: { id: 'default' },
       update: data,
-      create: { id: 'default', prestigeRatePerMile: 4.40, prestigeHourlyRate: 70, minibusRatePerMile: 4.00, minibusRate16Seater: 420, minibusRate24Seater: 520, minibusRate32Seater: 620, coachesRatePerMile: 4.00, coachesHourlyRate: 110, taxiRatePerMile: 3.00, taxiMinimumFare: 8, driverSearchRadiusMiles: 20, commissionPercentage: 27.5, driverPayoutPercentage: 60, ...data },
+      create: { id: 'default', prestigeRatePerMile: 4.40, prestigeHourlyRate: 70, minibusRatePerMile: 4.00, minibusRate16Seater: 420, minibusRate24Seater: 520, minibusRate32Seater: 620, coachesRatePerMile: 4.00, coachesHourlyRate: 110, taxiRatePerMile: 3.00, taxiMinimumFare: 8, driverSearchRadiusMiles: 20, commissionPercentage: 15, driverPayoutPercentage: 100, ...data },
     });
     const shaped = {
       prestige: { ratePerMile: p.prestigeRatePerMile, hourlyRate: p.prestigeHourlyRate },
@@ -805,7 +813,6 @@ router.put('/pricing', async (req: Request, res: Response) => {
       taxi:     { ratePerMile: p.taxiRatePerMile, minimumFare: p.taxiMinimumFare },
       driverSearchRadiusMiles: p.driverSearchRadiusMiles,
       commissionPercentage: p.commissionPercentage,
-      driverPayoutPercentage: p.driverPayoutPercentage,
     };
     res.json({ success: true, data: shaped });
   } catch (e) {

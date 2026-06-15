@@ -7,9 +7,9 @@ import { affiliateApi } from '@/lib/api-client';
 interface DashboardData {
   companyName: string; contactPerson: string;
   activeRides: number; availableDrivers: number; totalJobs: number; rating?: number;
-  pendingRides: number; pendingRidePreview?: { bookingRef: string; pickupAddress: string; dropoffAddress: string; fareAmount: number };
+  pendingRides: number; pendingRidePreview?: { bookingRef: string; pickupAddress: string; dropoffAddress: string; yourEarnings: number };
 }
-interface RecentJob { id: string; bookingRef: string; status: string; pickupAddress: string; dropoffAddress: string; fareAmount: number; }
+interface RecentJob { id: string; bookingRef: string; status: string; pickupAddress: string; dropoffAddress: string; yourEarnings?: number; }
 interface Driver { id: string; fullName: string; status: string; licencePlate?: string; }
 
 export default function AffiliateDashboard() {
@@ -57,7 +57,7 @@ export default function AffiliateDashboard() {
             </div>
             <div className="flex-1">
               <p className="font-bold text-green-800">{data.pendingRides} New Ride Request{data.pendingRides > 1 ? 's' : ''} Waiting!</p>
-              <p className="text-sm text-green-700">{data.pendingRidePreview.pickupAddress} → {data.pendingRidePreview.dropoffAddress} · £{data.pendingRidePreview.fareAmount}</p>
+              <p className="text-sm text-green-700">{data.pendingRidePreview.pickupAddress} → {data.pendingRidePreview.dropoffAddress} · payout £{data.pendingRidePreview.yourEarnings}</p>
             </div>
             <ArrowRight size={18} className="text-green-600" />
           </div>
@@ -113,7 +113,7 @@ export default function AffiliateDashboard() {
                   <p className="text-xs font-mono font-semibold text-slate-700">{r.bookingRef}</p>
                   <p className="text-xs text-slate-400 truncate">{r.pickupAddress}</p>
                 </div>
-                <p className="font-semibold text-slate-800 text-sm shrink-0">£{r.fareAmount}</p>
+                <p className="font-semibold text-slate-800 text-sm shrink-0">£{r.yourEarnings ?? 0}</p>
               </div>
             ))}
           </div>

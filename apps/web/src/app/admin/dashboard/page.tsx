@@ -12,7 +12,9 @@ interface DashboardData {
   totalBookings: number; pendingBookings: number; completedJobs: number; activeJobs: number;
   totalCustomers: number; totalDrivers: number; approvedDrivers: number;
   totalAffiliates: number; approvedAffiliates: number;
-  totalRevenue: number; pendingTickets: number; fleetVehicles: number;
+  totalRevenue: number; monthRevenue: number;
+  totalRpCommission: number; monthRpCommission: number;
+  pendingTickets: number; fleetVehicles: number;
 }
 
 interface RecentBooking {
@@ -70,12 +72,37 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Revenue / ROI strip */}
+      <div className="rounded-2xl p-5 grid grid-cols-2 lg:grid-cols-4 gap-4"
+        style={{ background: 'linear-gradient(135deg,#0d1424 0%,#111827 100%)', border: '1px solid rgba(201,168,76,0.15)' }}>
+        <div className="flex flex-col gap-0.5">
+          <p className="text-xs uppercase tracking-widest" style={{ color: 'rgba(201,168,76,0.6)' }}>RP commission (all time)</p>
+          <p className="text-2xl font-semibold text-white">£{data.totalRpCommission.toLocaleString()}</p>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>Ride Prestige net income</p>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <p className="text-xs uppercase tracking-widest" style={{ color: 'rgba(201,168,76,0.6)' }}>RP commission (this month)</p>
+          <p className="text-2xl font-semibold" style={{ color: '#c9a84c' }}>£{data.monthRpCommission.toLocaleString()}</p>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>Current calendar month</p>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <p className="text-xs uppercase tracking-widest" style={{ color: 'rgba(74,222,128,0.5)' }}>Gross turnover (all time)</p>
+          <p className="text-2xl font-semibold text-white">£{data.totalRevenue.toLocaleString()}</p>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>Total customer fares</p>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <p className="text-xs uppercase tracking-widest" style={{ color: 'rgba(74,222,128,0.5)' }}>Gross turnover (this month)</p>
+          <p className="text-2xl font-semibold" style={{ color: '#4ade80' }}>£{data.monthRevenue.toLocaleString()}</p>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>Customer fares this month</p>
+        </div>
+      </div>
+
       {/* Stats row 1 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <DashboardCard title="Total bookings"   value={data.totalBookings}   subtitle={`${data.pendingBookings} pending`}     icon={CalendarCheck} accent="blue"  />
         <DashboardCard title="Active jobs"      value={data.activeJobs}      subtitle={`${data.completedJobs} completed`}     icon={TrendingUp}    accent="green" />
         <DashboardCard title="Open tickets"     value={data.pendingTickets}  subtitle="awaiting action"                        icon={Headphones}    accent="red"   />
-        <DashboardCard title="Total revenue"    value={`£${data.totalRevenue.toLocaleString()}`} subtitle="all time" icon={TrendingUp} accent="gold" />
+        <DashboardCard title="Fleet items"      value={data.fleetVehicles}   subtitle="website vehicles"                       icon={Car}           accent="gold"  />
       </div>
 
       {/* Stats row 2 */}
@@ -83,7 +110,7 @@ export default function AdminDashboard() {
         <DashboardCard title="Customers"   value={data.totalCustomers}                            subtitle="registered"              icon={Users}     accent="blue"  />
         <DashboardCard title="Drivers"     value={`${data.approvedDrivers}/${data.totalDrivers}`} subtitle="approved / total"         icon={Car}       accent="gold"  />
         <DashboardCard title="Affiliates"  value={`${data.approvedAffiliates}/${data.totalAffiliates}`} subtitle="approved / total"  icon={Building2} accent="green" />
-        <DashboardCard title="Fleet items" value={data.fleetVehicles}                             subtitle="website vehicles"         icon={Clock}     accent="blue"  />
+        <DashboardCard title="Completed"   value={data.completedJobs}                             subtitle="rides all time"           icon={Clock}     accent="blue"  />
       </div>
 
       {/* Recent bookings + tickets */}
