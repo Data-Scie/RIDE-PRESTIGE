@@ -35,6 +35,7 @@ interface DashboardData {
   todayEarnings: number;
   pendingPayout: number;
   currentJob?: RideRequest | null;
+  currentVehicle?: { make: string; model: string; registration: string; colour: string } | null;
 }
 
 interface RideRequest {
@@ -79,7 +80,7 @@ export default function DriverDashboard() {
       .then(result => {
         const request = result.data.find(job => profile.driverType === 'independentDriver'
           ? job.status === 'awaiting_affiliate'
-          : ['driver_assigned', 'vehicle_assigned'].includes(job.status));
+          : job.status === 'vehicle_assigned');
         setRideRequest(request ?? null);
       })
       .catch(() => {});
@@ -209,8 +210,12 @@ export default function DriverDashboard() {
             <StatusRow label="Availability" value={online ? 'available' : 'offline'} good={online} />
           </div>
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-            <div className="flex items-center gap-2 mb-3"><Car size={17} className="text-blue-600" /><h2 className="font-semibold text-slate-800">Assigned Vehicle</h2></div>
-            {profile.assignedVehicle ? <><p className="font-bold text-slate-800">{profile.assignedVehicle.make} {profile.assignedVehicle.model}</p><p className="text-sm text-slate-500">{profile.assignedVehicle.registration} · {profile.assignedVehicle.colour}</p></> : <p className="text-sm text-slate-400">No permanent vehicle assigned. Your affiliate can allocate a vehicle with each ride.</p>}
+            <div className="flex items-center gap-2 mb-3"><Car size={17} className="text-blue-600" /><h2 className="font-semibold text-slate-800">{stats?.currentVehicle ? 'Vehicle For This Ride' : 'Assigned Vehicle'}</h2></div>
+            {stats?.currentVehicle
+              ? <><p className="font-bold text-slate-800">{stats.currentVehicle.make} {stats.currentVehicle.model}</p><p className="text-sm text-slate-500">{stats.currentVehicle.registration} · {stats.currentVehicle.colour}</p></>
+              : profile.assignedVehicle
+                ? <><p className="font-bold text-slate-800">{profile.assignedVehicle.make} {profile.assignedVehicle.model}</p><p className="text-sm text-slate-500">{profile.assignedVehicle.registration} · {profile.assignedVehicle.colour}</p></>
+                : <p className="text-sm text-slate-400">No permanent vehicle assigned. Your affiliate allocates a vehicle with each ride.</p>}
           </div>
           <Link href="/driver/ride" className="flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm"><Navigation size={16} /> Open Active Ride</Link>
         </div>

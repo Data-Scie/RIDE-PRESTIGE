@@ -159,9 +159,12 @@ async function main() {
     },
   });
 
+  // Service areas must be set so dispatchService's servesPickup() can match drv-2 against
+  // demo bookings — otherwise this seeded independent driver never receives any ride offers.
+  const drv2ServiceAreas = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10'];
   await prisma.driver.upsert({
     where: { id: 'drv-2' },
-    update: { isApproved: true, applicationStatus: 'approved', status: 'available', documentsStatus: 'approved' },
+    update: { isApproved: true, applicationStatus: 'approved', status: 'available', documentsStatus: 'approved', serviceAreas: drv2ServiceAreas },
     create: {
       id: 'drv-2',
       fullName: 'Thomas Reeves',
@@ -180,6 +183,7 @@ async function main() {
       totalJobs: 55,
       totalEarnings: 7920,
       documentsStatus: 'approved',
+      serviceAreas: drv2ServiceAreas,
       isApproved: true,
       applicationStatus: 'approved',
       joinedDate: new Date('2026-05-10T00:00:00Z'),
@@ -195,17 +199,20 @@ async function main() {
     { id: 'doc-1d', driverId: 'drv-1', type: 'insurance',       label: 'Insurance Certificate',   status: 'approved', expiryDate: '2027-03-31', uploadedAt: new Date('2026-01-12T10:15:00Z') },
   ];
 
+  // drv-2 is seeded as an active, approved independent driver (status/isApproved/applicationStatus/
+  // documentsStatus all 'approved'/available), so its documents must be approved too — otherwise
+  // isDriverDocumentEligible() silently excludes it from every independent dispatch offer.
   const drv2Docs = [
-    { id: 'doc-2a', driverId: 'drv-2', type: 'driving_licence', label: 'Driving Licence',       status: 'pending', uploadedAt: new Date('2026-05-10T09:00:00Z') },
-    { id: 'doc-2b', driverId: 'drv-2', type: 'phv_badge',       label: 'PHV Badge',             status: 'pending', uploadedAt: new Date('2026-05-10T09:05:00Z') },
-    { id: 'doc-2c', driverId: 'drv-2', type: 'dbs_check',       label: 'DBS Check',             status: 'missing' },
-    { id: 'doc-2d', driverId: 'drv-2', type: 'insurance',       label: 'Insurance Certificate', status: 'pending', uploadedAt: new Date('2026-05-10T09:10:00Z') },
+    { id: 'doc-2a', driverId: 'drv-2', type: 'driving_licence', label: 'Driving Licence',       status: 'approved', expiryDate: '2030-11-21', uploadedAt: new Date('2026-05-10T09:00:00Z') },
+    { id: 'doc-2b', driverId: 'drv-2', type: 'phv_badge',       label: 'PHV Badge',             status: 'approved', expiryDate: '2027-05-10', uploadedAt: new Date('2026-05-10T09:05:00Z') },
+    { id: 'doc-2c', driverId: 'drv-2', type: 'dbs_check',       label: 'DBS Check',             status: 'approved', uploadedAt: new Date('2026-05-10T09:08:00Z') },
+    { id: 'doc-2d', driverId: 'drv-2', type: 'insurance',       label: 'Insurance Certificate', status: 'approved', expiryDate: '2027-05-09', uploadedAt: new Date('2026-05-10T09:10:00Z') },
   ];
 
   for (const doc of [...drv1Docs, ...drv2Docs]) {
     await prisma.driverDocument.upsert({
       where: { id: doc.id },
-      update: {},
+      update: doc,
       create: doc,
     });
   }
@@ -240,6 +247,16 @@ async function main() {
       colour: 'White', passengerCapacity: 4, luggageCapacity: 2,
       motExpiry: '2026-10-01', insuranceExpiry: '2027-03-31', phvLicenceExpiry: '2027-01-01',
       status: 'available',
+    },
+    {
+      // Thomas Reeves (drv-2) is the seeded independent driver — he needs his own approved
+      // vehicle, otherwise dispatchService never finds an eligible vehicle for him and he
+      // never receives any independent ride offers.
+      id: 'fv-5', make: 'BMW', model: '5 Series', year: 2023, registration: 'SH23 IND',
+      vehicleType: 'Executive', vehicleCategory: 'prestige',
+      colour: 'Mineral Grey', passengerCapacity: 4, luggageCapacity: 3,
+      motExpiry: '2027-05-01', insuranceExpiry: '2027-05-01', phvLicenceExpiry: '2027-05-01',
+      status: 'available', ownerDriverId: 'drv-2', isApproved: true, approvalStatus: 'approved',
     },
   ];
 

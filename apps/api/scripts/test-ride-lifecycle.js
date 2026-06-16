@@ -74,7 +74,7 @@ async function main() {
         email: customer.email,
         pickupPostcode: 'S1 2BP',
         dropoffPostcode: 'S10 2TN',
-        vehicleCategory: 'taxi',
+        vehicleCategory: 'prestige',
         passengers: 1,
         bookingType: 'current',
         notes: 'Automated lifecycle verification',
@@ -99,9 +99,10 @@ async function main() {
     assert(opsRides.data.some(item => item.id === jobId), 'Ride missing from operations portal');
     assert(customerBookings.data.some(item => item.id === bookingId), 'Booking missing from customer portal');
     assert(affiliateJobs.data.some(item => item.id === jobId), 'Ride missing from affiliate new jobs');
-    assert(driverJobs.data.some(item => item.id === jobId), 'Ride missing from independent driver jobs');
+    const offer = driverJobs.data.find(item => item.jobId === jobId);
+    assert(offer, 'Ride missing from independent driver jobs');
 
-    await request(`/api/driver/jobs/${jobId}/claim`, { method: 'POST', token: driverToken });
+    await request(`/api/driver/jobs/${offer.id}/claim`, { method: 'POST', token: driverToken });
     for (const status of ['on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress', 'completed']) {
       await request(`/api/driver/jobs/${jobId}/status`, {
         method: 'PUT',

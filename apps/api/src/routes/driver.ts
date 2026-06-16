@@ -80,6 +80,9 @@ router.get('/dashboard', async (req: Request, res: Response) => {
     const today = new Date().toISOString().slice(0, 10);
     const thisWeekStart = new Date(); thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay());
     const currentJob = myJobs.find(j => ['driver_assigned', 'vehicle_assigned', 'driver_accepted', 'on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress'].includes(j.status));
+    const currentVehicle = currentJob?.assignedVehicleId
+      ? await prisma.fleetVehicle.findUnique({ where: { id: currentJob.assignedVehicleId } })
+      : null;
     res.json({
       success: true,
       data: {
@@ -89,6 +92,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         documentsStatus: driver.documentsStatus,
         currentJob:      currentJob ? shapeJob(currentJob) : null,
         currentRideId:   currentJob?.id ?? null,
+        currentVehicle,
         todayJobs:       myJobs.filter(j => j.dateTime.toISOString().startsWith(today)).length,
         completedJobs:   myJobs.filter(j => j.status === 'completed').length,
         todayEarnings:   parseFloat(myEarnings.filter(e => e.date.toISOString().startsWith(today)).reduce((s, e) => s + e.netAmount, 0).toFixed(2)),
@@ -191,7 +195,10 @@ router.get('/jobs/current', async (req: Request, res: Response) => {
         status: { in: ['driver_assigned', 'vehicle_assigned', 'driver_accepted', 'on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress'] },
       },
     });
-    res.json({ success: true, data: current ? shapeJob(current) : null });
+    const vehicle = current?.assignedVehicleId
+      ? await prisma.fleetVehicle.findUnique({ where: { id: current.assignedVehicleId } })
+      : null;
+    res.json({ success: true, data: current ? { ...shapeJob(current), vehicle } : null });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }

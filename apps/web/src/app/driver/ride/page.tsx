@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle, MapPin, Navigation, Phone, Route, Users } from 'lucide-react';
+import { Car, CheckCircle, MapPin, Navigation, Phone, Route, Users } from 'lucide-react';
 import { driverApi } from '@/lib/api-client';
 
 interface ActiveRide {
@@ -17,6 +17,7 @@ interface ActiveRide {
   distance?: string;
   estimatedDuration?: string;
   specialInstructions?: string;
+  vehicle?: { make: string; model: string; registration: string; colour: string } | null;
 }
 
 const STEPS = [
@@ -87,6 +88,7 @@ export default function DriverRidePage() {
   );
 
   const assigned = ['driver_assigned', 'vehicle_assigned'].includes(ride.status);
+  const readyToAccept = ride.status === 'vehicle_assigned';
   const currentIndex = STEPS.findIndex(step => step.key === ride.status);
   const current = STEPS[currentIndex];
   const completed = ride.status === 'completed';
@@ -142,6 +144,13 @@ export default function DriverRidePage() {
               <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">Your Payout</p><p className="text-3xl font-bold text-slate-800 mt-1">£{ride.yourEarnings}</p>
             </div>
           )}
+          {ride.vehicle && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+              <div className="flex items-center gap-2 mb-2"><Car size={15} className="text-blue-600" /><p className="text-xs font-semibold text-slate-400">VEHICLE FOR THIS RIDE</p></div>
+              <p className="font-bold text-slate-800">{ride.vehicle.make} {ride.vehicle.model}</p>
+              <p className="text-sm text-slate-500">{ride.vehicle.registration} · {ride.vehicle.colour}</p>
+            </div>
+          )}
           {ride.specialInstructions && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
               <p className="text-xs font-semibold text-slate-400">SPECIAL INSTRUCTIONS</p>
@@ -149,7 +158,11 @@ export default function DriverRidePage() {
             </div>
           )}
           <a href={`https://maps.google.com/?q=${encodeURIComponent(currentIndex < 2 ? ride.pickupAddress : ride.dropoffAddress)}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-800 text-white font-semibold text-sm"><MapPin size={16} /> Open Navigation</a>
-          {assigned ? <button onClick={acceptAssignment} disabled={updating} className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm disabled:opacity-50">{updating ? 'Accepting...' : 'Accept Assignment'}</button> : !completed && <button onClick={advance} disabled={updating} className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm disabled:opacity-50">{updating ? 'Updating...' : current?.action}</button>}
+          {assigned ? (
+            readyToAccept
+              ? <button onClick={acceptAssignment} disabled={updating} className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm disabled:opacity-50">{updating ? 'Accepting...' : 'Accept Assignment'}</button>
+              : <div className="p-3 rounded-xl bg-amber-50 text-amber-700 text-sm text-center font-medium">Waiting for your affiliate to allocate a vehicle before you can accept</div>
+          ) : !completed && <button onClick={advance} disabled={updating} className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm disabled:opacity-50">{updating ? 'Updating...' : current?.action}</button>}
           {completed && <div className="p-5 rounded-2xl bg-green-50 border border-green-100 text-center"><CheckCircle size={30} className="mx-auto text-green-600 mb-2" /><p className="font-bold text-green-800">Ride Completed</p></div>}
         </div>
       </div>

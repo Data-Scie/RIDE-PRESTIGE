@@ -50,6 +50,7 @@ async function main() {
   let jobId;
   let reference;
   let vehicleId;
+  let independentVehicleId;
 
   try {
     const common = {
@@ -79,6 +80,8 @@ async function main() {
         phvLicenceExpiry: '2027-06-14',
         status: 'available',
         affiliateId: affiliate.id,
+        isApproved: true,
+        approvalStatus: 'approved',
       },
     });
     vehicleId = testVehicle.id;
@@ -158,6 +161,51 @@ async function main() {
       login(independentEmail, password, 'driver'),
     ]);
 
+    // An affiliate can only allocate a driver whose documents are approved and current.
+    const affiliateDriverDocuments = (await request('/api/driver/documents', { token: affiliateDriverToken })).data;
+    for (const document of affiliateDriverDocuments) {
+      await request(`/api/driver/documents/${document.id}`, {
+        method: 'PUT',
+        token: affiliateDriverToken,
+        body: { fileUrl: `https://documents.example.com/${affiliateDriverId}/${document.type}.pdf`, expiryDate: '2028-12-31' },
+      });
+      await request(`/api/ops/drivers/${affiliateDriverId}/documents/${document.id}/approve`, {
+        method: 'PUT',
+        token: opsToken,
+        body: {},
+      });
+    }
+    await request('/api/driver/status', { method: 'PUT', token: affiliateDriverToken, body: { status: 'available' } });
+
+    // Independent drivers only receive dispatch offers once their documents and a vehicle
+    // are approved — mirror what Operations would do for a real applicant.
+    const independentDocuments = (await request('/api/driver/documents', { token: independentDriverToken })).data;
+    for (const document of independentDocuments) {
+      await request(`/api/driver/documents/${document.id}`, {
+        method: 'PUT',
+        token: independentDriverToken,
+        body: { fileUrl: `https://documents.example.com/${independentDriverId}/${document.type}.pdf`, expiryDate: '2028-12-31' },
+      });
+      await request(`/api/ops/drivers/${independentDriverId}/documents/${document.id}/approve`, {
+        method: 'PUT',
+        token: opsToken,
+        body: {},
+      });
+    }
+    const independentVehicle = (await request('/api/driver/vehicles', {
+      method: 'POST',
+      token: independentDriverToken,
+      body: {
+        make: 'Skoda', model: 'Superb', year: 2026, registration: `IND${String(suffix).slice(-7)}`,
+        vehicleType: 'Executive', vehicleCategory: 'prestige', colour: 'Grey',
+        passengerCapacity: 4, luggageCapacity: 3,
+        motExpiry: '2028-12-31', insuranceExpiry: '2028-12-31', phvLicenceExpiry: '2028-12-31',
+      },
+    })).data;
+    independentVehicleId = independentVehicle.id;
+    await request(`/api/ops/vehicles/${independentVehicleId}/approve`, { method: 'PUT', token: opsToken, body: {} });
+    await request('/api/driver/status', { method: 'PUT', token: independentDriverToken, body: { status: 'available' } });
+
     const created = await request('/api/public/booking', {
       method: 'POST',
       body: {
@@ -166,7 +214,7 @@ async function main() {
         email: `dispatch.${suffix}@example.com`,
         pickupPostcode: 'S1 2BP',
         dropoffPostcode: 'S10 2TN',
-        vehicleCategory: 'taxi',
+        vehicleCategory: 'prestige',
         passengers: 1,
         bookingType: 'current',
         notes: 'Driver application integration test',
@@ -181,7 +229,7 @@ async function main() {
       request('/api/driver/jobs/available', { token: independentDriverToken }),
     ]);
     assert(affiliateJobs.data.some(job => job.id === jobId), 'New booking missing from affiliate job pool');
-    assert(independentJobs.data.some(job => job.id === jobId), 'New booking missing from independent driver job pool');
+    assert(independentJobs.data.some(job => job.jobId === jobId), 'New booking missing from independent driver job pool');
     await request('/api/driver/jobs/available', { token: affiliateDriverToken, expectedStatus: 403 });
 
     await request(`/api/affiliate/jobs/${jobId}/accept`, { method: 'POST', token: affiliateToken });
@@ -254,6 +302,7 @@ async function main() {
     if (jobId) await prisma.job.deleteMany({ where: { id: jobId } });
     if (bookingId) await prisma.booking.deleteMany({ where: { id: bookingId } });
     if (vehicleId) await prisma.fleetVehicle.deleteMany({ where: { id: vehicleId } });
+    if (independentVehicleId) await prisma.fleetVehicle.deleteMany({ where: { id: independentVehicleId } });
     if (affiliateDriverId || independentDriverId || rejectedDriverId) {
       await prisma.notification.deleteMany({
         where: { recipientId: { in: [affiliateDriverId, independentDriverId, rejectedDriverId].filter(Boolean) } },

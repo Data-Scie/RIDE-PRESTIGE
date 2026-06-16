@@ -160,7 +160,13 @@ export default function JobDetailsScreen() {
           </TouchableOpacity>
         )}
 
-        {isDriver && (job.status === 'driver_assigned' || job.status === 'vehicle_assigned') && !acting && (
+        {isDriver && job.status === 'driver_assigned' && !acting && (
+          <View style={styles.waitingNotice}>
+            <Text style={styles.waitingNoticeText}>Waiting for your affiliate to allocate a vehicle before you can accept</Text>
+          </View>
+        )}
+
+        {isDriver && job.status === 'vehicle_assigned' && !acting && (
           <TouchableOpacity style={styles.btnAccept} onPress={handleDriverAccept} activeOpacity={0.8}>
             <Text style={styles.btnAcceptText}>Accept Assignment</Text>
           </TouchableOpacity>
@@ -266,4 +272,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(215,180,106,0.12)', borderWidth: 1, borderColor: ROSE_GOLD, marginTop: 8,
   },
   btnAllocateText: { color: ROSE_GOLD, fontWeight: '700', fontSize: 15, fontFamily: FONT_MEDIUM ?? undefined },
+  waitingNotice: {
+    padding: 14, borderRadius: 14, marginTop: 8,
+    backgroundColor: 'rgba(215,180,106,0.12)', borderWidth: 1, borderColor: 'rgba(215,180,106,0.4)',
+  },
+  waitingNoticeText: { color: ROSE_GOLD, fontWeight: '600', fontSize: 13, textAlign: 'center', fontFamily: FONT_MEDIUM ?? undefined },
 });
