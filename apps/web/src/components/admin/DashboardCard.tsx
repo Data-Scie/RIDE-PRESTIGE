@@ -1,4 +1,5 @@
 import { LucideIcon } from 'lucide-react';
+import Link from 'next/link';
 
 interface DashboardCardProps {
   title: string;
@@ -7,6 +8,7 @@ interface DashboardCardProps {
   icon: LucideIcon;
   trend?: { value: string; positive: boolean };
   accent?: 'gold' | 'green' | 'blue' | 'red';
+  href?: string;
 }
 
 const accents = {
@@ -16,11 +18,11 @@ const accents = {
   red:   { bg:'rgba(239,68,68,0.08)',   icon:'#dc2626',  border:'rgba(239,68,68,0.15)'  },
 };
 
-export default function DashboardCard({ title, value, subtitle, icon:Icon, trend, accent='gold' }: DashboardCardProps) {
+export default function DashboardCard({ title, value, subtitle, icon:Icon, trend, accent='gold', href }: DashboardCardProps) {
   const a = accents[accent];
-  return (
-    <div className="bg-white rounded-2xl p-6 transition-shadow duration-300 hover:shadow-lg"
-      style={{border:`1px solid ${a.border}`}}>
+  const content = (
+    <div className="bg-white rounded-2xl p-6 transition-shadow duration-300 hover:shadow-lg h-full"
+      style={{border:`1px solid ${a.border}`, cursor: href ? 'pointer' : undefined}}>
       <div className="flex items-start justify-between mb-4">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{background:a.bg}}>
           <Icon size={18} style={{color:a.icon}} />
@@ -40,4 +42,5 @@ export default function DashboardCard({ title, value, subtitle, icon:Icon, trend
       {subtitle && <p className="text-xs mt-0.5" style={{color:'#8b8fa8'}}>{subtitle}</p>}
     </div>
   );
+  return href ? <Link href={href} className="block h-full">{content}</Link> : content;
 }

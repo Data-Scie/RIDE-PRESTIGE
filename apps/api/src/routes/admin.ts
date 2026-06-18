@@ -1,9 +1,18 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, RequestHandler } from 'express';
 import { v4 as uuid } from 'uuid';
+import bcrypt from 'bcryptjs';
+import multer from 'multer';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
 import { DEFAULT_CONTENT_PAGES } from '../data/cmsDefaults';
+import { isCloudinaryConfigured, uploadImageBuffer } from '../lib/cloudinary';
 import type { WebsiteVehicle, Promotion, FAQItem, NavigationItem, SupportTicket } from '../types';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+// multer's bundled types resolve a duplicate, hoisted copy of @types/express in this npm
+// workspace, which TS treats as structurally incompatible with this file's express import —
+// cast through unknown to bypass that tooling mismatch (not a real type error).
+const uploadSingleImage = upload.single('image') as unknown as RequestHandler;
 
 const router = Router();
 router.use(authenticate, requireRole('admin', 'ops'));
@@ -32,7 +41,11 @@ function shapeBooking(b: {
 }
 
 function bookingStatusFromJob(jobStatus: string | undefined, fallback: string): string {
-  if (!jobStatus) return fallback;
+  // Only let the job's operational progress refine the displayed status while the booking
+  // is still in its generic 'accepted' state — once an admin has explicitly set a terminal
+  // status (rejected/cancelled/completed/etc.) that decision is authoritative and must not
+  // be overwritten by a stale/unrelated job status on the next read.
+  if (!jobStatus || fallback !== 'accepted') return fallback;
   if (['on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress'].includes(jobStatus)) return 'in_progress';
   if (['needs_allocation', 'driver_assigned', 'vehicle_assigned', 'driver_accepted'].includes(jobStatus)) return 'accepted';
   if (['completed', 'cancelled', 'rejected'].includes(jobStatus)) return jobStatus;
@@ -147,14 +160,27 @@ router.get('/bookings', async (req: Request, res: Response) => {
     const jobs = jobIds.length
       ? await prisma.job.findMany({
           where: { id: { in: jobIds } },
-          select: { id: true, status: true, customerRating: true, customerFeedback: true, assignedDriverId: true },
+          select: { id: true, status: true, customerRating: true, customerFeedback: true, assignedDriverId: true, affiliateId: true },
         })
       : [];
     const jobById = new Map(jobs.map(job => [job.id, job]));
+    const driverIds = [...new Set(jobs.map(job => job.assignedDriverId).filter((id): id is string => Boolean(id)))];
+    const affiliateIds = [...new Set(jobs.map(job => job.affiliateId).filter((id): id is string => Boolean(id)))];
+    const [acceptedDrivers, acceptedAffiliates] = await Promise.all([
+      prisma.driver.findMany({ where: { id: { in: driverIds } }, select: { id: true, fullName: true, driverType: true } }),
+      prisma.affiliate.findMany({ where: { id: { in: affiliateIds } }, select: { id: true, companyName: true } }),
+    ]);
+    const driverById = new Map(acceptedDrivers.map(d => [d.id, d]));
+    const affiliateById = new Map(acceptedAffiliates.map(a => [a.id, a]));
     const shaped = rows.map(row => {
       const booking = shapeBooking(row);
       const linkedJob = row.jobId ? jobById.get(row.jobId) : undefined;
       const operationalStatus = linkedJob?.status;
+      const assignedDriver = linkedJob?.assignedDriverId ? driverById.get(linkedJob.assignedDriverId) : undefined;
+      const affiliate = linkedJob?.affiliateId ? affiliateById.get(linkedJob.affiliateId) : undefined;
+      const acceptedBy: 'driver' | 'affiliate' | null = assignedDriver
+        ? (assignedDriver.driverType === 'independentDriver' ? 'driver' : 'affiliate')
+        : (affiliate ? 'affiliate' : null);
       return {
         ...booking,
         status: bookingStatusFromJob(operationalStatus, booking.status),
@@ -162,6 +188,9 @@ router.get('/bookings', async (req: Request, res: Response) => {
         customerRating: linkedJob?.customerRating ?? null,
         customerFeedback: linkedJob?.customerFeedback ?? null,
         assignedDriverId: linkedJob?.assignedDriverId ?? null,
+        acceptedBy,
+        affiliateName: affiliate?.companyName ?? null,
+        affiliateDriverName: assignedDriver && assignedDriver.driverType === 'affiliateDriver' ? assignedDriver.fullName : null,
       };
     });
     const filtered = status ? shaped.filter(row => row.status === status || row.operationalStatus === status) : shaped;
@@ -196,12 +225,22 @@ router.get('/bookings/:id', async (req: Request, res: Response) => {
     if (!row) { res.status(404).json({ success: false, message: 'Booking not found' }); return; }
     const b = shapeBooking(row);
     const linkedJob = b.jobId ? await prisma.job.findUnique({ where: { id: b.jobId } }) : null;
+    const [assignedDriver, affiliate] = await Promise.all([
+      linkedJob?.assignedDriverId ? prisma.driver.findUnique({ where: { id: linkedJob.assignedDriverId }, select: { fullName: true, driverType: true } }) : Promise.resolve(null),
+      linkedJob?.affiliateId ? prisma.affiliate.findUnique({ where: { id: linkedJob.affiliateId }, select: { companyName: true } }) : Promise.resolve(null),
+    ]);
+    const acceptedBy: 'driver' | 'affiliate' | null = assignedDriver
+      ? (assignedDriver.driverType === 'independentDriver' ? 'driver' : 'affiliate')
+      : (affiliate ? 'affiliate' : null);
     res.json({
       success: true,
       data: {
         ...b,
         status: bookingStatusFromJob(linkedJob?.status, b.status),
         operationalStatus: linkedJob?.status ?? null,
+        acceptedBy,
+        affiliateName: affiliate?.companyName ?? null,
+        affiliateDriverName: assignedDriver && assignedDriver.driverType === 'affiliateDriver' ? assignedDriver.fullName : null,
       },
       job: linkedJob ? shapeJob(linkedJob) : null,
     });
@@ -276,6 +315,36 @@ router.delete('/bookings/:id', async (req: Request, res: Response) => {
     res.json({ success: true, message: 'Booking cancelled' });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+// ─── Uploads ──────────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/admin/uploads/vehicle-image:
+ *   post:
+ *     summary: Upload a vehicle image to Cloudinary
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Uploaded image URL }
+ *       503: { description: Cloudinary not configured }
+ */
+router.post('/uploads/vehicle-image', uploadSingleImage, async (req: Request, res: Response) => {
+  try {
+    if (!isCloudinaryConfigured()) {
+      res.status(503).json({ success: false, message: 'Image upload is not configured. Paste an image URL instead, or ask an admin to set CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET.' });
+      return;
+    }
+    const file = (req as Request & { file?: Express.Multer.File }).file;
+    if (!file) { res.status(400).json({ success: false, message: 'No image file provided' }); return; }
+    if (!file.mimetype.startsWith('image/')) { res.status(400).json({ success: false, message: 'File must be an image' }); return; }
+    const url = await uploadImageBuffer(file.buffer, 'ride-prestige/vehicles');
+    res.json({ success: true, url });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Image upload failed' });
   }
 });
 
@@ -435,9 +504,79 @@ router.get('/drivers', async (req: Request, res: Response) => {
   try {
     const { approved } = req.query as { approved?: string };
     const where = approved !== undefined ? { isApproved: approved === 'true' } : {};
-    const drivers = await prisma.driver.findMany({ where, include: { documents: true } });
+    const drivers = await prisma.driver.findMany({
+      where,
+      include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
+      orderBy: { joinedDate: 'desc' },
+    });
     const list = drivers.map(({ passwordHash: _, ...d }) => d);
     res.json({ success: true, data: list, total: list.length });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/drivers:
+ *   post:
+ *     summary: Create a driver (manual admin onboarding)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       201: { description: Driver created }
+ */
+router.post('/drivers', async (req: Request, res: Response) => {
+  try {
+    const b = req.body as {
+      fullName: string; email: string; phone: string; password: string;
+      address?: string; city?: string; postcode?: string; dateOfBirth?: string;
+      drivingLicenceNumber: string; privateHireBadgeNumber: string; nationalInsurance?: string;
+      driverType: 'affiliateDriver' | 'independentDriver'; affiliateId?: string;
+      preApprove?: boolean;
+    };
+    if (!b.fullName || !b.email || !b.phone || !b.password || !b.drivingLicenceNumber || !b.privateHireBadgeNumber || !b.driverType) {
+      res.status(400).json({ success: false, message: 'Missing required driver fields' });
+      return;
+    }
+    if (b.driverType === 'affiliateDriver' && !b.affiliateId) {
+      res.status(400).json({ success: false, message: 'affiliateId is required for affiliate drivers' });
+      return;
+    }
+    const drvId = `drv-${uuid()}`;
+    const preApprove = Boolean(b.preApprove);
+    const newDriver = await prisma.driver.create({
+      data: {
+        id: drvId,
+        fullName: b.fullName, email: b.email, phone: b.phone,
+        passwordHash: bcrypt.hashSync(b.password, 10),
+        address: b.address ?? '', city: b.city ?? '', postcode: b.postcode ?? '',
+        dateOfBirth: b.dateOfBirth ?? '', drivingLicenceNumber: b.drivingLicenceNumber,
+        privateHireBadgeNumber: b.privateHireBadgeNumber, nationalInsurance: b.nationalInsurance,
+        driverType: b.driverType,
+        affiliateId: b.driverType === 'affiliateDriver' ? b.affiliateId : null,
+        serviceAreas: b.driverType === 'independentDriver' && b.postcode
+          ? [b.postcode.trim().toUpperCase().split(/\s+/)[0]]
+          : [],
+        status: 'offline',
+        rating: 0, totalJobs: 0, totalEarnings: 0,
+        documentsStatus: preApprove ? 'approved' : 'missing',
+        isApproved: preApprove,
+        applicationStatus: preApprove ? 'approved' : 'pending',
+        documents: {
+          create: [
+            { id: uuid(), type: 'driving_licence',  label: 'Driving Licence',       status: preApprove ? 'approved' : 'missing' },
+            { id: uuid(), type: 'phv_badge',        label: 'PHV Badge',             status: preApprove ? 'approved' : 'missing' },
+            { id: uuid(), type: 'dbs_check',        label: 'DBS Check',             status: preApprove ? 'approved' : 'missing' },
+            { id: uuid(), type: 'insurance',        label: 'Insurance Certificate', status: preApprove ? 'approved' : 'missing' },
+          ],
+        },
+      },
+      include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
+    });
+    const { passwordHash: _, ...safe } = newDriver;
+    res.status(201).json({ success: true, message: 'Driver created', data: safe });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }
@@ -461,7 +600,10 @@ router.get('/drivers', async (req: Request, res: Response) => {
  */
 router.get('/drivers/:id', async (req: Request, res: Response) => {
   try {
-    const d = await prisma.driver.findUnique({ where: { id: req.params.id }, include: { documents: true } });
+    const d = await prisma.driver.findUnique({
+      where: { id: req.params.id },
+      include: { documents: true, affiliate: { select: { id: true, companyName: true } }, vehicles: true },
+    });
     if (!d) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
     const { passwordHash: _, ...safe } = d;
     res.json({ success: true, data: safe });
@@ -500,11 +642,67 @@ router.put('/drivers/:id/approve', async (req: Request, res: Response) => {
     const { approve } = req.body as { approve: boolean };
     const d = await prisma.driver.update({
       where: { id: req.params.id },
-      data: { isApproved: approve },
-      include: { documents: true },
+      data: approve
+        ? { isApproved: true, applicationStatus: 'approved', status: 'offline' }
+        : { isApproved: false, applicationStatus: 'rejected', status: 'offline' },
+      include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
     });
     const { passwordHash: _, ...safe } = d;
     res.json({ success: true, message: `Driver ${approve ? 'approved' : 'rejected'}`, data: safe });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/drivers/{id}/reject:
+ *   put:
+ *     summary: Reject a pending driver application
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Driver rejected }
+ */
+router.put('/drivers/:id/reject', async (req: Request, res: Response) => {
+  try {
+    const exists = await prisma.driver.findUnique({ where: { id: req.params.id } });
+    if (!exists) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+    const d = await prisma.driver.update({
+      where: { id: req.params.id },
+      data: { isApproved: false, applicationStatus: 'rejected', status: 'offline' },
+      include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
+    });
+    const { passwordHash: _, ...safe } = d;
+    res.json({ success: true, message: 'Driver rejected', data: safe });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/drivers/{id}/suspend:
+ *   put:
+ *     summary: Suspend an approved driver
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Driver suspended }
+ */
+router.put('/drivers/:id/suspend', async (req: Request, res: Response) => {
+  try {
+    const exists = await prisma.driver.findUnique({ where: { id: req.params.id } });
+    if (!exists) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+    const d = await prisma.driver.update({
+      where: { id: req.params.id },
+      data: { isApproved: false, applicationStatus: 'suspended', status: 'offline' },
+      include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
+    });
+    const { passwordHash: _, ...safe } = d;
+    res.json({ success: true, message: 'Driver suspended', data: safe });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }
@@ -594,6 +792,41 @@ router.get('/affiliates', async (_req: Request, res: Response) => {
 
 /**
  * @swagger
+ * /api/admin/affiliates/{id}:
+ *   get:
+ *     summary: Get an affiliate with its drivers, vehicles, and documents
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Affiliate detail }
+ *       404: { description: Not found }
+ */
+router.get('/affiliates/:id', async (req: Request, res: Response) => {
+  try {
+    const affiliate = await prisma.affiliate.findUnique({
+      where: { id: req.params.id },
+      include: {
+        drivers: { include: { documents: true } },
+        fleetVehicles: true,
+      },
+    });
+    if (!affiliate) { res.status(404).json({ success: false, message: 'Affiliate not found' }); return; }
+    const { passwordHash: _, drivers, ...safe } = affiliate;
+    res.json({
+      success: true,
+      data: {
+        ...safe,
+        drivers: drivers.map(({ passwordHash: __, ...d }) => d),
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
  * /api/admin/affiliates/{id}/approve:
  *   put:
  *     summary: Approve or reject an affiliate
@@ -645,8 +878,56 @@ router.put('/affiliates/:id/approve', async (req: Request, res: Response) => {
  */
 router.get('/customers', async (_req: Request, res: Response) => {
   try {
-    const customers = await prisma.customer.findMany();
-    const list = customers.map(({ passwordHash: _, ...c }) => c);
+    const [customers, jobs] = await Promise.all([
+      prisma.customer.findMany(),
+      prisma.job.findMany({ orderBy: { createdAt: 'desc' } }),
+    ]);
+    const customerByEmail = new Map(customers.map(customer => [customer.email.toLowerCase(), customer]));
+    const jobGroups = new Map<string, typeof jobs>();
+    for (const job of jobs) {
+      const key = job.customerEmail?.toLowerCase() || `phone:${job.customerPhone}`;
+      jobGroups.set(key, [...(jobGroups.get(key) ?? []), job]);
+    }
+
+    const list = Array.from(jobGroups.entries()).map(([key, customerJobs]) => {
+      const latest = customerJobs[0];
+      const registered = latest.customerEmail ? customerByEmail.get(latest.customerEmail.toLowerCase()) : undefined;
+      const ratings = customerJobs.map(job => job.driverRating).filter((rating): rating is number => rating !== null);
+      return {
+        id: registered?.id ?? `guest:${encodeURIComponent(key)}`,
+        fullName: registered?.fullName ?? latest.customerName,
+        email: registered?.email ?? latest.customerEmail ?? '',
+        phone: registered?.phone ?? latest.customerPhone,
+        createdAt: registered?.createdAt.toISOString() ?? customerJobs[customerJobs.length - 1].createdAt.toISOString(),
+        isGuest: !registered,
+        totalJobs: customerJobs.length,
+        totalSpend: parseFloat(customerJobs.reduce((sum, job) => sum + job.fareAmount, 0).toFixed(2)),
+        averageCustomerRating: ratings.length
+          ? parseFloat((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1))
+          : null,
+        latestRide: {
+          bookingRef: latest.bookingRef,
+          status: latest.status,
+          dateTime: latest.dateTime.toISOString(),
+        } as { bookingRef: string; status: string; dateTime: string } | null,
+      };
+    });
+
+    for (const customer of customers) {
+      if (!jobGroups.has(customer.email.toLowerCase())) {
+        const { passwordHash: _, ...safe } = customer;
+        list.push({
+          ...safe,
+          createdAt: customer.createdAt.toISOString(),
+          isGuest: false,
+          totalJobs: 0,
+          totalSpend: 0,
+          averageCustomerRating: null,
+          latestRide: null,
+        });
+      }
+    }
+    list.sort((a, b) => new Date(b.latestRide?.dateTime ?? b.createdAt).getTime() - new Date(a.latestRide?.dateTime ?? a.createdAt).getTime());
     res.json({ success: true, data: list, total: list.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });

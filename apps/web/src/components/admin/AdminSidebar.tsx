@@ -8,7 +8,7 @@ import {
   CalendarCheck, FileBarChart, Headphones, Settings, LogOut,
   ChevronRight, DollarSign, RotateCcw, Phone, Truck,
   Briefcase, BookOpen, Layers, Globe,
-  Building2,
+  Building2, Users, Banknote,
 } from 'lucide-react';
 
 const navGroups = [
@@ -35,7 +35,10 @@ const navGroups = [
     label: 'Operations',
     items: [
       { href: '/admin/bookings', label: 'Bookings',        icon: CalendarCheck },
+      { href: '/admin/customers', label: 'Customers',      icon: Users },
+      { href: '/admin/drivers', label: 'Drivers',          icon: Car },
       { href: '/admin/affiliates', label: 'Affiliates',    icon: Building2 },
+      { href: '/admin/finance', label: 'Finance',          icon: Banknote },
       { href: '/admin/quotes',   label: 'Quotes',          icon: FileBarChart },
       { href: '/admin/support',  label: 'Support Tickets', icon: Headphones },
     ],

@@ -73,7 +73,9 @@ function VehicleCard({ v }: { v: Vehicle }) {
   );
 }
 
-export default function FleetClient({ vehicles, fleetCategories }: { vehicles: Vehicle[]; fleetCategories: FleetCategory[] }) {
+interface FleetIntro { title: string; description: string; }
+
+export default function FleetClient({ vehicles, fleetCategories, intro }: { vehicles: Vehicle[]; fleetCategories: FleetCategory[]; intro?: FleetIntro }) {
   const [active, setActive] = useState<CategorySlug>('all');
   const [showHelpPopup, setShowHelpPopup] = useState(false);
 
@@ -101,8 +103,9 @@ export default function FleetClient({ vehicles, fleetCategories }: { vehicles: V
         <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center">
           <p style={{ color:'#c9a84c' }} className="text-xs font-semibold uppercase tracking-widest mb-3">Our Fleet</p>
           <h1 className="text-4xl sm:text-5xl font-semibold text-white mb-4" style={{ fontFamily:'Playfair Display,Georgia,serif' }}>
-            The right vehicle for every journey
+            {intro?.title || 'The right vehicle for every journey'}
           </h1>
+          {intro?.description && <p className="text-white/55 text-lg max-w-xl mx-auto">{intro.description}</p>}
         </div>
       </div>
 

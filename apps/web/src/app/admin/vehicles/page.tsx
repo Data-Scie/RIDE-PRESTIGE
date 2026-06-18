@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Save, X, Eye, EyeOff, Car, Bus, Van, Star } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Eye, EyeOff, Car, Bus, Van, Star, UploadCloud } from 'lucide-react';
 import type { Vehicle, VehicleCategory } from '@/types';
-import { adminApi } from '@/lib/api-client';
+import { adminApi, uploadVehicleImage } from '@/lib/api-client';
 
 const CATEGORIES: { slug: VehicleCategory; name: string }[] = [
   { slug: 'prestige', name: 'Prestige' },
@@ -41,6 +41,8 @@ export default function AdminVehiclesPage() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [featuresInput, setFeaturesInput] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
     adminApi.get<{ success: boolean; data: Vehicle[] }>('/api/admin/fleet')
@@ -106,6 +108,19 @@ export default function AdminVehiclesPage() {
 
   const setField = (key: keyof Vehicle, value: unknown) =>
     setEditing(prev => prev ? { ...prev, [key]: value } : null);
+
+  const handleImageUpload = async (file: File) => {
+    setUploading(true);
+    setUploadError('');
+    try {
+      const url = await uploadVehicleImage(file);
+      setField('imageUrl', url);
+    } catch (e) {
+      setUploadError((e as Error).message || 'Could not upload image');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-400">Loading vehicles…</div>;
 
@@ -322,13 +337,28 @@ export default function AdminVehiclesPage() {
                 />
               </div>
 
-              {/* Image URL */}
+              {/* Image */}
               <div>
-                <label className="label">Image URL</label>
+                <label className="label">Vehicle image</label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium cursor-pointer border border-gray-200 hover:border-brand-gold transition-colors">
+                    <UploadCloud size={15} />
+                    {uploading ? 'Uploading…' : 'Upload image'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={e => { const file = e.target.files?.[0]; if (file) handleImageUpload(file); }}
+                    />
+                  </label>
+                  <span className="text-xs text-brand-grey">or paste a URL below</span>
+                </div>
+                {uploadError && <p className="text-xs text-red-500 mt-1">{uploadError}</p>}
                 <input
                   value={editing.imageUrl || ''}
                   onChange={e => setField('imageUrl', e.target.value)}
-                  className="input-field"
+                  className="input-field mt-2"
                   placeholder="https://images.unsplash.com/photo-..."
                 />
                 <p className="text-xs text-brand-grey mt-1">

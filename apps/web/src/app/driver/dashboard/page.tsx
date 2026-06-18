@@ -58,6 +58,7 @@ export default function DriverDashboard() {
   const [rideRequest, setRideRequest] = useState<RideRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [statusError, setStatusError] = useState('');
 
   const load = async () => {
     const [profileResult, dashboardResult] = await Promise.all([
@@ -110,10 +111,15 @@ export default function DriverDashboard() {
 
   const toggleOnline = async () => {
     const next = !online;
-    await driverApi.put('/api/driver/status', { status: next ? 'available' : 'offline' });
-    setOnline(next);
-    setProfile(current => current ? { ...current, status: next ? 'available' : 'offline' } : current);
-    if (!next) setRideRequest(null);
+    setStatusError('');
+    try {
+      await driverApi.put('/api/driver/status', { status: next ? 'available' : 'offline' });
+      setOnline(next);
+      setProfile(current => current ? { ...current, status: next ? 'available' : 'offline' } : current);
+      if (!next) setRideRequest(null);
+    } catch (e) {
+      setStatusError(e instanceof Error ? e.message : 'Could not update your status');
+    }
   };
 
   const acceptRide = async () => {
@@ -149,6 +155,9 @@ export default function DriverDashboard() {
           <div><p className="text-xs font-semibold text-slate-700">{online ? 'Available for rides' : 'Currently offline'}</p><p className="text-[11px] text-slate-400">Control your dispatch availability</p></div>
           <button onClick={toggleOnline} className={`relative w-12 h-7 rounded-full transition-colors ${online ? 'bg-green-500' : 'bg-slate-300'}`}><span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${online ? 'left-6' : 'left-1'}`} /></button>
         </div>
+        {statusError && (
+          <div className="w-full bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl px-4 py-2.5">{statusError}</div>
+        )}
       </div>
 
       {rideRequest && (

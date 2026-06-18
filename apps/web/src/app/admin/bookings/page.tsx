@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Search, Eye, MapPin, Users, Calendar } from 'lucide-react';
 import StatusBadge from '@/components/admin/StatusBadge';
 import { adminApi } from '@/lib/api-client';
@@ -16,16 +17,18 @@ interface ApiBooking {
   estimatedMiles: number | null; estimatedFare: number | null; adminNotes: string | null;
   operationalStatus?: string | null;
   customerRating?: number | null; customerFeedback?: string | null; assignedDriverId?: string | null;
+  acceptedBy?: 'driver' | 'affiliate' | null; affiliateName?: string | null; affiliateDriverName?: string | null;
 }
 
 const STATUS_OPTIONS: (BookingStatus | 'all')[] = ['all', 'pending', 'quoted', 'accepted', 'in_progress', 'rejected', 'completed', 'cancelled'];
 const VEHICLE_OPTIONS: (VehicleCategory | 'all')[] = ['all', 'prestige', 'minibus', 'coaches', 'taxi'];
 
-export default function AdminBookingsPage() {
+function AdminBookingsPageInner() {
+  const searchParams = useSearchParams();
   const [bookings, setBookings] = useState<ApiBooking[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
-  const [filterStatus, setFilterStatus]   = useState('all');
+  const [filterStatus, setFilterStatus]   = useState(searchParams.get('status') ?? 'all');
   const [filterVehicle, setFilterVehicle] = useState('all');
   const [search, setSearch]     = useState('');
   const [selected, setSelected] = useState<ApiBooking | null>(null);
@@ -102,7 +105,7 @@ export default function AdminBookingsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/50">
-                  {['Reference', 'Customer', 'Journey', 'Vehicle', 'Rating', 'Date', 'Status', ''].map(h => (
+                  {['Reference', 'Customer', 'Journey', 'Vehicle', 'Rating', 'Date', 'Status', 'Accepted by', ''].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-brand-grey uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -127,13 +130,23 @@ export default function AdminBookingsPage() {
                       <StatusBadge status={b.status} />
                       {b.operationalStatus && b.operationalStatus !== b.status && <p className="text-[10px] text-brand-grey mt-1 capitalize">{b.operationalStatus.replace(/_/g, ' ')}</p>}
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {b.acceptedBy === 'driver' && <span className="text-xs font-medium text-brand-black">Independent driver</span>}
+                      {b.acceptedBy === 'affiliate' && (
+                        <div>
+                          <p className="text-xs font-medium text-brand-black">{b.affiliateName ?? 'Affiliate'}</p>
+                          {b.affiliateDriverName && <p className="text-[10px] text-brand-grey">{b.affiliateDriverName}</p>}
+                        </div>
+                      )}
+                      {!b.acceptedBy && <span className="text-xs text-brand-grey">—</span>}
+                    </td>
                     <td className="px-4 py-3">
                       <button className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"><Eye size={14} className="text-brand-grey" /></button>
                     </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={8} className="px-4 py-12 text-center text-brand-grey text-sm">No bookings found</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-12 text-center text-brand-grey text-sm">No bookings found</td></tr>
                 )}
               </tbody>
             </table>
@@ -215,5 +228,13 @@ export default function AdminBookingsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AdminBookingsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64 text-slate-400">Loading…</div>}>
+      <AdminBookingsPageInner />
+    </Suspense>
   );
 }

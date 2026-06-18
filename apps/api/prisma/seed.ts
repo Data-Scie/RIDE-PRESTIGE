@@ -190,6 +190,90 @@ async function main() {
     },
   });
 
+  await prisma.driver.upsert({
+    where: { id: 'drv-3' },
+    update: {},
+    create: {
+      id: 'drv-3',
+      fullName: 'James Okafor',
+      email: 'james.okafor@settransfers.co.uk',
+      phone: '+44 7700 100003',
+      passwordHash: hash('Driver@123'),
+      address: '41 Crookes Road',
+      city: 'Sheffield',
+      postcode: 'S10 1BA',
+      dateOfBirth: '1992-03-08',
+      drivingLicenceNumber: 'OKAFO920308JM9CD',
+      privateHireBadgeNumber: 'SY-PHV-1003',
+      driverType: 'affiliateDriver',
+      affiliateId: 'aff-1',
+      status: 'offline',
+      rating: 0,
+      totalJobs: 0,
+      totalEarnings: 0,
+      documentsStatus: 'missing',
+      isApproved: false,
+      applicationStatus: 'pending',
+      joinedDate: new Date('2026-06-10T00:00:00Z'),
+    },
+  });
+
+  await prisma.driver.upsert({
+    where: { id: 'drv-4' },
+    update: {},
+    create: {
+      id: 'drv-4',
+      fullName: 'Priya Nair',
+      email: 'priya.nair@example.com',
+      phone: '+44 7700 100004',
+      passwordHash: hash('Driver@123'),
+      address: '9 Ecclesall Road',
+      city: 'Sheffield',
+      postcode: 'S11 8PA',
+      dateOfBirth: '1988-09-19',
+      drivingLicenceNumber: 'NAIR880919PN9EF',
+      privateHireBadgeNumber: 'SY-PHV-1004',
+      driverType: 'independentDriver',
+      status: 'offline',
+      rating: 0,
+      totalJobs: 0,
+      totalEarnings: 0,
+      documentsStatus: 'missing',
+      serviceAreas: ['S11'],
+      isApproved: false,
+      applicationStatus: 'pending',
+      joinedDate: new Date('2026-06-14T00:00:00Z'),
+    },
+  });
+
+  await prisma.driver.upsert({
+    where: { id: 'drv-5' },
+    update: {},
+    create: {
+      id: 'drv-5',
+      fullName: 'Robert Tanner',
+      email: 'robert.tanner@ypc-cabs.co.uk',
+      phone: '+44 7700 100005',
+      passwordHash: hash('Driver@123'),
+      address: '17 Leeds Road',
+      city: 'Sheffield',
+      postcode: 'S9 3BL',
+      dateOfBirth: '1979-12-02',
+      drivingLicenceNumber: 'TANNE791202RT9GH',
+      privateHireBadgeNumber: 'SY-PHV-1005',
+      driverType: 'affiliateDriver',
+      affiliateId: 'aff-2',
+      status: 'offline',
+      rating: 4.2,
+      totalJobs: 13,
+      totalEarnings: 980,
+      documentsStatus: 'rejected',
+      isApproved: false,
+      applicationStatus: 'suspended',
+      joinedDate: new Date('2026-04-02T00:00:00Z'),
+    },
+  });
+
   // ─── Driver Documents ──────────────────────────────────────────────────────
 
   const drv1Docs = [
@@ -209,7 +293,14 @@ async function main() {
     { id: 'doc-2d', driverId: 'drv-2', type: 'insurance',       label: 'Insurance Certificate', status: 'approved', expiryDate: '2027-05-09', uploadedAt: new Date('2026-05-10T09:10:00Z') },
   ];
 
-  for (const doc of [...drv1Docs, ...drv2Docs]) {
+  const pendingDriverDocs = (driverId: string) => [
+    { id: `doc-${driverId}-a`, driverId, type: 'driving_licence', label: 'Driving Licence',       status: 'missing' },
+    { id: `doc-${driverId}-b`, driverId, type: 'phv_badge',       label: 'PHV Badge',             status: 'missing' },
+    { id: `doc-${driverId}-c`, driverId, type: 'dbs_check',       label: 'DBS Check',             status: 'missing' },
+    { id: `doc-${driverId}-d`, driverId, type: 'insurance',       label: 'Insurance Certificate', status: 'missing' },
+  ];
+
+  for (const doc of [...drv1Docs, ...drv2Docs, ...pendingDriverDocs('drv-3'), ...pendingDriverDocs('drv-4'), ...pendingDriverDocs('drv-5')]) {
     await prisma.driverDocument.upsert({
       where: { id: doc.id },
       update: doc,
@@ -301,23 +392,23 @@ async function main() {
     },
     {
       id: 'wv-m1', categorySlug: 'minibus', name: '16-Seater Minibus', badge: 'Standard',
-      description: 'Reliable 16-seater minibus for airport transfers, team travel, and private group outings.',
-      passengers: 16, luggage: '16 standard cases',
-      features: ['Air conditioning', 'Comfortable seats', 'Large luggage bay', 'USB charging', 'Professional driver', 'Door-to-door service'],
+      description: 'Our 16-seater minibus delivers spacious, air-conditioned comfort for airport transfers, corporate group travel, and private outings — with a professional, fully licensed driver at the wheel throughout your journey.',
+      passengers: 16, luggage: 'Up to 10 large cases',
+      features: ['Air conditioning', 'High-back reclining seats', 'Dedicated luggage trailer available', 'USB charging points', 'Professional, uniformed driver', 'Door-to-door service'],
       imageUrl: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?fm=jpg&q=80&w=800', available: true, priceNote: '',
     },
     {
       id: 'wv-m2', categorySlug: 'minibus', name: '24-Seater Minibus', badge: 'Best Value',
-      description: 'Large 24-seater minibus ideal for school groups, sports teams, and large family transfers.',
-      passengers: 24, luggage: '24 standard cases',
-      features: ['Full air conditioning', 'Reclining seats', 'Large luggage bay', 'USB charging points', 'Professional driver', 'DDA compliant'],
+      description: 'Built for larger groups, our 24-seater minibus is the ideal choice for school trips, sports teams, and family transfers — combining generous seating with secure, comfortable group travel across Sheffield and beyond.',
+      passengers: 24, luggage: 'Up to 16 large cases',
+      features: ['Full air conditioning', 'High-back reclining seats', 'Large rear luggage bay', 'USB charging points', 'Professional, uniformed driver', 'DDA-compliant access'],
       imageUrl: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?fm=jpg&q=80&w=800', available: true, priceNote: '',
     },
     {
       id: 'wv-c1', categorySlug: 'coaches', name: '44-Seater Coach', badge: 'Best Value',
-      description: 'Spacious 44-seater coach for larger groups, events, and corporate excursions.',
-      passengers: 44, luggage: 'Large underfloor bay',
-      features: ['Air conditioning', 'Reclining seats', 'Underfloor luggage', 'Entertainment system', 'Wi-Fi', 'PA system'],
+      description: 'Our 44-seater executive coach is designed for events, corporate excursions, and large group journeys — offering reclining seats, underfloor luggage storage, and on-board comfort for long-distance travel.',
+      passengers: 44, luggage: 'Underfloor luggage bay (up to 44 cases)',
+      features: ['Air conditioning', 'Reclining seats', 'Underfloor luggage storage', 'On-board entertainment system', 'Free Wi-Fi', 'PA system & microphone'],
       imageUrl: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?fm=jpg&q=80&w=800', available: true, priceNote: '',
     },
     {
@@ -341,8 +432,8 @@ async function main() {
 
   const fleetCategories = [
     { id: 'cat-1', slug: 'prestige', name: 'Prestige Vehicles', tagline: 'Luxury travel for every occasion',   description: 'Executive cars and luxury vehicles for corporate travel, airport transfers, and VIP journeys.', icon: 'prestige', available: true, order: 1 },
-    { id: 'cat-2', slug: 'minibus',  name: 'Minibuses',         tagline: 'Comfortable group travel',           description: 'Modern minibuses ideal for airport transfers, private group journeys, and events.', icon: 'minibus',  available: true, order: 2 },
-    { id: 'cat-3', slug: 'coaches',  name: 'Coaches',           tagline: 'Large group transport',              description: 'Full-size coaches for large groups, corporate events, school trips, and long-distance travel.', icon: 'coach', available: true, order: 3 },
+    { id: 'cat-2', slug: 'minibus',  name: 'Minibuses',         tagline: 'Spacious group travel, done right',  description: 'A modern, well-maintained fleet of minibuses for airport transfers, corporate group travel, school trips, and private events — comfortable, air-conditioned, and driven by fully licensed professionals.', icon: 'minibus',  available: true, order: 2 },
+    { id: 'cat-3', slug: 'coaches',  name: 'Coaches',           tagline: 'Premium coach travel for large groups', description: 'Full-size executive coaches for large groups, corporate events, school trips, and long-distance travel — combining generous capacity with on-board comfort and professional drivers.', icon: 'coach', available: true, order: 3 },
     { id: 'cat-4', slug: 'taxi',     name: 'Taxis',             tagline: 'Reliable local taxi service',        description: 'Standard taxi service for everyday journeys across Sheffield and South Yorkshire.', icon: 'taxi', available: true, order: 4 },
   ];
 

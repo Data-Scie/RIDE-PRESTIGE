@@ -73,7 +73,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Revenue / ROI strip */}
-      <div className="rounded-2xl p-5 grid grid-cols-2 lg:grid-cols-4 gap-4"
+      <Link href="/admin/finance" className="block rounded-2xl p-5 grid grid-cols-2 lg:grid-cols-4 gap-4 transition-opacity hover:opacity-90"
         style={{ background: 'linear-gradient(135deg,#0d1424 0%,#111827 100%)', border: '1px solid rgba(201,168,76,0.15)' }}>
         <div className="flex flex-col gap-0.5">
           <p className="text-xs uppercase tracking-widest" style={{ color: 'rgba(201,168,76,0.6)' }}>RP commission (all time)</p>
@@ -95,22 +95,22 @@ export default function AdminDashboard() {
           <p className="text-2xl font-semibold" style={{ color: '#4ade80' }}>£{data.monthRevenue.toLocaleString()}</p>
           <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>Customer fares this month</p>
         </div>
-      </div>
+      </Link>
 
       {/* Stats row 1 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <DashboardCard title="Total bookings"   value={data.totalBookings}   subtitle={`${data.pendingBookings} pending`}     icon={CalendarCheck} accent="blue"  />
-        <DashboardCard title="Active jobs"      value={data.activeJobs}      subtitle={`${data.completedJobs} completed`}     icon={TrendingUp}    accent="green" />
-        <DashboardCard title="Open tickets"     value={data.pendingTickets}  subtitle="awaiting action"                        icon={Headphones}    accent="red"   />
-        <DashboardCard title="Fleet items"      value={data.fleetVehicles}   subtitle="website vehicles"                       icon={Car}           accent="gold"  />
+        <DashboardCard title="Total bookings"   value={data.totalBookings}   subtitle={`${data.pendingBookings} pending`}     icon={CalendarCheck} accent="blue"  href="/admin/bookings" />
+        <DashboardCard title="Active jobs"      value={data.activeJobs}      subtitle={`${data.completedJobs} completed`}     icon={TrendingUp}    accent="green" href="/admin/bookings?status=accepted" />
+        <DashboardCard title="Open tickets"     value={data.pendingTickets}  subtitle="awaiting action"                        icon={Headphones}    accent="red"   href="/admin/support" />
+        <DashboardCard title="Fleet items"      value={data.fleetVehicles}   subtitle="website vehicles"                       icon={Car}           accent="gold"  href="/admin/fleet" />
       </div>
 
       {/* Stats row 2 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <DashboardCard title="Customers"   value={data.totalCustomers}                            subtitle="registered"              icon={Users}     accent="blue"  />
-        <DashboardCard title="Drivers"     value={`${data.approvedDrivers}/${data.totalDrivers}`} subtitle="approved / total"         icon={Car}       accent="gold"  />
-        <DashboardCard title="Affiliates"  value={`${data.approvedAffiliates}/${data.totalAffiliates}`} subtitle="approved / total"  icon={Building2} accent="green" />
-        <DashboardCard title="Completed"   value={data.completedJobs}                             subtitle="rides all time"           icon={Clock}     accent="blue"  />
+        <DashboardCard title="Customers"   value={data.totalCustomers}                            subtitle="registered"              icon={Users}     accent="blue"  href="/admin/customers" />
+        <DashboardCard title="Drivers"     value={`${data.approvedDrivers}/${data.totalDrivers}`} subtitle="approved / total"         icon={Car}       accent="gold"  href="/admin/drivers" />
+        <DashboardCard title="Affiliates"  value={`${data.approvedAffiliates}/${data.totalAffiliates}`} subtitle="approved / total"  icon={Building2} accent="green" href="/admin/affiliates" />
+        <DashboardCard title="Completed"   value={data.completedJobs}                             subtitle="rides all time"           icon={Clock}     accent="blue"  href="/admin/bookings?status=completed" />
       </div>
 
       {/* Recent bookings + tickets */}

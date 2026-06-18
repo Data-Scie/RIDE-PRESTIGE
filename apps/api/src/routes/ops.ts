@@ -291,6 +291,13 @@ router.put('/rides/:id/status', async (req: Request, res: Response) => {
           },
         });
       }
+      await prisma.payment.create({
+        data: {
+          id: `pay-${uuid()}`, jobId: job.id, bookingRef: job.bookingRef,
+          customerId: job.customerId, customerName: job.customerName,
+          amount: job.fareAmount, method: 'cash', status: 'paid', paidAt: now,
+        },
+      });
       // Update linked booking
       const bk = await prisma.booking.findFirst({ where: { jobId: job.id } });
       if (bk) {

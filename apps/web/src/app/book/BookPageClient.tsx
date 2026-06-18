@@ -16,7 +16,11 @@ const VEHICLES: { value: VehicleCategory; label: string; icon: ReactNode; desc: 
 
 function pl(n: number) { return n === 1 ? '1 person' : `${n} persons`; }
 
-export default function BookPageClient() {
+interface BookPageClientProps {
+  intro?: { title: string; description: string };
+}
+
+export default function BookPageClient({ intro }: BookPageClientProps) {
   const router = useRouter();
   const params = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -74,8 +78,8 @@ export default function BookPageClient() {
       <div style={{ background:'#000000' }} className="pt-20 pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center">
           <p style={{ color:'#c9a84c' }} className="text-sm font-semibold uppercase tracking-widest mb-3">Book your journey</p>
-          <h1 className="text-4xl sm:text-5xl font-semibold text-white mb-4" style={{ fontFamily:'Playfair Display,Georgia,serif' }}>Complete your booking</h1>
-          <p className="text-white/55 text-lg max-w-xl mx-auto">Enter your details to receive an instant fare estimate.</p>
+          <h1 className="text-4xl sm:text-5xl font-semibold text-white mb-4" style={{ fontFamily:'Playfair Display,Georgia,serif' }}>{intro?.title || 'Complete your booking'}</h1>
+          <p className="text-white/55 text-lg max-w-xl mx-auto">{intro?.description || 'Enter your details to receive an instant fare estimate.'}</p>
         </div>
       </div>
 
@@ -125,7 +129,8 @@ export default function BookPageClient() {
                   <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{color:'#c9a84c'}} />
                   <input type="text" placeholder="e.g. S1 1AX" value={form.pickupPostcode}
                     onChange={e=>set('pickupPostcode',e.target.value.toUpperCase())}
-                    className={`input-field pl-9 ${errors.pickupPostcode?'border-red-400':''}`} />
+                    style={{paddingLeft:'2.25rem'}}
+                    className={`input-field ${errors.pickupPostcode?'border-red-400':''}`} />
                 </div>
                 {errors.pickupPostcode && <p className="text-red-500 text-xs mt-1">{errors.pickupPostcode}</p>}
               </div>
@@ -135,7 +140,8 @@ export default function BookPageClient() {
                   <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300" />
                   <input type="text" placeholder="e.g. M1 1AB" value={form.dropoffPostcode}
                     onChange={e=>set('dropoffPostcode',e.target.value.toUpperCase())}
-                    className={`input-field pl-9 ${errors.dropoffPostcode?'border-red-400':''}`} />
+                    style={{paddingLeft:'2.25rem'}}
+                    className={`input-field ${errors.dropoffPostcode?'border-red-400':''}`} />
                 </div>
                 {errors.dropoffPostcode && <p className="text-red-500 text-xs mt-1">{errors.dropoffPostcode}</p>}
               </div>

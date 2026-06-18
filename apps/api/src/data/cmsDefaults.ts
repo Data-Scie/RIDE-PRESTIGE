@@ -91,6 +91,30 @@ export const DEFAULT_CONTENT_PAGES = [
       { id: 'privacy-6', type: 'legal_section', visible: true, order: 7, content: { title: '6. Security and contact', content: 'We use appropriate technical and organisational safeguards. Contact Ride Prestige using the details published on the Contact page for privacy requests.' } },
     ],
   },
+  {
+    id: 'page-book',
+    slug: 'book',
+    title: 'Book',
+    seoTitle: 'Book Your Journey - Ride Prestige',
+    metaDescription: 'Complete your booking with Ride Prestige. Enter your journey details for an instant quote.',
+    ogTitle: 'Book Your Journey',
+    ogDescription: 'Enter your details to receive an instant fare estimate.',
+    sectionsJson: [
+      { id: 'book-intro', type: 'page_intro', visible: true, order: 1, content: { title: 'Complete your booking', introduction: 'Enter your details to receive an instant fare estimate.' } },
+    ],
+  },
+  {
+    id: 'page-fleet',
+    slug: 'fleet',
+    title: 'Fleet',
+    seoTitle: 'Our Fleet - Ride Prestige',
+    metaDescription: 'Browse our fleet of prestige cars, minibuses, coaches, and taxis available for hire across Sheffield and the UK.',
+    ogTitle: 'Our Fleet',
+    ogDescription: 'Prestige cars, minibuses, coaches, and taxis for every journey.',
+    sectionsJson: [
+      { id: 'fleet-intro', type: 'page_intro', visible: true, order: 1, content: { title: 'The right vehicle for every journey', introduction: '' } },
+    ],
+  },
 ];
 
 export const DEFAULT_WEBSITE_PAGES = [DEFAULT_HOME_PAGE, ...DEFAULT_CONTENT_PAGES];

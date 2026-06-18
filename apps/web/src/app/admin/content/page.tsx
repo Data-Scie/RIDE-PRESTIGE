@@ -131,8 +131,8 @@ export default function AdminContentPage() {
     }
   };
 
-  const applyDraft = () => {
-    if (!selectedPage || !activeSection) return;
+  const applyDraft = (): Page | null => {
+    if (!selectedPage || !activeSection) return selectedPage;
     const updatedSection = { ...activeSection, content: { ...activeSection.content, ...draft } };
     const updatedPage = {
       ...selectedPage,
@@ -141,12 +141,14 @@ export default function AdminContentPage() {
     setSelectedPage(updatedPage);
     setPageList(prev => prev.map(p => p.id === updatedPage.id ? updatedPage : p));
     setActiveSection(updatedSection);
+    return updatedPage;
   };
 
   const save = async () => {
     if (!selectedPage) return;
-    applyDraft();
-    const current = pageList.find(p => p.id === selectedPage.id) ?? selectedPage;
+    // Use applyDraft's return value directly rather than re-reading `pageList` state —
+    // setPageList above is async, so the component's `pageList` closure is still stale here.
+    const current = applyDraft() ?? selectedPage;
     setSaving(true);
     setSaveError(null);
     try {

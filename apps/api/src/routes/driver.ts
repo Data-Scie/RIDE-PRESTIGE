@@ -426,6 +426,13 @@ router.put('/jobs/:id/status', async (req: Request, res: Response) => {
             },
           });
         }
+        await tx.payment.create({
+          data: {
+            id: `pay-${uuid()}`, jobId: job.id, bookingRef: job.bookingRef,
+            customerId: job.customerId, customerName: job.customerName,
+            amount: job.fareAmount, method: 'cash', status: 'paid', paidAt: now,
+          },
+        });
         await tx.booking.updateMany({
           where: { OR: [{ id: job.bookingId ?? '' }, { jobId: job.id }] },
           data: { status: 'completed' },

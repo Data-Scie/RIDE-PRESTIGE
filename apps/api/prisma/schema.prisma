@@ -259,17 +259,56 @@ model Booking {
 // ─── Earnings ─────────────────────────────────────────────────────────────────
 
 model EarningEntry {
-  id                 String   @id
+  id                 String    @id
   jobId              String
   bookingRef         String
-  entityId           String   // polymorphic — affiliateId or driverId
-  entityType         String   // affiliate | driver
+  entityId           String    // polymorphic — affiliateId or driverId
+  entityType         String    // affiliate | driver
   date               DateTime
   grossAmount        Float
-  commissionDeducted Float    @default(0)
+  commissionDeducted Float     @default(0)
   netAmount          Float
-  status             String   @default("pending") // paid | pending | processing
-  createdAt          DateTime @default(now())
+  status             String    @default("pending") // paid | pending | processing
+  paymentMethod      String?
+  payoutReference    String?
+  paidAt             DateTime?
+  createdAt          DateTime  @default(now())
+}
+
+// ─── Payments (customer-side) ──────────────────────────────────────────────────
+
+model Payment {
+  id             String    @id
+  bookingId      String?
+  jobId          String?
+  bookingRef     String?
+  customerId     String?
+  customerName   String
+  amount         Float
+  method         String    // card | cash | bank_transfer
+  status         String    @default("pending") // pending | paid | failed | refunded
+  transactionRef String?
+  paidAt         DateTime?
+  refundedAt     DateTime?
+  refundAmount   Float?
+  refundReason   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// ─── Invoices ───────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id          String    @id
+  type        String    // customer_receipt | affiliate_payout | driver_payout
+  entityId    String
+  entityName  String
+  periodStart DateTime
+  periodEnd   DateTime
+  totalAmount Float
+  status      String    @default("draft") // draft | issued | paid
+  issuedAt    DateTime?
+  createdAt   DateTime  @default(now())
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────

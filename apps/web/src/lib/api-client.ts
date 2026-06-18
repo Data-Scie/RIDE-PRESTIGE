@@ -73,6 +73,21 @@ export const adminApi = {
   delete: <T>(path: string)              => request<T>(path, 'admin', { method: 'DELETE' }),
 };
 
+export async function uploadVehicleImage(file: File): Promise<string> {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+  const token = getToken('admin');
+  const form = new FormData();
+  form.append('image', file);
+  const res = await fetch(`${apiUrl}/api/admin/uploads/vehicle-image`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  const data = await res.json().catch(() => ({ message: res.statusText }));
+  if (!res.ok) throw new Error(data.message || 'Image upload failed');
+  return data.url as string;
+}
+
 export async function backendLogin(
   email: string,
   password: string,

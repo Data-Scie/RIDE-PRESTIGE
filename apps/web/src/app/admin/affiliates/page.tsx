@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Building2, Search } from 'lucide-react';
 import { adminApi } from '@/lib/api-client';
 
@@ -104,7 +105,7 @@ export default function AdminAffiliatesPage() {
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="font-bold text-slate-800">{affiliate.companyName}</h2>
+                  <Link href={`/admin/affiliates/${affiliate.id}`} className="font-bold text-slate-800 hover:text-amber-600">{affiliate.companyName}</Link>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${affiliate.isApproved ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
                     {affiliate.isApproved ? 'Approved' : 'Pending'}
                   </span>
