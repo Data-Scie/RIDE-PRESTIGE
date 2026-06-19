@@ -63,7 +63,9 @@ function Sidebar({ onNav }: { onNav?: () => void }) {
     <aside className="w-64 min-h-screen flex flex-col shrink-0" style={{ background: '#0f172a', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
       <div className="p-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <Link href="/ops/dashboard" onClick={onNav} className="flex flex-col gap-2">
-          <BrandLogo variant="full" width={138} />
+          <span className="inline-flex rounded-xl bg-white px-2 py-2 w-fit">
+            <BrandLogo variant="full" width={138} />
+          </span>
           <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#3b82f6', fontSize: '7px' }}>Operations Portal</p>
         </Link>
       </div>
@@ -86,7 +88,7 @@ export default function OpsLayout({ children }: { children: React.ReactNode }) {
       )}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="lg:hidden flex items-center justify-between px-4 py-3" style={{ background: '#0f172a', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-          <div className="flex items-center gap-2"><BrandLogo variant="full" width={112} /><span className="text-white font-bold text-sm">Operations</span></div>
+          <div className="flex items-center gap-2"><span className="inline-flex rounded-lg bg-white px-1.5 py-1"><BrandLogo variant="full" width={112} /></span><span className="text-white font-bold text-sm">Operations</span></div>
           <button onClick={() => setMobileOpen(!mobileOpen)} className="text-white">{mobileOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </header>
         <main className="flex-1 p-4 lg:p-6 overflow-auto">
