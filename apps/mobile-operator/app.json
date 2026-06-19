@@ -4,6 +4,7 @@
     "slug": "ride-prestige-affiliate-driver",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/images/brand/ride-prestige-mark.png",
     "scheme": "rpaffiliate",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
@@ -14,17 +15,25 @@
       "supportsTablet": true
     },
     "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/brand/ride-prestige-mark.png",
+        "backgroundColor": "#030303",
+        "monochromeImage": "./assets/images/brand/ride-prestige-mark.png"
+      },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "static"
+      "output": "static",
+      "favicon": "./assets/images/brand/ride-prestige-mark.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
+          "image": "./assets/images/brand/ride-prestige-mark.png",
+          "imageWidth": 200,
           "backgroundColor": "#030303",
           "resizeMode": "contain"
         }
