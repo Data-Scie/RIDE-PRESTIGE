@@ -824,8 +824,8 @@ router.put('/drivers/:id/documents/:docId', async (req: Request, res: Response) 
     const docExists = await prisma.driverDocument.findFirst({ where: { id: req.params.docId, driverId: req.params.id } });
     if (!docExists) { res.status(404).json({ success: false, message: 'Document not found' }); return; }
 
-    const { status, rejectionReason, expiryDate } = req.body as { status?: string; rejectionReason?: string; expiryDate?: string };
-    if (status === 'approved' && !hasCurrentDocumentFile({ fileUrl: docExists.fileUrl, expiryDate: expiryDate ?? docExists.expiryDate })) {
+    const { status, rejectionReason, expiryDate, override } = req.body as { status?: string; rejectionReason?: string; expiryDate?: string; override?: boolean };
+    if (status === 'approved' && !override && !hasCurrentDocumentFile({ fileUrl: docExists.fileUrl, expiryDate: expiryDate ?? docExists.expiryDate })) {
       res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
       return;
     }
@@ -978,7 +978,8 @@ router.put('/affiliates/:affiliateId/documents/:documentId/approve', async (req:
       res.status(404).json({ success: false, message: 'Document not found' });
       return;
     }
-    if (!hasCurrentDocumentFile(document)) {
+    const { override } = req.body as { override?: boolean };
+    if (!override && !hasCurrentDocumentFile(document)) {
       res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
       return;
     }
@@ -1021,7 +1022,8 @@ router.put('/vehicles/:vehicleId/documents/:documentId/approve', async (req: Req
       res.status(404).json({ success: false, message: 'Document not found' });
       return;
     }
-    if (!hasCurrentVehicleDocumentFile(document)) {
+    const { override } = req.body as { override?: boolean };
+    if (!override && !hasCurrentVehicleDocumentFile(document)) {
       res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
       return;
     }

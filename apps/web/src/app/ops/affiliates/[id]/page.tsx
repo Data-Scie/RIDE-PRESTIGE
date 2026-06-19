@@ -54,12 +54,13 @@ export default function AffiliateDetailPage() {
     }
   };
 
-  const updateDocument = async (documentId: string, action: 'approve' | 'reject') => {
+  const updateDocument = async (documentId: string, action: 'approve' | 'reject', override = false) => {
     const reason = action === 'reject' ? window.prompt('Reason for rejection?') || 'Document was not approved' : undefined;
+    if (override && !window.confirm('Approve this document without a valid uploaded file? Use this only when you have verified compliance another way.')) return;
     setUpdating(true);
     setError('');
     try {
-      await opsApi.put(`/api/ops/affiliates/${id}/documents/${documentId}/${action}`, { reason });
+      await opsApi.put(`/api/ops/affiliates/${id}/documents/${documentId}/${action}`, { reason, override });
       await load();
     } catch (e) {
       setError((e as Error).message || 'Could not update document');
@@ -136,8 +137,11 @@ export default function AffiliateDetailPage() {
                 </div>
                 {document.status === 'approved' ? <CheckCircle size={18} className="text-green-500" /> : <XCircle size={18} className="text-amber-500" />}
               </div>
-              <div className="flex gap-2 mt-3">
+              <div className="flex gap-2 mt-3 flex-wrap">
                 <button disabled={updating} onClick={() => void updateDocument(document.id, 'approve')} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>
+                {document.status !== 'approved' && (
+                  <button disabled={updating} onClick={() => void updateDocument(document.id, 'approve', true)} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 disabled:opacity-50">Approve anyway</button>
+                )}
                 <button disabled={updating} onClick={() => void updateDocument(document.id, 'reject')} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>
               </div>
             </div>

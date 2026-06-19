@@ -93,14 +93,15 @@ export default function AdminDriversPage() {
     }
   };
 
-  const updateDocument = async (driverId: string, documentId: string, status: 'approved' | 'rejected') => {
+  const updateDocument = async (driverId: string, documentId: string, status: 'approved' | 'rejected', override = false) => {
     const rejectionReason = status === 'rejected'
       ? window.prompt('Reason for rejection?') || 'Document was not approved'
       : undefined;
+    if (override && !window.confirm('Approve this document without a valid uploaded file? Use this only when you have verified compliance another way.')) return;
     setUpdatingDocument(documentId);
     setError('');
     try {
-      await adminApi.put(`/api/admin/drivers/${driverId}/documents/${documentId}`, { status, rejectionReason });
+      await adminApi.put(`/api/admin/drivers/${driverId}/documents/${documentId}`, { status, rejectionReason, override });
       await load();
     } catch (e) {
       setError((e as Error).message || 'Could not update document');
@@ -207,8 +208,11 @@ export default function AdminDriversPage() {
                               </div>
                               <span className={`text-[10px] px-2 py-0.5 rounded-full h-fit font-semibold capitalize ${document.status === 'approved' ? 'bg-green-50 text-green-700' : document.status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>{document.status}</span>
                             </div>
-                            <div className="flex gap-2 mt-3">
+                            <div className="flex gap-2 mt-3 flex-wrap">
                               <button disabled={updatingDocument === document.id || !document.fileUrl} onClick={() => updateDocument(driver.id, document.id, 'approved')} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>
+                              {document.status !== 'approved' && (
+                                <button disabled={updatingDocument === document.id} onClick={() => updateDocument(driver.id, document.id, 'approved', true)} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 disabled:opacity-50">Approve anyway</button>
+                              )}
                               <button disabled={updatingDocument === document.id} onClick={() => updateDocument(driver.id, document.id, 'rejected')} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>
                             </div>
                           </div>

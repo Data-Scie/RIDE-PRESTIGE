@@ -34,12 +34,13 @@ export default function OpsVehiclesPage() {
   const load = () => opsApi.get<{ data: Vehicle[] }>('/api/ops/vehicles').then(result => setVehicles(result.data));
   useEffect(() => { load().catch(e => setError(e.message)); }, []);
 
-  const update = async (id: string, action: 'approve' | 'reject') => {
+  const update = async (id: string, action: 'approve' | 'reject', override = false) => {
     const reason = action === 'reject' ? window.prompt('Reason for rejection') || 'Vehicle compliance was not approved' : undefined;
+    if (override && !window.confirm('Approve this vehicle without valid compliance dates/documents? Use this only when you have verified compliance another way.')) return;
     setUpdating(id);
     setError('');
     try {
-      await opsApi.put(`/api/ops/vehicles/${id}/${action}`, { reason });
+      await opsApi.put(`/api/ops/vehicles/${id}/${action}`, { reason, override });
       await load();
     } catch (e) {
       setError((e as Error).message || `Could not ${action} vehicle`);
@@ -61,12 +62,13 @@ export default function OpsVehiclesPage() {
     }
   };
 
-  const updateDocument = async (vehicleId: string, documentId: string, action: 'approve' | 'reject') => {
+  const updateDocument = async (vehicleId: string, documentId: string, action: 'approve' | 'reject', override = false) => {
     const reason = action === 'reject' ? window.prompt('Reason for rejection') || 'Vehicle document was not approved' : undefined;
+    if (override && !window.confirm('Approve this document without a valid uploaded file? Use this only when you have verified compliance another way.')) return;
     setUpdating(`${vehicleId}:${documentId}`);
     setError('');
     try {
-      await opsApi.put(`/api/ops/vehicles/${vehicleId}/documents/${documentId}/${action}`, { reason });
+      await opsApi.put(`/api/ops/vehicles/${vehicleId}/documents/${documentId}/${action}`, { reason, override });
       await load();
     } catch (e) {
       setError((e as Error).message || `Could not ${action} vehicle document`);
@@ -145,9 +147,9 @@ function VehicleCard({
   vehicle: Vehicle;
   updating: boolean;
   updatingKey: string | null;
-  onUpdate: (id: string, action: 'approve' | 'reject') => void;
+  onUpdate: (id: string, action: 'approve' | 'reject', override?: boolean) => void;
   onSaveCompliance: (vehicle: Vehicle, dates: { motExpiry: string; insuranceExpiry: string; phvLicenceExpiry: string }) => void;
-  onUpdateDocument: (vehicleId: string, documentId: string, action: 'approve' | 'reject') => void;
+  onUpdateDocument: (vehicleId: string, documentId: string, action: 'approve' | 'reject', override?: boolean) => void;
 }) {
   const hasExpiredCompliance = [vehicle.motExpiry, vehicle.insuranceExpiry, vehicle.phvLicenceExpiry].some(isExpired);
   const documentsApproved = (vehicle.documents?.length ?? 0) >= 3 && (vehicle.documents ?? []).every(document => document.status === 'approved' && !!document.fileUrl && !!document.expiryDate && !isExpired(document.expiryDate));
@@ -206,8 +208,11 @@ function VehicleCard({
                           {document.rejectionReason && <p className="mt-1 text-[11px] text-red-600">{document.rejectionReason}</p>}
                           {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-blue-600">Open document</a>}
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap justify-end">
                           <button onClick={() => onUpdateDocument(vehicle.id, document.id, 'approve')} disabled={busy || !current || document.status === 'approved'} className="rounded-lg bg-green-600 px-2 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50">Approve</button>
+                          {document.status !== 'approved' && (
+                            <button onClick={() => onUpdateDocument(vehicle.id, document.id, 'approve', true)} disabled={busy} className="rounded-lg bg-amber-50 border border-amber-200 px-2 py-1.5 text-[11px] font-semibold text-amber-700 disabled:opacity-50">Approve anyway</button>
+                          )}
                           <button onClick={() => onUpdateDocument(vehicle.id, document.id, 'reject')} disabled={busy} className="rounded-lg bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-600 disabled:opacity-50">Reject</button>
                         </div>
                       </div>
@@ -237,6 +242,11 @@ function VehicleCard({
               {vehicle.approvalStatus !== 'approved' && (
                 <button onClick={() => onUpdate(vehicle.id, 'approve')} disabled={updating || hasExpiredCompliance || !documentsApproved} className="px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-semibold flex items-center gap-1 disabled:opacity-50">
                   <CheckCircle size={14} /> {updating ? 'Approving...' : 'Approve'}
+                </button>
+              )}
+              {vehicle.approvalStatus !== 'approved' && (hasExpiredCompliance || !documentsApproved) && (
+                <button onClick={() => onUpdate(vehicle.id, 'approve', true)} disabled={updating} className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold flex items-center gap-1 disabled:opacity-50">
+                  <CheckCircle size={14} /> Approve anyway
                 </button>
               )}
               {vehicle.approvalStatus !== 'rejected' && (

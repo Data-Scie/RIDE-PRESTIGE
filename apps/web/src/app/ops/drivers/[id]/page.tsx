@@ -72,8 +72,9 @@ export default function DriverDetailPage() {
     setVehicles(result.vehicles ?? []);
   };
 
-  const updateDocument = async (documentId: string, action: 'approve' | 'reject', reason?: string) => {
-    await opsApi.put(`/api/ops/drivers/${id}/documents/${documentId}/${action}`, { reason });
+  const updateDocument = async (documentId: string, action: 'approve' | 'reject', reason?: string, override = false) => {
+    if (override && !window.confirm('Approve this document without a valid uploaded file? Use this only when you have verified compliance another way.')) return;
+    await opsApi.put(`/api/ops/drivers/${id}/documents/${documentId}/${action}`, { reason, override });
     await load();
   };
 
@@ -156,8 +157,11 @@ export default function DriverDetailPage() {
               <div className="text-right">
                 <span className="flex items-center justify-end gap-1 text-xs capitalize">{document.status === 'approved' ? <CheckCircle size={16} className="text-green-500" /> : <XCircle size={16} className="text-amber-500" />}{document.status}</span>
                 {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600">View document</a>}
-                <div className="flex gap-1 mt-1">
+                <div className="flex gap-1 mt-1 flex-wrap justify-end">
                   <button onClick={() => void updateDocument(document.id, 'approve')} className="text-[10px] px-2 py-1 rounded bg-green-600 text-white">Approve</button>
+                  {document.status !== 'approved' && (
+                    <button onClick={() => void updateDocument(document.id, 'approve', undefined, true)} className="text-[10px] px-2 py-1 rounded bg-amber-50 border border-amber-200 text-amber-700">Approve anyway</button>
+                  )}
                   <button onClick={() => setRejectDocId(document.id)} className="text-[10px] px-2 py-1 rounded bg-red-50 text-red-600">Reject</button>
                 </div>
               </div>

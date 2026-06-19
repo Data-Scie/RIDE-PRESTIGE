@@ -45,12 +45,13 @@ export default function AdminAffiliateDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const updateDocument = async (documentId: string, action: 'approve' | 'reject') => {
+  const updateDocument = async (documentId: string, action: 'approve' | 'reject', override = false) => {
     const reason = action === 'reject' ? window.prompt('Reason for rejection?') || 'Document was not approved' : undefined;
+    if (override && !window.confirm('Approve this document without a valid uploaded file? Use this only when you have verified compliance another way.')) return;
     setUpdatingDocument(documentId);
     setError('');
     try {
-      await adminApi.put(`/api/admin/affiliates/${id}/documents/${documentId}/${action}`, { reason });
+      await adminApi.put(`/api/admin/affiliates/${id}/documents/${documentId}/${action}`, { reason, override });
       await load();
     } catch (e) {
       setError((e as Error).message || 'Could not update document');
@@ -59,12 +60,13 @@ export default function AdminAffiliateDetailPage() {
     }
   };
 
-  const updateVehicleDocument = async (vehicleId: string, documentId: string, action: 'approve' | 'reject') => {
+  const updateVehicleDocument = async (vehicleId: string, documentId: string, action: 'approve' | 'reject', override = false) => {
     const reason = action === 'reject' ? window.prompt('Reason for rejection?') || 'Vehicle document was not approved' : undefined;
+    if (override && !window.confirm('Approve this document without a valid uploaded file? Use this only when you have verified compliance another way.')) return;
     setUpdatingDocument(documentId);
     setError('');
     try {
-      await adminApi.put(`/api/admin/vehicles/${vehicleId}/documents/${documentId}/${action}`, { reason });
+      await adminApi.put(`/api/admin/vehicles/${vehicleId}/documents/${documentId}/${action}`, { reason, override });
       await load();
     } catch (e) {
       setError((e as Error).message || 'Could not update vehicle document');
@@ -123,8 +125,11 @@ export default function AdminAffiliateDetailPage() {
                 </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full h-fit font-semibold capitalize ${doc.status === 'approved' ? 'bg-green-50 text-green-700' : doc.status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>{doc.status}</span>
               </div>
-              <div className="flex gap-2 mt-3">
+              <div className="flex gap-2 mt-3 flex-wrap">
                 <button disabled={updatingDocument === doc.id} onClick={() => void updateDocument(doc.id, 'approve')} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>
+                {doc.status !== 'approved' && (
+                  <button disabled={updatingDocument === doc.id} onClick={() => void updateDocument(doc.id, 'approve', true)} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 disabled:opacity-50">Approve anyway</button>
+                )}
                 <button disabled={updatingDocument === doc.id} onClick={() => void updateDocument(doc.id, 'reject')} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>
               </div>
             </div>
@@ -183,8 +188,11 @@ export default function AdminAffiliateDetailPage() {
                     <p className="text-[11px] text-slate-400 capitalize">{doc.status}{doc.expiryDate ? ` - expires ${new Date(doc.expiryDate).toLocaleDateString('en-GB')}` : ''}</p>
                     {doc.rejectionReason && <p className="mt-1 text-[11px] text-red-600">{doc.rejectionReason}</p>}
                     {doc.fileUrl && <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-blue-600">View document</a>}
-                    <div className="mt-2 flex gap-1">
+                    <div className="mt-2 flex gap-1 flex-wrap">
                       <button disabled={updatingDocument === doc.id} onClick={() => void updateVehicleDocument(vehicle.id, doc.id, 'approve')} className="rounded-lg bg-green-600 px-2 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50">Approve</button>
+                      {doc.status !== 'approved' && (
+                        <button disabled={updatingDocument === doc.id} onClick={() => void updateVehicleDocument(vehicle.id, doc.id, 'approve', true)} className="rounded-lg bg-amber-50 border border-amber-200 px-2 py-1.5 text-[11px] font-semibold text-amber-700 disabled:opacity-50">Approve anyway</button>
+                      )}
                       <button disabled={updatingDocument === doc.id} onClick={() => void updateVehicleDocument(vehicle.id, doc.id, 'reject')} className="rounded-lg bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-600 disabled:opacity-50">Reject</button>
                     </div>
                   </div>

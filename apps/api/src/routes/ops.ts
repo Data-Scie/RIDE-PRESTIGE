@@ -535,8 +535,9 @@ router.put('/vehicles/:id/approve', async (req: Request, res: Response) => {
       res.status(404).json({ success: false, message: 'Vehicle not found' });
       return;
     }
+    const { override } = req.body as { override?: boolean };
     const complianceDates = [vehicle.motExpiry, vehicle.insuranceExpiry, vehicle.phvLicenceExpiry];
-    if (complianceDates.some(value => {
+    if (!override && complianceDates.some(value => {
       const timestamp = new Date(`${value}T23:59:59.999Z`).getTime();
       return Number.isNaN(timestamp) || timestamp < Date.now();
     })) {
@@ -544,7 +545,7 @@ router.put('/vehicles/:id/approve', async (req: Request, res: Response) => {
       return;
     }
     const documents = await ensureVehicleDocuments(vehicle.id);
-    if (!areVehicleDocumentsApproved(documents)) {
+    if (!override && !areVehicleDocumentsApproved(documents)) {
       res.status(409).json({ success: false, message: 'Approve all uploaded current vehicle documents before approving this vehicle' });
       return;
     }
@@ -570,7 +571,8 @@ router.put('/vehicles/:vehicleId/documents/:documentId/approve', async (req: Req
       res.status(404).json({ success: false, message: 'Document not found' });
       return;
     }
-    if (!hasCurrentVehicleDocumentFile(document)) {
+    const { override } = req.body as { override?: boolean };
+    if (!override && !hasCurrentVehicleDocumentFile(document)) {
       res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
       return;
     }
@@ -749,7 +751,8 @@ router.put('/affiliates/:affiliateId/documents/:documentId/approve', async (req:
       res.status(404).json({ success: false, message: 'Document not found' });
       return;
     }
-    if (!hasCurrentDocumentFile(document)) {
+    const { override } = req.body as { override?: boolean };
+    if (!override && !hasCurrentDocumentFile(document)) {
       res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
       return;
     }
@@ -870,7 +873,8 @@ router.put('/drivers/:driverId/documents/:documentId/approve', async (req: Reque
       res.status(404).json({ success: false, message: 'Document not found' });
       return;
     }
-    if (!hasCurrentDocumentFile(document)) {
+    const { override } = req.body as { override?: boolean };
+    if (!override && !hasCurrentDocumentFile(document)) {
       res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
       return;
     }
