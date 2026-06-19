@@ -22,7 +22,7 @@ export default function Header({ navigation, settings }: { navigation: Navigatio
 
           {/* Brand */}
           <Link href="/" className="shrink-0">
-            <BrandLogo width={90} alt={settings.siteName} />
+            <BrandLogo width={56} alt={settings.siteName} />
           </Link>
 
           {/* Desktop nav */}

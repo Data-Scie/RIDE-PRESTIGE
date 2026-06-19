@@ -15,14 +15,15 @@ export default function BrandLogo({
   const renderedWidth = Math.round(width);
 
   return (
-    <Image
-      src={src}
-      alt={alt}
-      width={renderedWidth}
-      height={Math.round(renderedWidth * 1.047)}
-      className={className}
-      style={{ width: renderedWidth, height: 'auto', objectFit: 'contain' }}
-      priority
-    />
+    <span className={`inline-flex items-center overflow-visible ${className}`} style={{ lineHeight: 0, paddingTop: 2, paddingBottom: 2 }}>
+      <Image
+        src={src}
+        alt={alt}
+        width={renderedWidth}
+        height={Math.round(renderedWidth * 1.047)}
+        style={{ width: renderedWidth, height: 'auto', objectFit: 'contain', display: 'block' }}
+        priority
+      />
+    </span>
   );
 }
