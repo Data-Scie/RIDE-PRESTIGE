@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   back: { marginBottom: 24 },
   backText: { color: ROSE_GOLD, fontSize: 16, fontWeight: '600', fontFamily: FONT_MEDIUM ?? undefined },
   headerArea: { alignItems: 'center', marginBottom: 32 },
-  logo: { width: 190, height: 105, marginBottom: 8 },
+  logo: { width: 160, height: 88, marginBottom: 8 },
   title: { fontSize: 28, fontWeight: '700', color: TEXT, fontFamily: FONT_MEDIUM ?? undefined },
   sub: { color: MUTED, fontSize: 13, marginTop: 4, fontFamily: FONT_REGULAR ?? undefined },
   fieldLabel: { fontSize: 11, color: MUTED, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8, fontFamily: FONT_MEDIUM ?? undefined },

@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     top: 0, left: 0, right: 0,
     height: '80%',
   },
-  brandLogo: { width: 260, height: 170, marginBottom: 4 },
+  brandLogo: { width: 218, height: 143, marginBottom: 4 },
   tagline: {
     fontSize: 14,
     color: ROSE_GOLD_2,

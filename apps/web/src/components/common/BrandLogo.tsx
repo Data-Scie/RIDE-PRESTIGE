@@ -11,14 +11,16 @@ export default function BrandLogo({
   src?: string;
   alt?: string;
 }) {
+  const renderedWidth = Math.round(width * 0.84);
+
   return (
     <Image
       src="/brand/ride-prestige-mark.png"
       alt={alt}
-      width={width}
-      height={Math.round(width * 1.047)}
+      width={renderedWidth}
+      height={Math.round(renderedWidth * 1.047)}
       className={className}
-      style={{ width, height: 'auto', objectFit: 'contain' }}
+      style={{ width: renderedWidth, height: 'auto', objectFit: 'contain' }}
       priority
     />
   );
