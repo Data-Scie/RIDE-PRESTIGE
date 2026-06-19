@@ -116,6 +116,7 @@ export default function AdminAffiliatesPage() {
               </div>
             </div>
             <div className="flex gap-2">
+              <Link href={`/admin/affiliates/${affiliate.id}`} className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 bg-slate-50">Review documents</Link>
               {!affiliate.isApproved ? (
                 <>
                   <button disabled={updating === affiliate.id} onClick={() => setApproval(affiliate, true)} className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>

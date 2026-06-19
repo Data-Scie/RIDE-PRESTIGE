@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Building2, Car, Search, User, Users } from 'lucide-react';
 import { opsApi } from '@/lib/api-client';
 
@@ -132,6 +133,7 @@ export default function OpsApplicationsPage() {
               </div>
               {!a.isApproved && (
                 <div className="flex gap-2">
+                  <Link href={`/ops/affiliates/${a.id}`} className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-50">Review documents</Link>
                   <button disabled={updating === `/api/ops/affiliates/${a.id}`} onClick={() => act(`/api/ops/affiliates/${a.id}`, 'approve')} className="px-3 py-2 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>
                   <button disabled={updating === `/api/ops/affiliates/${a.id}`} onClick={() => act(`/api/ops/affiliates/${a.id}`, 'suspend')} className="px-3 py-2 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>
                 </div>
@@ -155,6 +157,7 @@ export default function OpsApplicationsPage() {
               </div>
               {d.applicationStatus === 'pending' && (
                 <div className="flex gap-2">
+                  <Link href={`/ops/drivers/${d.id}`} className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-50">Review documents</Link>
                   <button disabled={updating === `/api/ops/drivers/${d.id}`} onClick={() => act(`/api/ops/drivers/${d.id}`, 'approve')} className="px-3 py-2 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>
                   <button disabled={updating === `/api/ops/drivers/${d.id}`} onClick={() => act(`/api/ops/drivers/${d.id}`, 'reject')} className="px-3 py-2 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>
                 </div>
@@ -180,6 +183,7 @@ export default function OpsApplicationsPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 flex-wrap">
+                  <Link href={`/ops/drivers/${d.id}`} className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-50">Review documents</Link>
                   {d.applicationStatus === 'pending' && (
                     <>
                       <button disabled={updating === `/api/ops/drivers/${d.id}`} onClick={() => act(`/api/ops/drivers/${d.id}`, 'approve')} className="px-3 py-2 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve driver</button>

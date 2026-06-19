@@ -1,8 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Plus, Search, Star, X } from 'lucide-react';
+import { Fragment, useEffect, useState } from 'react';
+import { FileText, Plus, Search, Star, X } from 'lucide-react';
 import { adminApi } from '@/lib/api-client';
+
+interface DriverDocument {
+  id: string;
+  label: string;
+  status: string;
+  expiryDate?: string | null;
+  fileUrl?: string | null;
+  rejectionReason?: string | null;
+}
 
 interface Driver {
   id: string;
@@ -16,6 +25,7 @@ interface Driver {
   applicationStatus: 'pending' | 'approved' | 'rejected' | 'suspended';
   documentsStatus?: 'missing' | 'pending' | 'approved' | 'rejected' | 'expired';
   affiliate?: { id: string; companyName: string } | null;
+  documents?: DriverDocument[];
 }
 
 interface Affiliate { id: string; companyName: string; }
@@ -53,6 +63,8 @@ export default function AdminDriversPage() {
   const [form, setForm] = useState(emptyForm);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [expandedDriverId, setExpandedDriverId] = useState<string | null>(null);
+  const [updatingDocument, setUpdatingDocument] = useState<string | null>(null);
 
   const load = async () => {
     const [driversResult, affiliatesResult] = await Promise.all([
@@ -78,6 +90,22 @@ export default function AdminDriversPage() {
       setError((e as Error).message || `Could not ${action} driver`);
     } finally {
       setUpdating(null);
+    }
+  };
+
+  const updateDocument = async (driverId: string, documentId: string, status: 'approved' | 'rejected') => {
+    const rejectionReason = status === 'rejected'
+      ? window.prompt('Reason for rejection?') || 'Document was not approved'
+      : undefined;
+    setUpdatingDocument(documentId);
+    setError('');
+    try {
+      await adminApi.put(`/api/admin/drivers/${driverId}/documents/${documentId}`, { status, rejectionReason });
+      await load();
+    } catch (e) {
+      setError((e as Error).message || 'Could not update document');
+    } finally {
+      setUpdatingDocument(null);
     }
   };
 
@@ -139,6 +167,7 @@ export default function AdminDriversPage() {
           </tr></thead>
           <tbody className="divide-y divide-slate-100">
             {visible.map(driver => (
+              <Fragment key={driver.id}>
               <tr key={driver.id}>
                 <td className="px-4 py-4"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center font-bold">{driver.fullName.charAt(0)}</div><span className="font-semibold text-sm">{driver.fullName}</span></div></td>
                 <td className="px-4 py-4"><p className="text-xs font-semibold">{driver.driverType === 'affiliateDriver' ? 'Affiliate Driver' : 'Independent Driver'}</p><p className="text-xs text-slate-400">{driver.affiliate?.companyName ?? 'Direct Ride Prestige driver'}</p></td>
@@ -149,11 +178,48 @@ export default function AdminDriversPage() {
                 <td className="px-4 py-4"><span className="flex items-center gap-1 text-sm"><Star size={12} className="text-amber-400" />{driver.rating || '-'}</span></td>
                 <td className="px-4 py-4 text-sm">{driver.totalJobs}</td>
                 <td className="px-4 py-4"><div className="flex gap-2 items-center">
+                  <button disabled={!driver.documents?.length} onClick={() => setExpandedDriverId(expandedDriverId === driver.id ? null : driver.id)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-slate-50 disabled:opacity-50 flex items-center gap-1"><FileText size={12} /> Docs</button>
                   {driver.applicationStatus !== 'approved' && <button disabled={updating === driver.id} onClick={() => updateApplication(driver, 'approve')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>}
                   {driver.applicationStatus === 'pending' && <button disabled={updating === driver.id} onClick={() => updateApplication(driver, 'reject')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>}
                   {driver.applicationStatus === 'approved' && <button disabled={updating === driver.id} onClick={() => updateApplication(driver, 'suspend')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Suspend</button>}
                 </div></td>
               </tr>
+              {expandedDriverId === driver.id && (
+                <tr key={`${driver.id}-documents`}>
+                  <td colSpan={9} className="px-4 py-4 bg-slate-50">
+                    <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                        <div>
+                          <p className="font-semibold text-sm text-slate-800">Document Review</p>
+                          <p className="text-xs text-slate-400">Approve every uploaded, current document before activating this driver.</p>
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded-full font-semibold capitalize ${driver.documentsStatus === 'approved' ? 'bg-green-50 text-green-700' : driver.documentsStatus === 'rejected' || driver.documentsStatus === 'expired' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>{driver.documentsStatus ?? 'missing'}</span>
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        {(driver.documents ?? []).map(document => (
+                          <div key={document.id} className="rounded-xl border border-slate-100 p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="font-semibold text-sm text-slate-800">{document.label}</p>
+                                <p className="text-xs text-slate-400">Expiry: {document.expiryDate || 'Not supplied'}</p>
+                                {document.fileUrl ? <a href={document.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 font-semibold">Open uploaded file</a> : <p className="text-xs text-amber-600">No file uploaded yet</p>}
+                                {document.rejectionReason && <p className="text-xs text-red-600 mt-1">{document.rejectionReason}</p>}
+                              </div>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full h-fit font-semibold capitalize ${document.status === 'approved' ? 'bg-green-50 text-green-700' : document.status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>{document.status}</span>
+                            </div>
+                            <div className="flex gap-2 mt-3">
+                              <button disabled={updatingDocument === document.id || !document.fileUrl} onClick={() => updateDocument(driver.id, document.id, 'approved')} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>
+                              <button disabled={updatingDocument === document.id} onClick={() => updateDocument(driver.id, document.id, 'rejected')} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>
+                            </div>
+                          </div>
+                        ))}
+                        {!driver.documents?.length && <p className="text-sm text-slate-400">No documents uploaded yet.</p>}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>
