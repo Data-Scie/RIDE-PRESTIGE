@@ -43,6 +43,7 @@ export default function AdminVehiclesPage() {
   const [featuresInput, setFeaturesInput] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     adminApi.get<{ success: boolean; data: Vehicle[] }>('/api/admin/fleet')
@@ -56,12 +57,16 @@ export default function AdminVehiclesPage() {
     : vehicles.filter(v => v.categorySlug === filterCat);
 
   const startNew = () => {
+    setError('');
+    setUploadError('');
     setEditing({ id: '', ...emptyVehicle() });
     setFeaturesInput('');
     setIsNew(true);
   };
 
   const startEdit = (v: Vehicle) => {
+    setError('');
+    setUploadError('');
     setEditing({ ...v });
     setFeaturesInput(v.features.join(', '));
     setIsNew(false);
@@ -74,6 +79,7 @@ export default function AdminVehiclesPage() {
       features: featuresInput.split(',').map(f => f.trim()).filter(Boolean),
     };
     setSaving(true);
+    setError('');
     try {
       if (isNew) {
         const { id: _id, ...body } = vehicle;
@@ -87,8 +93,8 @@ export default function AdminVehiclesPage() {
       setIsNew(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {
-      // silently fail — backend error
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save vehicle')
     } finally {
       setSaving(false);
     }
@@ -97,6 +103,25 @@ export default function AdminVehiclesPage() {
   const deleteVehicle = async (id: string) => {
     await adminApi.delete(`/api/admin/fleet/${id}`).catch(() => {});
     setVehicles(prev => prev.filter(v => v.id !== id));
+  };
+
+  const restoreDefaults = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const r = await adminApi.post<{ success: boolean; data: Vehicle[] }>('/api/admin/fleet/restore-defaults', {});
+      setVehicles(prev => {
+        const byId = new Map(prev.map(vehicle => [vehicle.id, vehicle]));
+        for (const vehicle of r.data ?? []) byId.set(vehicle.id, vehicle);
+        return Array.from(byId.values());
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not restore default fleet');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleAvailability = async (id: string) => {
@@ -144,8 +169,12 @@ export default function AdminVehiclesPage() {
           <button onClick={startNew} className="btn-gold flex items-center gap-2 py-2.5 px-4 text-sm">
             <Plus size={15} /> Add vehicle
           </button>
+          <button onClick={restoreDefaults} disabled={saving} className="btn-outline-gold py-2.5 px-4 text-sm disabled:opacity-50">
+            Restore defaults
+          </button>
         </div>
       </div>
+      {error && <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
 
       {/* Category filter */}
       <div className="flex flex-wrap gap-2">
@@ -359,13 +388,13 @@ export default function AdminVehiclesPage() {
                   value={editing.imageUrl || ''}
                   onChange={e => setField('imageUrl', e.target.value)}
                   className="input-field mt-2"
-                  placeholder="https://images.unsplash.com/photo-..."
+                  placeholder="https://images.unsplash.com/photo-... (optional)"
                 />
                 <p className="text-xs text-brand-grey mt-1">
                   Paste a direct image link from Unsplash, Pexels, or upload to{' '}
                   <a href="https://imgbb.com" target="_blank" rel="noopener noreferrer" className="text-brand-gold underline">imgbb.com</a> (free)
                 </p>
-                {editing.imageUrl && (
+                {editing.imageUrl?.startsWith('http') && (
                   <div className="mt-2 w-full h-32 rounded-xl overflow-hidden bg-gray-100">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -411,7 +440,7 @@ export default function AdminVehiclesPage() {
             <div className="flex gap-3 p-6 border-t border-gray-100 sticky bottom-0 bg-white rounded-b-3xl">
               <button
                 onClick={saveEdit}
-                disabled={saving || !editing.name || !editing.description}
+                disabled={saving || !editing.name || !editing.description || !editing.categorySlug || !editing.passengers}
                 className="btn-gold flex items-center gap-2 flex-1 justify-center py-3 disabled:opacity-50"
               >
                 <Save size={15} />
@@ -430,3 +459,4 @@ export default function AdminVehiclesPage() {
     </div>
   );
 }
+

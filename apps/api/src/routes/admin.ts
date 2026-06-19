@@ -5,6 +5,7 @@ import multer from 'multer';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
 import { DEFAULT_CONTENT_PAGES } from '../data/cmsDefaults';
+import { DEFAULT_WEBSITE_VEHICLES } from '../data/defaultWebsiteFleet';
 import { isCloudinaryConfigured, uploadImageBuffer } from '../lib/cloudinary';
 import type { UploadedFile } from '../lib/documentUpload';
 import type { WebsiteVehicle, Promotion, FAQItem, NavigationItem, SupportTicket } from '../types';
@@ -439,15 +440,43 @@ router.get('/fleet', async (_req: Request, res: Response) => {
 router.post('/fleet', async (req: Request, res: Response) => {
   try {
     const b = req.body as Omit<WebsiteVehicle, 'id'>;
-    if (!b.name || !b.categorySlug || !b.description || !b.passengers || !b.imageUrl) {
+    if (!b.name || !b.categorySlug || !b.description || !b.passengers) {
       res.status(400).json({ success: false, message: 'Missing required fields' }); return;
     }
     const v = await prisma.websiteVehicle.create({
-      data: { ...b, id: `wv-${uuid()}`, available: b.available !== false },
+      data: {
+        id: `wv-${uuid()}`,
+        categorySlug: b.categorySlug,
+        name: b.name,
+        description: b.description,
+        passengers: Number(b.passengers),
+        luggage: b.luggage ?? '',
+        features: Array.isArray(b.features) ? b.features.slice(0, 12) : [],
+        imageUrl: b.imageUrl?.startsWith('http') ? b.imageUrl : '',
+        badge: b.badge || null,
+        priceNote: b.priceNote || null,
+        available: b.available !== false,
+      },
     });
     res.status(201).json({ success: true, data: v });
-  } catch (e) {
-    res.status(500).json({ success: false, message: 'Database error' });
+  } catch (e: unknown) {
+    res.status(500).json({ success: false, message: e instanceof Error ? e.message : 'Database error' });
+  }
+});
+
+router.post('/fleet/restore-defaults', async (_req: Request, res: Response) => {
+  try {
+    const vehicles: Record<string, unknown>[] = [];
+    for (const vehicle of DEFAULT_WEBSITE_VEHICLES) {
+      vehicles.push(await prisma.websiteVehicle.upsert({
+        where: { id: vehicle.id },
+        update: {},
+        create: vehicle,
+      }));
+    }
+    res.json({ success: true, data: vehicles, total: vehicles.length });
+  } catch (e: unknown) {
+    res.status(500).json({ success: false, message: e instanceof Error ? e.message : 'Database error' });
   }
 });
 
@@ -471,7 +500,18 @@ router.put('/fleet/:id', async (req: Request, res: Response) => {
   try {
     const exists = await prisma.websiteVehicle.findUnique({ where: { id: req.params.id } });
     if (!exists) { res.status(404).json({ success: false, message: 'Vehicle not found' }); return; }
-    const { id: _id, ...data } = req.body;
+    const b = req.body as Partial<WebsiteVehicle>;
+    const data: Partial<WebsiteVehicle> = {};
+    if (b.categorySlug !== undefined) data.categorySlug = b.categorySlug;
+    if (b.name !== undefined) data.name = b.name;
+    if (b.description !== undefined) data.description = b.description;
+    if (b.passengers !== undefined) data.passengers = Number(b.passengers);
+    if (b.luggage !== undefined) data.luggage = b.luggage;
+    if (b.features !== undefined) data.features = Array.isArray(b.features) ? b.features.slice(0, 12) : [];
+    if (b.imageUrl !== undefined) data.imageUrl = b.imageUrl?.startsWith('http') ? b.imageUrl : '';
+    if (b.badge !== undefined) data.badge = b.badge || '';
+    if (b.priceNote !== undefined) data.priceNote = b.priceNote || '';
+    if (b.available !== undefined) data.available = b.available;
     const v = await prisma.websiteVehicle.update({ where: { id: req.params.id }, data });
     res.json({ success: true, data: v });
   } catch (e) {
