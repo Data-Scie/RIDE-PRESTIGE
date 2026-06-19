@@ -45,11 +45,11 @@ export default function OpsApplicationsPage() {
     setSub('received');
   }, [tab]);
 
-  const act = async (path: string, action: string, refresh = true) => {
+  const act = async (path: string, action: string, refresh = true, body: Record<string, unknown> = {}) => {
     setUpdating(path);
     setError('');
     try {
-      await opsApi.put(`${path}/${action}`, {});
+      await opsApi.put(`${path}/${action}`, body);
       if (refresh) await load();
     } catch (e) {
       setError((e as Error).message || 'Action failed');
@@ -191,7 +191,17 @@ export default function OpsApplicationsPage() {
                     </>
                   )}
                   {vehicle && vehicle.approvalStatus === 'pending' && (
-                    <button disabled={updating === `/api/ops/vehicles/${vehicle.id}`} onClick={() => act(`/api/ops/vehicles/${vehicle.id}`, 'approve')} className="px-3 py-2 rounded-lg text-xs font-semibold text-white bg-blue-600 disabled:opacity-50">Approve vehicle</button>
+                    <>
+                      <Link href="/ops/vehicles" className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-50">Review vehicle docs</Link>
+                      <button disabled={updating === `/api/ops/vehicles/${vehicle.id}`} onClick={() => act(`/api/ops/vehicles/${vehicle.id}`, 'approve')} className="px-3 py-2 rounded-lg text-xs font-semibold text-white bg-blue-600 disabled:opacity-50">Approve vehicle</button>
+                      <button
+                        disabled={updating === `/api/ops/vehicles/${vehicle.id}`}
+                        onClick={() => window.confirm('Approve this vehicle even if compliance documents are missing? Use this only after manual verification.') && act(`/api/ops/vehicles/${vehicle.id}`, 'approve', true, { override: true })}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 disabled:opacity-50"
+                      >
+                        Approve vehicle anyway
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

@@ -152,7 +152,7 @@ function VehicleCard({
   onUpdateDocument: (vehicleId: string, documentId: string, action: 'approve' | 'reject', override?: boolean) => void;
 }) {
   const hasExpiredCompliance = [vehicle.motExpiry, vehicle.insuranceExpiry, vehicle.phvLicenceExpiry].some(isExpired);
-  const documentsApproved = (vehicle.documents?.length ?? 0) >= 3 && (vehicle.documents ?? []).every(document => document.status === 'approved' && !!document.fileUrl && !!document.expiryDate && !isExpired(document.expiryDate));
+  const documentsApproved = (vehicle.documents?.length ?? 0) >= 3 && (vehicle.documents ?? []).every(document => document.status === 'approved');
   const [editing, setEditing] = useState(false);
   const [motExpiry, setMotExpiry] = useState(vehicle.motExpiry || '');
   const [insuranceExpiry, setInsuranceExpiry] = useState(vehicle.insuranceExpiry || '');
@@ -191,7 +191,7 @@ function VehicleCard({
             </div>
 
             {hasExpiredCompliance && <p className="mt-3 text-xs text-red-600">Update expired compliance dates before approving this vehicle.</p>}
-            {!documentsApproved && <p className="mt-3 text-xs text-amber-600">Approve current MOT, insurance, and PHV document uploads before approving this vehicle.</p>}
+            {!documentsApproved && <p className="mt-3 text-xs text-amber-600">Approve or override MOT, insurance, and PHV documents before approving this vehicle.</p>}
             {vehicle.rejectionReason && <p className="mt-3 text-xs text-red-600">{vehicle.rejectionReason}</p>}
 
             {!!vehicle.documents?.length && (

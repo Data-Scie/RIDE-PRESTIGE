@@ -24,7 +24,7 @@ export function hasCurrentDocumentFile(document: Pick<VehicleDocument, 'fileUrl'
 
 export function areVehicleDocumentsApproved(documents: VehicleDocument[]): boolean {
   return documents.length >= VEHICLE_DOCUMENTS.length
-    && documents.every(document => document.status === 'approved' && hasCurrentDocumentFile(document));
+    && documents.every(document => document.status === 'approved');
 }
 
 export async function ensureVehicleDocuments(vehicleId: string) {
