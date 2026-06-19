@@ -22,6 +22,11 @@ interface Job {
 interface Driver  { id: string; fullName: string; email: string; phone: string; status: string; rating: number; totalJobs: number; }
 interface Affiliate { id: string; companyName: string; contactPerson: string; email: string; phone: string; }
 interface Vehicle { id: string; make: string; model: string; registration: string; colour: string; vehicleType: string; }
+interface FlowEvent {
+  id: string; eventType: string; title: string; description?: string | null;
+  fromStatus?: string | null; toStatus?: string | null; actorRole?: string | null;
+  actorName?: string | null; createdAt: string;
+}
 
 const STATUS_COLORS: Record<string, string> = {
   awaiting_affiliate: '#f59e0b', needs_allocation: '#f59e0b',
@@ -37,13 +42,18 @@ export default function RideDetailPage() {
   const [driver, setDriver]     = useState<Driver | null>(null);
   const [affiliate, setAffiliate] = useState<Affiliate | null>(null);
   const [vehicle, setVehicle]   = useState<Vehicle | null>(null);
+  const [flowEvents, setFlowEvents] = useState<FlowEvent[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
   const [updating, setUpdating] = useState(false);
 
+  const loadRide = () => {
+    return opsApi.get<{ success: boolean; data: Job; driver: Driver | null; affiliate: Affiliate | null; vehicle: Vehicle | null; flowEvents: FlowEvent[] }>(`/api/ops/rides/${id}`)
+      .then(r => { setJob(r.data); setDriver(r.driver); setAffiliate(r.affiliate); setVehicle(r.vehicle); setFlowEvents(r.flowEvents ?? []); });
+  };
+
   useEffect(() => {
-    opsApi.get<{ success: boolean; data: Job; driver: Driver | null; affiliate: Affiliate | null; vehicle: Vehicle | null }>(`/api/ops/rides/${id}`)
-      .then(r => { setJob(r.data); setDriver(r.driver); setAffiliate(r.affiliate); setVehicle(r.vehicle); })
+    loadRide()
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
@@ -54,6 +64,7 @@ export default function RideDetailPage() {
     try {
       const r = await opsApi.put<{ success: boolean; data: Job }>(`/api/ops/rides/${id}/status`, { status });
       setJob(r.data);
+      await loadRide();
     } finally { setUpdating(false); }
   };
 
@@ -66,6 +77,7 @@ export default function RideDetailPage() {
       setJob(r.data);
       setDriver(null);
       setVehicle(null);
+      await loadRide();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not reset allocation');
     } finally {
@@ -130,6 +142,24 @@ export default function RideDetailPage() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+            <h2 className="font-semibold text-slate-800 mb-5 flex items-center gap-2"><Clock size={16} className="text-blue-500" /> Flow Information</h2>
+            <div className="space-y-4">
+              {flowEvents.map(event => (
+                <div key={event.id} className="flex gap-3">
+                  <div className="mt-1 h-2.5 w-2.5 rounded-full bg-blue-500 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{event.title}</p>
+                    <p className="text-xs text-slate-400">{new Date(event.createdAt).toLocaleString('en-GB')} {event.actorRole ? `by ${event.actorName || event.actorRole}` : ''}</p>
+                    {event.description && <p className="mt-1 text-xs text-slate-500">{event.description}</p>}
+                    {(event.fromStatus || event.toStatus) && <p className="mt-1 text-[11px] text-slate-400">{`${event.fromStatus || 'new'} -> ${event.toStatus || 'updated'}`}</p>}
+                  </div>
+                </div>
+              ))}
+              {!flowEvents.length && <p className="text-sm text-slate-400">No flow events recorded yet.</p>}
             </div>
           </div>
 

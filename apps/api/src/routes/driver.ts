@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import multer from 'multer';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
+import { recordRideFlowEvent } from '../lib/rideFlow';
 import { storeDocumentFile, validateDocumentFile } from '../lib/documentUpload';
 import {
   ensureVehicleDocuments,
@@ -329,6 +330,17 @@ router.post('/jobs/:id/accept', async (req: Request, res: Response) => {
       await tx.rideStatusHistory.create({
         data: { jobId: job.id, fromStatus: job.status, toStatus: 'driver_accepted', changedBy: drvId, changedByRole: 'driver' },
       });
+      await recordRideFlowEvent({
+        job: updatedJob,
+        eventType: 'driver_accepted_assignment',
+        title: 'Driver accepted assignment',
+        fromStatus: job.status,
+        toStatus: 'driver_accepted',
+        actorId: drvId,
+        actorRole: 'driver',
+        driverId: drvId,
+        vehicleId: job.assignedVehicleId,
+      }, tx);
       return updatedJob;
     });
     res.json({ success: true, message: 'Job accepted', data: shapeJob(updated) });
@@ -421,11 +433,22 @@ router.put('/jobs/:id/status', async (req: Request, res: Response) => {
     if (status === 'completed') {
       const now = new Date();
       const updated = await prisma.$transaction(async tx => {
-        await tx.rideStatusHistory.create({ data: { jobId: job.id, fromStatus: job.status, toStatus: status, changedBy: drvId, changedByRole: 'driver' } });
         const updatedJob = await tx.job.update({
           where: { id: job.id },
           data: { status: 'completed', completedAt: now },
         });
+        await tx.rideStatusHistory.create({ data: { jobId: job.id, fromStatus: job.status, toStatus: status, changedBy: drvId, changedByRole: 'driver' } });
+        await recordRideFlowEvent({
+          job: updatedJob,
+          eventType: 'status_changed',
+          title: 'Ride completed',
+          fromStatus: job.status,
+          toStatus: status,
+          actorId: drvId,
+          actorRole: 'driver',
+          driverId: drvId,
+          vehicleId: job.assignedVehicleId,
+        }, tx);
         // Earning amount for this driver:
         // - Independent driver (no affiliateId on job): earns the full operator payout (affiliatePayoutAmount)
         // - Fleet driver (job has affiliateId): their pay is set by their affiliate, not by RP; record 0 from RP
@@ -481,8 +504,19 @@ router.put('/jobs/:id/status', async (req: Request, res: Response) => {
       res.json({ success: true, data: shapeJob(updated) });
     } else {
       const updated = await prisma.$transaction(async tx => {
-        await tx.rideStatusHistory.create({ data: { jobId: job.id, fromStatus: job.status, toStatus: status, changedBy: drvId, changedByRole: 'driver' } });
         const updatedJob = await tx.job.update({ where: { id: job.id }, data: { status } });
+        await tx.rideStatusHistory.create({ data: { jobId: job.id, fromStatus: job.status, toStatus: status, changedBy: drvId, changedByRole: 'driver' } });
+        await recordRideFlowEvent({
+          job: updatedJob,
+          eventType: status === 'cancelled' ? 'ride_cancelled' : 'status_changed',
+          title: status === 'cancelled' ? 'Ride cancelled' : `Ride moved to ${status.replace(/_/g, ' ')}`,
+          fromStatus: job.status,
+          toStatus: status,
+          actorId: drvId,
+          actorRole: 'driver',
+          driverId: drvId,
+          vehicleId: job.assignedVehicleId,
+        }, tx);
         if (status === 'cancelled') {
           await tx.driver.update({ where: { id: drvId }, data: { status: 'available' } });
           if (job.assignedVehicleId) {

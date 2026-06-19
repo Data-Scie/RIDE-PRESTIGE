@@ -526,6 +526,30 @@ model RideStatusHistory {
   notes         String?
   createdAt     DateTime @default(now())
 }
+model RideFlowEvent {
+  id             String   @id @default(uuid())
+  jobId          String
+  bookingId      String?
+  bookingRef     String
+  eventType      String
+  title          String
+  description    String?
+  fromStatus     String?
+  toStatus       String?
+  actorId        String?
+  actorRole      String?
+  actorName      String?
+  affiliateId    String?
+  driverId       String?
+  vehicleId      String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([jobId, createdAt])
+  @@index([bookingId, createdAt])
+  @@index([bookingRef, createdAt])
+  @@index([eventType])
+}
 
 // ─── Driver Location History ──────────────────────────────────────────────────
 

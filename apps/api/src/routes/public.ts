@@ -6,6 +6,7 @@ import { pushNotification } from '../services/notificationService';
 import { DEFAULT_HOME_SECTIONS, DEFAULT_WEBSITE_PAGES } from '../data/cmsDefaults';
 import { createIndependentRideOffers } from '../services/dispatchService';
 import { bookingConfirmationEmail, sendTransactionalEmail } from '../services/emailService';
+import { recordRideFlowEvent } from '../lib/rideFlow';
 import type { VehicleCategory, BookingType } from '../types';
 
 const router = Router();
@@ -424,6 +425,22 @@ router.post('/booking', async (req: Request, res: Response) => {
       await tx.rideStatusHistory.create({
         data: { jobId, fromStatus: null, toStatus: 'awaiting_affiliate', changedByRole: 'customer', notes: 'Booking created' },
       });
+      await recordRideFlowEvent({
+        job: jobRow,
+        eventType: 'booking_created',
+        title: 'Booking created',
+        description: `${fullName} booked ${pickupPostcode} to ${dropoffPostcode}`,
+        fromStatus: null,
+        toStatus: 'awaiting_affiliate',
+        actorRole: 'customer',
+        actorName: fullName,
+        metadata: {
+          fareAmount: calc.total,
+          distance: miles,
+          vehicleCategory,
+          bookingType,
+        },
+      }, tx);
       if (existingCustomer) {
         await tx.customer.update({
           where: { id: existingCustomer.id },

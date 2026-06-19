@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
+import { shapeRideFlowEvent } from '../lib/rideFlow';
 import { DEFAULT_CONTENT_PAGES } from '../data/cmsDefaults';
 import { DEFAULT_WEBSITE_VEHICLES } from '../data/defaultWebsiteFleet';
 import { isCloudinaryConfigured, uploadImageBuffer } from '../lib/cloudinary';
@@ -266,9 +267,10 @@ router.get('/bookings/:id', async (req: Request, res: Response) => {
     if (!row) { res.status(404).json({ success: false, message: 'Booking not found' }); return; }
     const b = shapeBooking(row);
     const linkedJob = b.jobId ? await prisma.job.findUnique({ where: { id: b.jobId } }) : null;
-    const [assignedDriver, affiliate] = await Promise.all([
+    const [assignedDriver, affiliate, flowEvents] = await Promise.all([
       linkedJob?.assignedDriverId ? prisma.driver.findUnique({ where: { id: linkedJob.assignedDriverId }, select: { fullName: true, driverType: true } }) : Promise.resolve(null),
       linkedJob?.affiliateId ? prisma.affiliate.findUnique({ where: { id: linkedJob.affiliateId }, select: { companyName: true } }) : Promise.resolve(null),
+      linkedJob ? (prisma as any).rideFlowEvent.findMany({ where: { jobId: linkedJob.id }, orderBy: { createdAt: 'asc' } }) : Promise.resolve([]),
     ]);
     const acceptedBy: 'driver' | 'affiliate' | null = assignedDriver
       ? (assignedDriver.driverType === 'independentDriver' ? 'driver' : 'affiliate')
@@ -284,6 +286,7 @@ router.get('/bookings/:id', async (req: Request, res: Response) => {
         affiliateDriverName: assignedDriver && assignedDriver.driverType === 'affiliateDriver' ? assignedDriver.fullName : null,
       },
       job: linkedJob ? shapeJob(linkedJob) : null,
+      flowEvents: flowEvents.map(shapeRideFlowEvent),
     });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });

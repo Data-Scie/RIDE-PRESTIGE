@@ -1,5 +1,6 @@
 import { Prisma, type Driver, type DriverDocument, type FleetVehicle, type Job } from '@prisma/client';
 import { prisma } from '../lib/db';
+import { recordRideFlowEvent } from '../lib/rideFlow';
 import { emitToRoom } from '../lib/socket';
 import { pushNotification } from './notificationService';
 
@@ -245,7 +246,21 @@ export async function claimIndependentRide(driverId: string, offerId: string) {
         notes: 'Independent driver accepted a direct ride offer',
       },
     });
-    return tx.job.findUniqueOrThrow({ where: { id: offer.jobId } });
+    const updatedJob = await tx.job.findUniqueOrThrow({ where: { id: offer.jobId } });
+    await recordRideFlowEvent({
+      job: updatedJob,
+      eventType: 'independent_driver_claimed',
+      title: 'Independent driver accepted ride',
+      description: `${offer.driver.fullName} accepted direct dispatch`,
+      fromStatus: 'awaiting_affiliate',
+      toStatus: 'driver_accepted',
+      actorId: driverId,
+      actorRole: 'driver',
+      actorName: offer.driver.fullName,
+      driverId,
+      vehicleId: vehicle.id,
+    }, tx);
+    return updatedJob;
       }, {
         maxWait: 3_000,
         timeout: 10_000,

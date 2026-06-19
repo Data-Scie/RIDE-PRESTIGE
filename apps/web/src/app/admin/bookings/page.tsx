@@ -20,6 +20,11 @@ interface ApiBooking {
   acceptedBy?: 'driver' | 'affiliate' | null; affiliateName?: string | null; affiliateDriverName?: string | null;
   driverName?: string | null; driverType?: string | null; assignedVehicleId?: string | null; vehicleLabel?: string | null;
 }
+interface FlowEvent {
+  id: string; eventType: string; title: string; description?: string | null;
+  fromStatus?: string | null; toStatus?: string | null; actorRole?: string | null;
+  actorName?: string | null; createdAt: string;
+}
 
 const STATUS_OPTIONS: (BookingStatus | 'all')[] = ['all', 'pending', 'quoted', 'accepted', 'in_progress', 'rejected', 'completed', 'cancelled'];
 const VEHICLE_OPTIONS: (VehicleCategory | 'all')[] = ['all', 'prestige', 'minibus', 'coaches', 'taxi'];
@@ -33,6 +38,7 @@ function AdminBookingsPageInner() {
   const [filterVehicle, setFilterVehicle] = useState('all');
   const [search, setSearch]     = useState('');
   const [selected, setSelected] = useState<ApiBooking | null>(null);
+  const [selectedFlow, setSelectedFlow] = useState<FlowEvent[]>([]);
   const [adminNote, setAdminNote] = useState('');
   const [saving, setSaving]     = useState(false);
 
@@ -66,6 +72,20 @@ function AdminBookingsPageInner() {
       setBookings(prev => prev.map(b => b.id === id ? { ...b, ...r.data } : b));
       if (selected?.id === id) setSelected(prev => prev ? { ...prev, ...r.data } : r.data);
     } finally { setSaving(false); }
+  };
+
+  const openBooking = async (booking: ApiBooking) => {
+    setSelected(booking);
+    setSelectedFlow([]);
+    setAdminNote(booking.adminNotes || '');
+    try {
+      const detail = await adminApi.get<{ success: boolean; data: ApiBooking; flowEvents: FlowEvent[] }>(`/api/admin/bookings/${booking.id}`);
+      setSelected(prev => prev?.id === booking.id ? { ...prev, ...detail.data } : detail.data);
+      setSelectedFlow(detail.flowEvents ?? []);
+      setAdminNote(detail.data.adminNotes || '');
+    } catch {
+      setSelectedFlow([]);
+    }
   };
 
   const saveNote = async () => {
@@ -113,7 +133,7 @@ function AdminBookingsPageInner() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map(b => (
-                  <tr key={b.id} onClick={() => { setSelected(b); setAdminNote(b.adminNotes || ''); }}
+                  <tr key={b.id} onClick={() => void openBooking(b)}
                     className={`hover:bg-gray-50/50 cursor-pointer transition-colors ${selected?.id === b.id ? 'bg-brand-gold/4' : ''}`}>
                     <td className="px-4 py-3 font-mono text-xs text-brand-grey whitespace-nowrap">{b.reference}</td>
                     <td className="px-4 py-3">
@@ -215,6 +235,21 @@ function AdminBookingsPageInner() {
               <p className="text-xs font-semibold text-brand-grey uppercase tracking-wider mb-2">Customer rating</p>
               <StarRating value={selected.customerRating} size={16} />
               <p className="text-xs text-brand-grey mt-2">{selected.customerFeedback || (selected.customerRating ? 'No written feedback.' : 'Not rated yet.')}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-brand-grey uppercase tracking-wider mb-3">Flow information</p>
+              <div className="space-y-3">
+                {selectedFlow.map(event => (
+                  <div key={event.id} className="border-l-2 border-brand-gold pl-3">
+                    <p className="text-xs font-semibold text-brand-black">{event.title}</p>
+                    <p className="text-[11px] text-brand-grey">{new Date(event.createdAt).toLocaleString('en-GB')} {event.actorRole ? `by ${event.actorName || event.actorRole}` : ''}</p>
+                    {event.description && <p className="text-[11px] text-brand-grey mt-1">{event.description}</p>}
+                    {(event.fromStatus || event.toStatus) && <p className="text-[10px] text-brand-grey mt-1">{`${event.fromStatus || 'new'} -> ${event.toStatus || 'updated'}`}</p>}
+                  </div>
+                ))}
+                {!selectedFlow.length && <p className="text-xs text-brand-grey">No flow events recorded yet.</p>}
+              </div>
             </div>
 
             <div>

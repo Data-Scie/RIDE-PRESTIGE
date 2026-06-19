@@ -11,6 +11,7 @@ import {
 } from '../lib/vehicleDocuments';
 import { applyCommission, getPricingConfig } from '../services/fareService';
 import { pushNotification } from '../services/notificationService';
+import { recordRideFlowEvent, shapeRideFlowEvent } from '../lib/rideFlow';
 import type { Job, JobStatus, Stop } from '../types';
 
 const router = Router();
@@ -196,14 +197,15 @@ router.get('/rides/:id', async (req: Request, res: Response) => {
   try {
     const job = await prisma.job.findUnique({ where: { id: req.params.id } });
     if (!job) { res.status(404).json({ success: false, message: 'Ride not found' }); return; }
-    const [driver, affiliate, vehicle] = await Promise.all([
+    const [driver, affiliate, vehicle, flowEvents] = await Promise.all([
       job.assignedDriverId ? prisma.driver.findUnique({ where: { id: job.assignedDriverId } }) : null,
       job.affiliateId ? prisma.affiliate.findUnique({ where: { id: job.affiliateId } }) : null,
       job.assignedVehicleId ? prisma.fleetVehicle.findUnique({ where: { id: job.assignedVehicleId } }) : null,
+      (prisma as any).rideFlowEvent.findMany({ where: { jobId: job.id }, orderBy: { createdAt: 'asc' } }),
     ]);
     const safeDriver = driver ? (({ passwordHash: _, ...d }) => d)(driver) : null;
     const safeAffiliate = affiliate ? (({ passwordHash: _, ...a }) => a)(affiliate) : null;
-    res.json({ success: true, data: shapeJob(job), driver: safeDriver, affiliate: safeAffiliate, vehicle: vehicle ?? null });
+    res.json({ success: true, data: shapeJob(job), driver: safeDriver, affiliate: safeAffiliate, vehicle: vehicle ?? null, flowEvents: flowEvents.map(shapeRideFlowEvent) });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }
@@ -277,6 +279,17 @@ router.post('/rides', async (req: Request, res: Response) => {
         status: 'awaiting_affiliate',
       },
     });
+    await recordRideFlowEvent({
+      job,
+      eventType: 'ride_created_by_ops',
+      title: 'Ride created by operations',
+      description: `${job.customerName} - ${job.pickupAddress} to ${job.dropoffAddress}`,
+      fromStatus: null,
+      toStatus: 'awaiting_affiliate',
+      actorId: req.user?.id ?? null,
+      actorRole: req.user?.role ?? 'ops',
+      metadata: { fareAmount: job.fareAmount, vehicleCategory: job.vehicleCategory },
+    });
     // Notify only affiliates with a matching vehicle category
     const jobCategory = b.vehicleCategory ?? 'prestige';
     const approvedAffiliates = await prisma.affiliate.findMany({
@@ -323,7 +336,16 @@ router.put('/rides/:id/status', async (req: Request, res: Response) => {
     const job = await prisma.job.findUnique({ where: { id: req.params.id } });
     if (!job) { res.status(404).json({ success: false, message: 'Ride not found' }); return; }
     const { status } = req.body as { status: JobStatus };
-    const updated = await prisma.job.update({ where: { id: job.id }, data: { status } });
+    const updated = await prisma.job.update({ where: { id: job.id }, data: { status, ...(status === 'completed' ? { completedAt: new Date() } : {}) } });
+    await recordRideFlowEvent({
+      job: updated,
+      eventType: 'status_changed',
+      title: `Status changed to ${status.replace(/_/g, ' ')}`,
+      fromStatus: job.status,
+      toStatus: status,
+      actorId: req.user?.id ?? null,
+      actorRole: req.user?.role ?? 'ops',
+    });
 
     // Auto-create earnings when completed
     if (status === 'completed' && job.assignedDriverId) {
@@ -404,6 +426,18 @@ router.post('/rides/:id/reset-allocation', async (req: Request, res: Response) =
           notes: 'Allocation reset by operations',
         },
       });
+      await recordRideFlowEvent({
+        job: resetJob,
+        eventType: 'allocation_reset',
+        title: 'Allocation reset',
+        description: 'Driver and vehicle were released by operations',
+        fromStatus: job.status,
+        toStatus: resetJob.status,
+        actorId: req.user?.id ?? null,
+        actorRole: req.user?.role ?? 'ops',
+        driverId: job.assignedDriverId,
+        vehicleId: job.assignedVehicleId,
+      }, tx);
       return resetJob;
     });
     res.json({ success: true, message: 'Allocation reset', data: shapeJob(updated) });
@@ -453,7 +487,19 @@ router.put('/rides/:id/assign-affiliate', async (req: Request, res: Response) =>
         where: { jobId: job.id, status: 'pending' },
         data: { status: 'withdrawn', respondedAt: new Date() },
       });
-      return tx.job.findUniqueOrThrow({ where: { id: job.id } });
+      const updatedJob = await tx.job.findUniqueOrThrow({ where: { id: job.id } });
+      await recordRideFlowEvent({
+        job: updatedJob,
+        eventType: 'affiliate_assigned',
+        title: 'Affiliate assigned',
+        description: aff.companyName,
+        fromStatus: job.status,
+        toStatus: 'needs_allocation',
+        actorId: req.user?.id ?? null,
+        actorRole: req.user?.role ?? 'ops',
+        affiliateId,
+      }, tx);
+      return updatedJob;
     });
     await pushNotification(affiliateId, 'affiliate', 'Job Assigned', `Job ${job.bookingRef} has been assigned to you. Please allocate driver and vehicle.`, 'job');
     res.json({ success: true, data: shapeJob(updated) });

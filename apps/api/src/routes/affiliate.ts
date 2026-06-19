@@ -11,6 +11,7 @@ import {
   isDocumentUrl as isVehicleDocumentUrl,
   syncVehicleDocumentExpiries,
 } from '../lib/vehicleDocuments';
+import { recordRideFlowEvent } from '../lib/rideFlow';
 import { pushNotification } from '../services/notificationService';
 import { isDriverDocumentEligible, isVehicleEligible } from '../services/dispatchService';
 import type { Stop } from '../types';
@@ -320,6 +321,17 @@ router.post('/jobs/:id/accept', async (req: Request, res: Response) => {
       await tx.rideStatusHistory.create({
         data: { jobId: job.id, fromStatus: job.status, toStatus: 'needs_allocation', changedBy: affId, changedByRole: 'affiliate', notes: 'Affiliate accepted job' },
       });
+      await recordRideFlowEvent({
+        job: updatedJob,
+        eventType: 'affiliate_accepted',
+        title: 'Affiliate accepted ride',
+        description: 'Ride moved to driver and vehicle allocation',
+        fromStatus: job.status,
+        toStatus: 'needs_allocation',
+        actorId: affId,
+        actorRole: 'affiliate',
+        affiliateId: affId,
+      }, tx);
       return updatedJob;
     });
     res.json({ success: true, message: 'Job accepted', data: shapeJob(updated) });
@@ -442,6 +454,18 @@ router.post('/jobs/:id/assign-driver', async (req: Request, res: Response) => {
       await tx.rideStatusHistory.create({
         data: { jobId: job.id, fromStatus: job.status, toStatus: nextStatus, changedBy: affId, changedByRole: 'affiliate', notes: `Driver ${driver.fullName} assigned` },
       });
+      await recordRideFlowEvent({
+        job: updatedJob,
+        eventType: 'driver_assigned',
+        title: 'Driver assigned',
+        description: driver.fullName,
+        fromStatus: job.status,
+        toStatus: nextStatus,
+        actorId: affId,
+        actorRole: 'affiliate',
+        affiliateId: affId,
+        driverId,
+      }, tx);
       return updatedJob;
     });
     await pushNotification(driverId, 'driver', 'Job Assigned', `You have been assigned to job ${job.bookingRef}. Pickup: ${job.pickupAddress}`, 'job');
@@ -518,6 +542,19 @@ router.post('/jobs/:id/assign-vehicle', async (req: Request, res: Response) => {
       await tx.rideStatusHistory.create({
         data: { jobId: job.id, fromStatus: job.status, toStatus: 'vehicle_assigned', changedBy: affId, changedByRole: 'affiliate', notes: `Vehicle ${vehicle.registration} assigned` },
       });
+      await recordRideFlowEvent({
+        job: updatedJob,
+        eventType: 'vehicle_assigned',
+        title: 'Vehicle assigned',
+        description: `${vehicle.registration} - ${vehicle.make} ${vehicle.model}`,
+        fromStatus: job.status,
+        toStatus: 'vehicle_assigned',
+        actorId: affId,
+        actorRole: 'affiliate',
+        affiliateId: affId,
+        driverId: job.assignedDriverId,
+        vehicleId,
+      }, tx);
       return updatedJob;
     });
     if (job.assignedDriverId) {
@@ -568,6 +605,19 @@ router.post('/jobs/:id/reset-allocation', async (req: Request, res: Response) =>
           notes: 'Allocation reset for reassignment',
         },
       });
+      await recordRideFlowEvent({
+        job: resetJob,
+        eventType: 'allocation_reset',
+        title: 'Allocation reset',
+        description: 'Affiliate released the assigned driver and vehicle',
+        fromStatus: job.status,
+        toStatus: 'needs_allocation',
+        actorId: affId,
+        actorRole: 'affiliate',
+        affiliateId: affId,
+        driverId: job.assignedDriverId,
+        vehicleId: job.assignedVehicleId,
+      }, tx);
       return resetJob;
     });
     res.json({ success: true, message: 'Allocation reset', data: shapeJob(updated) });
