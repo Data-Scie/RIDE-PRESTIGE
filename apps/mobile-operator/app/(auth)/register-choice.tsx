@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   back: { marginBottom: 24 },
   backText: { color: ROSE_GOLD, fontSize: 16, fontWeight: '600', fontFamily: FONT_MEDIUM ?? undefined },
   header: { marginBottom: 28 },
-  brand: { width: 126, height: 64, marginBottom: 8 },
+  brand: { width: 105, height: 54, marginBottom: 8 },
   title: { fontSize: 26, fontWeight: '700', color: TEXT, fontFamily: FONT_MEDIUM ?? undefined },
   sub: { color: MUTED, fontSize: 14, marginTop: 4, fontFamily: FONT_REGULAR ?? undefined },
   optionCard: {

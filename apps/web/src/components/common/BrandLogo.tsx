@@ -11,7 +11,7 @@ export default function BrandLogo({
   src?: string;
   alt?: string;
 }) {
-  const renderedWidth = Math.round(width * 0.84);
+  const renderedWidth = Math.round(width * 0.68);
 
   return (
     <Image
