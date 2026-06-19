@@ -16,7 +16,7 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
           {/* Brand */}
           <div className="lg:col-span-1">
             <Link href="/" className="inline-flex items-center gap-2.5 mb-5 rounded-xl bg-white px-3 py-2">
-              <BrandLogo width={180} src={settings.logoUrl} alt={settings.siteName} />
+              <BrandLogo width={122} src={settings.logoUrl} alt={settings.siteName} />
             </Link>
             <p className="text-sm leading-relaxed mb-6" style={{color:'rgba(255,255,255,0.55)'}}>
               {settings.heroSubtitle}

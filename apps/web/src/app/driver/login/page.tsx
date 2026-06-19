@@ -29,7 +29,7 @@ export default function DriverLoginPage() {
     <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a0a' }}>
       <div className="w-full max-w-sm mx-4">
         <div className="text-center mb-8">
-          <BrandLogo variant="full" width={160} className="mx-auto mb-5" />
+          <BrandLogo width={56} className="mx-auto mb-5" />
           <h1 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>Driver Portal</h1>
           <p className="text-zinc-500 text-sm">Ride Prestige — Driver Access</p>
         </div>

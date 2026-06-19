@@ -96,7 +96,7 @@ function LoginForm() {
           <button onClick={() => router.back()} className="flex items-center gap-1.5 mb-8 mx-auto text-xs transition-opacity hover:opacity-60" style={{ color: 'rgba(255,255,255,0.3)' }}>
             <ArrowLeft size={12} /> Back
           </button>
-          <BrandLogo variant="mark" width={58} className="mx-auto mb-5" />
+          <BrandLogo width={39} className="mx-auto mb-5" />
           <h1
             style={{
               fontFamily: 'Playfair Display,Georgia,serif',

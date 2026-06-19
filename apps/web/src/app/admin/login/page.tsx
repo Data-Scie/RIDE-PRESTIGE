@@ -44,7 +44,7 @@ export default function AdminLoginPage() {
       <div className="relative w-full max-w-sm mx-4">
         {/* Header */}
         <div className="text-center mb-8">
-          <BrandLogo variant="full" width={170} className="mx-auto mb-5" />
+          <BrandLogo width={56} className="mx-auto mb-5" />
           <h1 style={{ fontFamily: 'Playfair Display,Georgia,serif', color: '#0a0f1e', fontSize: '1.7rem', fontWeight: 600, letterSpacing: '-0.01em' }}>
             Prestige Admin Panel
           </h1>

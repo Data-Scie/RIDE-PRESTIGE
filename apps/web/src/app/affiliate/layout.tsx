@@ -61,9 +61,12 @@ function Sidebar({ onNav, identity }: { onNav?: () => void; identity: AffiliateI
   return (
     <aside className="w-64 min-h-screen flex flex-col shrink-0 bg-white" style={{ borderRight: '1px solid #f1f5f9' }}>
       <div className="p-5" style={{ borderBottom: '1px solid #f1f5f9' }}>
-        <Link href="/affiliate/dashboard" onClick={onNav} className="flex flex-col gap-2">
-          <BrandLogo variant="full" width={138} />
-          <p style={{ color: '#10b981', fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>{name}</p>
+        <Link href="/affiliate/dashboard" onClick={onNav} className="flex items-center gap-2.5">
+          <BrandLogo width={32} />
+          <div className="flex flex-col leading-none">
+            <span className="font-semibold text-sm text-slate-800">Ride Prestige</span>
+            <p style={{ color: '#10b981', fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>{name}</p>
+          </div>
         </Link>
       </div>
       <Suspense fallback={<div className="flex-1" />}><AffNavLinks onNav={onNav} /></Suspense>
@@ -93,7 +96,7 @@ function AffiliateLayoutInner({ children }: { children: React.ReactNode }) {
       {open && <div className="fixed inset-0 z-50 lg:hidden"><div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} /><div className="absolute left-0 top-0 bottom-0 w-64"><Sidebar onNav={() => setOpen(false)} identity={identity} /></div></div>}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-100">
-          <div className="flex items-center gap-2"><BrandLogo variant="full" width={112} /><span className="font-bold text-sm text-slate-800">Affiliate</span></div>
+          <div className="flex items-center gap-2"><BrandLogo width={24} /><span className="font-bold text-sm text-slate-800">Affiliate</span></div>
           <button onClick={() => setOpen(!open)} className="text-slate-600">{open ? <X size={20} /> : <Menu size={20} />}</button>
         </header>
         <main className="flex-1 p-4 lg:p-6 overflow-auto">{children}</main>
