@@ -4,11 +4,12 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Car, ChevronRight, CircleUserRound, History, LayoutDashboard, LogOut,
+  ChevronRight, History, LayoutDashboard, LogOut,
   Menu, Navigation, TrendingUp, X,
   ShieldCheck,
 } from 'lucide-react';
 import { driverApi } from '@/lib/api-client';
+import BrandLogo from '@/components/common/BrandLogo';
 
 interface DriverIdentity {
   fullName: string;
@@ -77,8 +78,8 @@ function Sidebar({ profile, onNav }: { profile: DriverIdentity | null; onNav?: (
   return (
     <aside className="w-64 min-h-screen flex flex-col shrink-0 bg-white border-r border-slate-100">
       <div className="p-5 border-b border-slate-100">
-        <Link href="/driver/dashboard" onClick={onNav} className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-700"><Car size={17} className="text-white" /></div>
+        <Link href="/driver/dashboard" onClick={onNav} className="flex flex-col gap-2">
+          <BrandLogo variant="full" width={138} />
           <div className="min-w-0">
             <p className="font-bold text-slate-800 text-sm">Driver Portal</p>
             <p className="text-blue-600 text-[9px] font-bold tracking-widest uppercase truncate">{company}</p>
@@ -113,7 +114,7 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
       {open && <div className="fixed inset-0 z-50 lg:hidden"><div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} /><div className="absolute left-0 top-0 bottom-0 w-64"><Sidebar profile={profile} onNav={() => setOpen(false)} /></div></div>}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-100">
-          <div className="flex items-center gap-2"><CircleUserRound size={17} className="text-blue-600" /><div><p className="font-bold text-sm text-slate-800">{profile?.fullName || 'Driver Portal'}</p><p className="text-[10px] text-slate-400">{profile?.email}</p></div></div>
+          <div className="flex items-center gap-2"><BrandLogo variant="mark" width={28} /><div><p className="font-bold text-sm text-slate-800">{profile?.fullName || 'Driver Portal'}</p><p className="text-[10px] text-slate-400">{profile?.email}</p></div></div>
           <button onClick={() => setOpen(!open)} className="text-slate-600">{open ? <X size={20} /> : <Menu size={20} />}</button>
         </header>
         <main className="flex-1 p-4 lg:p-6 overflow-auto">{children}</main>

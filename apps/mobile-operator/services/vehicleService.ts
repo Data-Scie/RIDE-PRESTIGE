@@ -7,8 +7,10 @@ export const vehicleService = {
     return r.data;
   },
 
-  async getAvailableVehicles(_affiliateId: string): Promise<Vehicle[]> {
-    const r = await api.get<{ success: boolean; data: Vehicle[] }>('/api/affiliate/vehicles?status=available');
+  async getAvailableVehicles(_affiliateId: string, jobId?: string): Promise<Vehicle[]> {
+    const qs = new URLSearchParams({ status: 'available' });
+    if (jobId) qs.set('jobId', jobId);
+    const r = await api.get<{ success: boolean; data: Vehicle[] }>(`/api/affiliate/vehicles?${qs.toString()}`);
     return r.data;
   },
 

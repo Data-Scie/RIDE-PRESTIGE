@@ -26,8 +26,9 @@ export default function DriverDashboard() {
     driverService.getDashboardStats(driver?.id ?? '').then(setStats);
   }, [driver?.id]);
 
-  const isIndependent = user?.role === 'independentDriver';
-  const isAffiliate = user?.role === 'affiliateDriver';
+  const driverType = driver?.driverType ?? user?.role;
+  const isIndependent = driverType === 'independentDriver';
+  const isAffiliate = driverType === 'affiliateDriver';
 
   return (
     <View style={styles.screen}>

@@ -50,6 +50,7 @@ async function main() {
   let jobId;
   let reference;
   let vehicleId;
+  let ineligibleVehicleId;
   let independentVehicleId;
 
   try {
@@ -85,6 +86,28 @@ async function main() {
       },
     });
     vehicleId = testVehicle.id;
+    const ineligibleVehicle = await prisma.fleetVehicle.create({
+      data: {
+        id: `fv-ineligible-${suffix}`,
+        make: 'Volvo',
+        model: 'Coach',
+        year: 2025,
+        registration: `COA${String(suffix).slice(-7)}`,
+        vehicleType: 'Coach',
+        vehicleCategory: 'coaches',
+        colour: 'White',
+        passengerCapacity: 48,
+        luggageCapacity: 40,
+        motExpiry: '2027-06-14',
+        insuranceExpiry: '2027-06-14',
+        phvLicenceExpiry: '2027-06-14',
+        status: 'available',
+        affiliateId: affiliate.id,
+        isApproved: true,
+        approvalStatus: 'approved',
+      },
+    });
+    ineligibleVehicleId = ineligibleVehicle.id;
 
     const affiliateApplication = await request('/api/auth/register/driver', {
       method: 'POST',
@@ -232,6 +255,14 @@ async function main() {
     assert(independentJobs.data.some(job => job.jobId === jobId), 'New booking missing from independent driver job pool');
     await request('/api/driver/jobs/available', { token: affiliateDriverToken, expectedStatus: 403 });
 
+    const [eligibleDrivers, eligibleVehicles] = await Promise.all([
+      request(`/api/affiliate/drivers?status=available&jobId=${jobId}`, { token: affiliateToken }),
+      request(`/api/affiliate/vehicles?status=available&jobId=${jobId}`, { token: affiliateToken }),
+    ]);
+    assert(eligibleDrivers.data.some(driver => driver.id === affiliateDriverId), 'Eligible affiliate driver missing from job-specific allocation list');
+    assert(eligibleVehicles.data.some(vehicle => vehicle.id === vehicleId), 'Eligible affiliate vehicle missing from job-specific allocation list');
+    assert(!eligibleVehicles.data.some(vehicle => vehicle.id === ineligibleVehicleId), 'Wrong-category affiliate vehicle leaked into job-specific allocation list');
+
     await request(`/api/affiliate/jobs/${jobId}/accept`, { method: 'POST', token: affiliateToken });
     await request(`/api/affiliate/jobs/${jobId}/assign-driver`, {
       method: 'POST',
@@ -273,6 +304,12 @@ async function main() {
       body: { email: independentEmail, password, role: 'driver' },
       expectedStatus: 403,
     });
+    await request(`/api/admin/drivers/${affiliateDriverId}/suspend`, { method: 'PUT', token: adminToken, body: {} });
+    await request('/api/auth/login', {
+      method: 'POST',
+      body: { email: affiliateEmail, password, role: 'driver' },
+      expectedStatus: 403,
+    });
 
     console.log(JSON.stringify({
       success: true,
@@ -288,7 +325,8 @@ async function main() {
         'affiliate driver request visibility',
         'operations in-progress visibility',
         'admin in-progress visibility',
-        'driver suspension',
+        'operations driver suspension',
+        'admin driver suspension',
       ],
     }));
   } finally {
@@ -302,6 +340,7 @@ async function main() {
     if (jobId) await prisma.job.deleteMany({ where: { id: jobId } });
     if (bookingId) await prisma.booking.deleteMany({ where: { id: bookingId } });
     if (vehicleId) await prisma.fleetVehicle.deleteMany({ where: { id: vehicleId } });
+    if (ineligibleVehicleId) await prisma.fleetVehicle.deleteMany({ where: { id: ineligibleVehicleId } });
     if (independentVehicleId) await prisma.fleetVehicle.deleteMany({ where: { id: independentVehicleId } });
     if (affiliateDriverId || independentDriverId || rejectedDriverId) {
       await prisma.notification.deleteMany({

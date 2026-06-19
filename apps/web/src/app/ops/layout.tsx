@@ -62,9 +62,9 @@ function Sidebar({ onNav }: { onNav?: () => void }) {
   return (
     <aside className="w-64 min-h-screen flex flex-col shrink-0" style={{ background: '#0f172a', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
       <div className="p-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <Link href="/ops/dashboard" onClick={onNav} className="flex items-center gap-2.5">
-          <BrandLogo variant="mark" width={38} className="shrink-0" />
-          <div><p className="font-bold text-white text-sm" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>Ride Prestige</p><p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#3b82f6', fontSize: '7px' }}>Operations Portal</p></div>
+        <Link href="/ops/dashboard" onClick={onNav} className="flex flex-col gap-2">
+          <BrandLogo variant="full" width={138} />
+          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#3b82f6', fontSize: '7px' }}>Operations Portal</p>
         </Link>
       </div>
       <Suspense fallback={<div className="flex-1" />}><OpsNavLinks /></Suspense>

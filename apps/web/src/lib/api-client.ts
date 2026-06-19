@@ -37,6 +37,13 @@ async function request<T>(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
+    if (res.status === 401 && typeof window !== 'undefined') {
+      deleteCookie(`rp_${role}_jwt`);
+      const loginPath = role === 'customer' ? '/login' : `/${role}/login`;
+      if (!window.location.pathname.startsWith(loginPath)) {
+        window.location.href = loginPath;
+      }
+    }
     throw Object.assign(new Error(err.message || 'Request failed'), { status: res.status });
   }
   return res.json() as Promise<T>;

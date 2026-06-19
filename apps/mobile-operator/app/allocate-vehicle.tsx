@@ -18,11 +18,11 @@ export default function AllocateVehicleScreen() {
   const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
-    vehicleService.getAvailableVehicles(affiliate?.id ?? 'aff_001').then((data) => {
-      setVehicles(data);
-      setLoading(false);
-    });
-  }, [affiliate?.id]);
+    vehicleService.getAvailableVehicles(affiliate?.id ?? 'aff_001', jobId)
+      .then(setVehicles)
+      .catch((error) => Alert.alert('Could not load vehicles', error instanceof Error ? error.message : 'Please try again.'))
+      .finally(() => setLoading(false));
+  }, [affiliate?.id, jobId]);
 
   const handleAssign = async (vehicleId: string, vehicleName: string) => {
     Alert.alert(
@@ -33,11 +33,16 @@ export default function AllocateVehicleScreen() {
         {
           text: 'Assign', onPress: async () => {
             setAssigning(true);
-            await jobService.assignVehicle(jobId, vehicleId);
-            setAssigning(false);
-            Alert.alert('Vehicle Assigned', `${vehicleName} has been assigned. The driver has been notified.`, [
-              { text: 'Done', onPress: () => router.push('/(affiliate)/accepted-jobs') },
-            ]);
+            try {
+              await jobService.assignVehicle(jobId, vehicleId);
+              Alert.alert('Vehicle Assigned', `${vehicleName} has been assigned. The driver has been notified.`, [
+                { text: 'Done', onPress: () => router.push('/(affiliate)/accepted-jobs') },
+              ]);
+            } catch (error) {
+              Alert.alert('Assignment Failed', error instanceof Error ? error.message : 'Please try another vehicle.');
+            } finally {
+              setAssigning(false);
+            }
           },
         },
       ],

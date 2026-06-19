@@ -10,8 +10,8 @@ interface Job {
   yourEarnings: number; vehicleCategory: string;
   passengerCount: number; distance?: string; dateTime: string;
 }
-interface Driver  { id: string; fullName: string; status: string; }
-interface Vehicle { id: string; make: string; model: string; registration: string; status: string; }
+interface Driver  { id: string; fullName: string; status: string; documentsStatus?: string; applicationStatus?: string; isApproved?: boolean; }
+interface Vehicle { id: string; make: string; model: string; registration: string; status: string; vehicleCategory?: string; passengerCapacity?: number; luggageCapacity?: number; isApproved?: boolean; approvalStatus?: string; }
 
 export default function AffiliateRidesPage() {
   const [pending, setPending]   = useState<Job[]>([]);
@@ -24,6 +24,7 @@ export default function AffiliateRidesPage() {
   const [selectedDriver, setSelectedDriver]   = useState('');
   const [selectedVehicle, setSelectedVehicle] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [assigningError, setAssigningError] = useState('');
 
   const load = () => Promise.all([
       affiliateApi.get<{ success: boolean; data: Job[] }>('/api/affiliate/jobs/new'),
@@ -41,7 +42,22 @@ export default function AffiliateRidesPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const acceptRide   = (id: string) => { setAssignModal(id); };
+  const acceptRide = async (id: string) => {
+    setAssignModal(id);
+    setSelectedDriver('');
+    setSelectedVehicle('');
+    setAssigningError('');
+    try {
+      const [d, v] = await Promise.all([
+        affiliateApi.get<{ success: boolean; data: Driver[] }>(`/api/affiliate/drivers?status=available&jobId=${encodeURIComponent(id)}`),
+        affiliateApi.get<{ success: boolean; data: Vehicle[] }>(`/api/affiliate/vehicles?status=available&jobId=${encodeURIComponent(id)}`),
+      ]);
+      setDrivers(d.data);
+      setVehicles(v.data);
+    } catch (e) {
+      setAssigningError(e instanceof Error ? e.message : 'Could not load eligible drivers and vehicles');
+    }
+  };
   const declineRide  = async (id: string) => {
     await affiliateApi.post(`/api/affiliate/jobs/${id}/reject`, {});
     setPending(prev => prev.filter(r => r.id !== id));
@@ -49,12 +65,15 @@ export default function AffiliateRidesPage() {
   const confirmAssign = async () => {
     if (!selectedDriver || !selectedVehicle || !assignModal) return;
     setSubmitting(true);
+    setAssigningError('');
     try {
       await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/accept`, {});
       await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/assign-driver`, { driverId: selectedDriver });
       await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/assign-vehicle`, { vehicleId: selectedVehicle });
       await load();
       setAssignModal(null); setSelectedDriver(''); setSelectedVehicle('');
+    } catch (e) {
+      setAssigningError(e instanceof Error ? e.message : 'Assignment failed');
     } finally { setSubmitting(false); }
   };
 
@@ -145,24 +164,27 @@ export default function AffiliateRidesPage() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6">
             <h3 className="font-bold text-slate-800 text-lg mb-5" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>Assign Driver &amp; Vehicle</h3>
+            {assigningError && <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">{assigningError}</div>}
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Select Driver *</label>
                 <select value={selectedDriver} onChange={e => setSelectedDriver(e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400">
                   <option value="">Choose a driver…</option>
-                  {drivers.filter(d => d.status === 'available').map(d => (
+                  {drivers.map(d => (
                     <option key={d.id} value={d.id}>{d.fullName}</option>
                   ))}
                 </select>
+                {drivers.length === 0 && <p className="mt-2 text-xs text-amber-600">No available approved drivers with current documents for this ride.</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Select Vehicle *</label>
                 <select value={selectedVehicle} onChange={e => setSelectedVehicle(e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400">
                   <option value="">Choose a vehicle…</option>
-                  {vehicles.filter(v => v.status === 'available').map(v => (
+                  {vehicles.map(v => (
                     <option key={v.id} value={v.id}>{v.make} {v.model} · {v.registration}</option>
                   ))}
                 </select>
+                {vehicles.length === 0 && <p className="mt-2 text-xs text-amber-600">No approved available vehicles match this ride category, capacity, and compliance requirements.</p>}
               </div>
             </div>
             <div className="flex gap-3 mt-6">

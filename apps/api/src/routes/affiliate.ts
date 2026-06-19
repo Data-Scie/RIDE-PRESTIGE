@@ -1,16 +1,47 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, RequestHandler } from 'express';
 import bcrypt from 'bcryptjs';
+import multer from 'multer';
 import { v4 as uuid } from 'uuid';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
+import { storeDocumentFile, validateDocumentFile } from '../lib/documentUpload';
 import { pushNotification } from '../services/notificationService';
 import { isDriverDocumentEligible, isVehicleEligible } from '../services/dispatchService';
 import type { Stop } from '../types';
 
 const router = Router();
 router.use(authenticate, requireRole('affiliate', 'admin', 'ops'));
+const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+const uploadSingleDocument = documentUpload.single('document') as unknown as RequestHandler;
 
 const getAffId = (req: Request): string => req.user!.affiliateId ?? req.user!.id;
+const ACTIVE_DRIVER_JOB_STATUSES = ['driver_assigned', 'vehicle_assigned', 'driver_accepted', 'on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress'];
+const AFFILIATE_DOCUMENTS = [
+  { type: 'operator_licence', label: 'Operator Licence' },
+  { type: 'insurance', label: 'Insurance Document' },
+  { type: 'company_cert', label: 'Company Certificate' },
+  { type: 'proof_of_address', label: 'Proof of Address' },
+];
+
+function isDocumentUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+async function ensureAffiliateDocuments(affiliateId: string) {
+  await prisma.affiliateDocument.createMany({
+    data: AFFILIATE_DOCUMENTS.map(document => ({
+      id: `adoc-${uuid()}`,
+      affiliateId,
+      type: document.type,
+      label: document.label,
+    })),
+    skipDuplicates: true,
+  });
+  return prisma.affiliateDocument.findMany({
+    where: { affiliateId },
+    orderBy: { label: 'asc' },
+  });
+}
 
 function shapeJob(j: {
   id: string; bookingRef: string; bookingId: string | null; customerId: string | null;
@@ -366,6 +397,19 @@ router.post('/jobs/:id/assign-driver', async (req: Request, res: Response) => {
     if (driver.status !== 'available' && job.assignedDriverId !== driverId) {
       res.status(409).json({ success: false, message: 'Driver is not available' }); return;
     }
+    if (job.assignedDriverId !== driverId) {
+      const activeJob = await prisma.job.findFirst({
+        where: {
+          assignedDriverId: driverId,
+          id: { not: job.id },
+          status: { in: ACTIVE_DRIVER_JOB_STATUSES },
+        },
+        select: { bookingRef: true },
+      });
+      if (activeJob) {
+        res.status(409).json({ success: false, message: `Driver already has active ride ${activeJob.bookingRef}` }); return;
+      }
+    }
     const nextStatus = job.assignedVehicleId ? 'vehicle_assigned' : 'driver_assigned';
     const updated = await prisma.$transaction(async tx => {
       const updatedJob = await tx.job.update({ where: { id: job.id }, data: { assignedDriverId: driverId, status: nextStatus } });
@@ -455,13 +499,32 @@ router.post('/jobs/:id/assign-vehicle', async (req: Request, res: Response) => {
 router.get('/drivers', async (req: Request, res: Response) => {
   try {
     const affId = getAffId(req);
-    const { status } = req.query as { status?: string };
+    const { status, jobId } = req.query as { status?: string; jobId?: string };
+    const job = jobId
+      ? await prisma.job.findFirst({
+          where: {
+            id: jobId,
+            OR: [
+              { affiliateId: affId },
+              { status: 'awaiting_affiliate', affiliateId: null },
+            ],
+          },
+        })
+      : null;
     const drivers = await prisma.driver.findMany({
       where: { affiliateId: affId, ...(status ? { status } : {}) },
       include: { documents: true },
       orderBy: { joinedDate: 'desc' },
     });
-    const list = drivers.map(({ passwordHash: _, ...d }) => d);
+    const eligibleDrivers = jobId
+      ? (job ? drivers.filter(driver =>
+          driver.isApproved
+          && driver.applicationStatus === 'approved'
+          && driver.status === 'available'
+          && driver.documentsStatus === 'approved'
+          && isDriverDocumentEligible(driver.documents)) : [])
+      : drivers;
+    const list = eligibleDrivers.map(({ passwordHash: _, ...d }) => d);
     res.json({ success: true, data: list, total: list.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
@@ -626,10 +689,22 @@ router.put('/drivers/:id/remove', async (req: Request, res: Response) => {
 router.get('/vehicles', async (req: Request, res: Response) => {
   try {
     const affId = getAffId(req);
-    const { status } = req.query as { status?: string };
-    const list = await prisma.fleetVehicle.findMany({
+    const { status, jobId } = req.query as { status?: string; jobId?: string };
+    const vehicles = await prisma.fleetVehicle.findMany({
       where: { affiliateId: affId, ...(status ? { status } : {}) },
     });
+    const job = jobId
+      ? await prisma.job.findFirst({
+          where: {
+            id: jobId,
+            OR: [
+              { affiliateId: affId },
+              { status: 'awaiting_affiliate', affiliateId: null },
+            ],
+          },
+        })
+      : null;
+    const list = jobId ? (job ? vehicles.filter(vehicle => isVehicleEligible(vehicle, job)) : []) : vehicles;
     res.json({ success: true, data: list, total: list.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
@@ -979,15 +1054,68 @@ router.get('/documents', async (req: Request, res: Response) => {
     const affId = getAffId(req);
     const aff = await prisma.affiliate.findUnique({ where: { id: affId } });
     if (!aff) { res.status(404).json({ success: false, message: 'Affiliate not found' }); return; }
-    const docs = [
-      { id: 'adoc_1', type: 'operator_licence', label: 'Operator Licence',    status: aff.isApproved ? 'approved' : 'pending' },
-      { id: 'adoc_2', type: 'insurance',         label: 'Insurance Document',  status: aff.isApproved ? 'approved' : 'pending' },
-      { id: 'adoc_3', type: 'company_cert',      label: 'Company Certificate', status: aff.isApproved ? 'approved' : 'pending' },
-      { id: 'adoc_4', type: 'proof_of_address',  label: 'Proof of Address',    status: aff.isApproved ? 'approved' : 'pending' },
-    ];
+    const docs = await ensureAffiliateDocuments(affId);
     res.json({ success: true, data: docs });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/documents/:id', async (req: Request, res: Response) => {
+  try {
+    const affId = getAffId(req);
+    const { fileUrl, expiryDate } = req.body as { fileUrl?: string; expiryDate?: string };
+    const expiry = expiryDate ? new Date(`${expiryDate}T23:59:59.999Z`) : null;
+    if (!fileUrl || !isDocumentUrl(fileUrl) || !expiryDate || !expiry || expiry.getTime() < Date.now()) {
+      res.status(400).json({ success: false, message: 'A document URL and current expiry date are required' });
+      return;
+    }
+    const document = await prisma.affiliateDocument.findFirst({ where: { id: req.params.id, affiliateId: affId } });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    const updated = await prisma.affiliateDocument.update({
+      where: { id: document.id },
+      data: { fileUrl, expiryDate, status: 'pending', uploadedAt: new Date(), rejectionReason: null },
+    });
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.post('/documents/:id/upload', uploadSingleDocument, async (req: Request, res: Response) => {
+  try {
+    const affId = getAffId(req);
+    const { expiryDate } = req.body as { expiryDate?: string };
+    const expiry = expiryDate ? new Date(`${expiryDate}T23:59:59.999Z`) : null;
+    if (!expiryDate || !expiry || expiry.getTime() < Date.now()) {
+      res.status(400).json({ success: false, message: 'A current expiry date is required' });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ success: false, message: 'Document file is required' });
+      return;
+    }
+    const validationError = validateDocumentFile(req.file);
+    if (validationError) {
+      res.status(400).json({ success: false, message: validationError });
+      return;
+    }
+    const document = await prisma.affiliateDocument.findFirst({ where: { id: req.params.id, affiliateId: affId } });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    const fileUrl = await storeDocumentFile(req, req.file, affId, document.type);
+    const updated = await prisma.affiliateDocument.update({
+      where: { id: document.id },
+      data: { fileUrl, expiryDate, status: 'pending', uploadedAt: new Date(), rejectionReason: null },
+    });
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Document upload failed' });
   }
 });
 

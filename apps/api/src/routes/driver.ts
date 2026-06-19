@@ -1,7 +1,9 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, RequestHandler } from 'express';
 import { v4 as uuid } from 'uuid';
+import multer from 'multer';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
+import { storeDocumentFile, validateDocumentFile } from '../lib/documentUpload';
 import { pushNotification } from '../services/notificationService';
 import {
   claimIndependentRide,
@@ -13,8 +15,24 @@ import type { JobStatus, Stop } from '../types';
 
 const router = Router();
 router.use(authenticate, requireRole('driver', 'admin', 'ops', 'affiliate'));
+const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+const uploadSingleDocument = documentUpload.single('document') as unknown as RequestHandler;
 
 const getDrvId = (req: Request): string => req.user!.id;
+const ACTIVE_JOB_STATUSES = ['driver_assigned', 'vehicle_assigned', 'driver_accepted', 'on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress'];
+const ACTIVE_JOB_PRIORITY: Record<string, number> = {
+  in_progress: 0,
+  passenger_onboard: 1,
+  arrived_pickup: 2,
+  on_route: 3,
+  driver_accepted: 4,
+  vehicle_assigned: 5,
+  driver_assigned: 6,
+};
+
+function isDocumentUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
 
 function shapeJob(j: {
   id: string; bookingRef: string; bookingId: string | null; customerId: string | null;
@@ -53,6 +71,14 @@ function shapeJob(j: {
   };
 }
 
+function pickCurrentJob<T extends { status: string; dateTime: Date; updatedAt: Date }>(jobs: T[]): T | undefined {
+  return [...jobs].sort((a, b) => {
+    const priority = (ACTIVE_JOB_PRIORITY[a.status] ?? 99) - (ACTIVE_JOB_PRIORITY[b.status] ?? 99);
+    if (priority !== 0) return priority;
+    return Math.max(b.dateTime.getTime(), b.updatedAt.getTime()) - Math.max(a.dateTime.getTime(), a.updatedAt.getTime());
+  })[0];
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 /**
@@ -72,14 +98,14 @@ router.get('/dashboard', async (req: Request, res: Response) => {
     const driver = await prisma.driver.findUnique({ where: { id: drvId } });
     if (!driver) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
     const [myJobs, myEarnings] = await Promise.all([
-      prisma.job.findMany({ where: { assignedDriverId: drvId } }),
+      prisma.job.findMany({ where: { assignedDriverId: drvId }, orderBy: { dateTime: 'desc' } }),
       driver.driverType === 'independentDriver'
         ? prisma.earningEntry.findMany({ where: { entityId: drvId, entityType: 'driver' } })
         : Promise.resolve([]),
     ]);
     const today = new Date().toISOString().slice(0, 10);
     const thisWeekStart = new Date(); thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay());
-    const currentJob = myJobs.find(j => ['driver_assigned', 'vehicle_assigned', 'driver_accepted', 'on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress'].includes(j.status));
+    const currentJob = pickCurrentJob(myJobs.filter(j => ACTIVE_JOB_STATUSES.includes(j.status)));
     const currentVehicle = currentJob?.assignedVehicleId
       ? await prisma.fleetVehicle.findUnique({ where: { id: currentJob.assignedVehicleId } })
       : null;
@@ -189,16 +215,18 @@ router.get('/jobs/my', async (req: Request, res: Response) => {
 router.get('/jobs/current', async (req: Request, res: Response) => {
   try {
     const drvId = getDrvId(req);
-    const current = await prisma.job.findFirst({
+    const currentJobs = await prisma.job.findMany({
       where: {
         assignedDriverId: drvId,
-        status: { in: ['driver_assigned', 'vehicle_assigned', 'driver_accepted', 'on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress'] },
+        status: { in: ACTIVE_JOB_STATUSES },
       },
+      orderBy: { dateTime: 'desc' },
     });
-    const vehicle = current?.assignedVehicleId
-      ? await prisma.fleetVehicle.findUnique({ where: { id: current.assignedVehicleId } })
+    const selected = pickCurrentJob(currentJobs);
+    const vehicle = selected?.assignedVehicleId
+      ? await prisma.fleetVehicle.findUnique({ where: { id: selected.assignedVehicleId } })
       : null;
-    res.json({ success: true, data: current ? { ...shapeJob(current), vehicle } : null });
+    res.json({ success: true, data: selected ? { ...shapeJob(selected), vehicle } : null });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }
@@ -618,8 +646,8 @@ router.put('/documents/:id', async (req: Request, res: Response) => {
   try {
     const { fileUrl, expiryDate } = req.body as { fileUrl?: string; expiryDate?: string };
     const expiry = expiryDate ? new Date(`${expiryDate}T23:59:59.999Z`) : null;
-    if (!fileUrl || !fileUrl.startsWith('https://') || !expiryDate || !expiry || expiry.getTime() < Date.now()) {
-      res.status(400).json({ success: false, message: 'A secure HTTPS document URL and current expiry date are required' });
+    if (!fileUrl || !isDocumentUrl(fileUrl) || !expiryDate || !expiry || expiry.getTime() < Date.now()) {
+      res.status(400).json({ success: false, message: 'A document URL and current expiry date are required' });
       return;
     }
     const document = await prisma.driverDocument.findFirst({
@@ -640,6 +668,46 @@ router.put('/documents/:id', async (req: Request, res: Response) => {
     res.json({ success: true, data: updated });
   } catch {
     res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.post('/documents/:id/upload', uploadSingleDocument, async (req: Request, res: Response) => {
+  try {
+    const drvId = getDrvId(req);
+    const { expiryDate } = req.body as { expiryDate?: string };
+    const expiry = expiryDate ? new Date(`${expiryDate}T23:59:59.999Z`) : null;
+    if (!expiryDate || !expiry || expiry.getTime() < Date.now()) {
+      res.status(400).json({ success: false, message: 'A current expiry date is required' });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ success: false, message: 'Document file is required' });
+      return;
+    }
+    const validationError = validateDocumentFile(req.file);
+    if (validationError) {
+      res.status(400).json({ success: false, message: validationError });
+      return;
+    }
+    const document = await prisma.driverDocument.findFirst({
+      where: { id: req.params.id, driverId: drvId },
+    });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    const fileUrl = await storeDocumentFile(req, req.file, drvId, document.type);
+    const updated = await prisma.driverDocument.update({
+      where: { id: document.id },
+      data: { fileUrl, expiryDate, status: 'pending', uploadedAt: new Date(), rejectionReason: null },
+    });
+    await prisma.driver.update({
+      where: { id: drvId },
+      data: { documentsStatus: 'pending', status: 'offline' },
+    });
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Document upload failed' });
   }
 });
 

@@ -12,16 +12,34 @@ const hardcodedDefaults = {
 
 export type PricingConfig = typeof hardcodedDefaults;
 
+function positiveOrDefault(value: number, fallback: number): number {
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 export async function getPricingConfig(): Promise<PricingConfig> {
   const p = await prisma.pricingConfig.findUnique({ where: { id: 'default' } });
   if (!p) return hardcodedDefaults;
   return {
-    prestige: { ratePerMile: p.prestigeRatePerMile, hourlyRate: p.prestigeHourlyRate },
-    minibus:  { ratePerMile: p.minibusRatePerMile, rate16Seater: p.minibusRate16Seater, rate24Seater: p.minibusRate24Seater, rate32Seater: p.minibusRate32Seater },
-    coaches:  { ratePerMile: p.coachesRatePerMile, hourlyRate: p.coachesHourlyRate },
-    taxi:     { ratePerMile: p.taxiRatePerMile, minimumFare: p.taxiMinimumFare },
-    commissionPercentage: p.commissionPercentage,
-    driverPayoutPercentage: p.driverPayoutPercentage,
+    prestige: {
+      ratePerMile: positiveOrDefault(p.prestigeRatePerMile, hardcodedDefaults.prestige.ratePerMile),
+      hourlyRate: positiveOrDefault(p.prestigeHourlyRate, hardcodedDefaults.prestige.hourlyRate),
+    },
+    minibus: {
+      ratePerMile: positiveOrDefault(p.minibusRatePerMile, hardcodedDefaults.minibus.ratePerMile),
+      rate16Seater: positiveOrDefault(p.minibusRate16Seater, hardcodedDefaults.minibus.rate16Seater),
+      rate24Seater: positiveOrDefault(p.minibusRate24Seater, hardcodedDefaults.minibus.rate24Seater),
+      rate32Seater: positiveOrDefault(p.minibusRate32Seater, hardcodedDefaults.minibus.rate32Seater),
+    },
+    coaches: {
+      ratePerMile: positiveOrDefault(p.coachesRatePerMile, hardcodedDefaults.coaches.ratePerMile),
+      hourlyRate: positiveOrDefault(p.coachesHourlyRate, hardcodedDefaults.coaches.hourlyRate),
+    },
+    taxi: {
+      ratePerMile: positiveOrDefault(p.taxiRatePerMile, hardcodedDefaults.taxi.ratePerMile),
+      minimumFare: positiveOrDefault(p.taxiMinimumFare, hardcodedDefaults.taxi.minimumFare),
+    },
+    commissionPercentage: positiveOrDefault(p.commissionPercentage, hardcodedDefaults.commissionPercentage),
+    driverPayoutPercentage: positiveOrDefault(p.driverPayoutPercentage, hardcodedDefaults.driverPayoutPercentage),
   };
 }
 

@@ -78,12 +78,9 @@ export default function AdminSidebar() {
     >
       {/* Logo */}
       <div className="p-6" style={{ borderBottom: '1px solid #f0f0f0' }}>
-        <Link href="/admin/dashboard" className="flex items-center gap-2.5">
-          <BrandLogo variant="mark" width={36} />
-          <div className="flex flex-col leading-none">
-            <span className="font-semibold text-sm" style={{ color: '#0a0f1e', fontFamily: 'Playfair Display,Georgia,serif' }}>Ride Prestige</span>
-            <span className="font-semibold uppercase" style={{ color: GOLD, fontSize: '7px', letterSpacing: '0.15em' }}>Prestige Admin Panel</span>
-          </div>
+        <Link href="/admin/dashboard" className="flex flex-col gap-2">
+          <BrandLogo variant="full" width={138} />
+          <span className="font-semibold uppercase" style={{ color: GOLD, fontSize: '7px', letterSpacing: '0.15em' }}>Prestige Admin Panel</span>
         </Link>
       </div>
 

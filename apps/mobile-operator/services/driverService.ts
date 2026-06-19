@@ -7,8 +7,10 @@ export const driverService = {
     return r.data;
   },
 
-  async getAvailableDrivers(_affiliateId: string): Promise<Driver[]> {
-    const r = await api.get<{ success: boolean; data: Driver[] }>('/api/affiliate/drivers?status=available');
+  async getAvailableDrivers(_affiliateId: string, jobId?: string): Promise<Driver[]> {
+    const qs = new URLSearchParams({ status: 'available' });
+    if (jobId) qs.set('jobId', jobId);
+    const r = await api.get<{ success: boolean; data: Driver[] }>(`/api/affiliate/drivers?${qs.toString()}`);
     return r.data;
   },
 

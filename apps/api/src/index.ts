@@ -56,6 +56,7 @@ app.use(cors({ origin: '*', methods: ['GET','POST','PUT','DELETE','PATCH','OPTIO
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
+app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
 
@@ -144,8 +145,8 @@ app.get('/api-spec.json', (_req, res) => res.json(swaggerSpec));
 
 app.use('/api/auth',      authRouter);
 app.use('/api/public',    publicRouter);
-app.use('/api/admin',     adminRouter);
 app.use('/api/admin/finance', financeRouter);
+app.use('/api/admin',     adminRouter);
 app.use('/api/ops',       opsRouter);
 app.use('/api/affiliate', affiliateRouter);
 app.use('/api/driver',    driverRouter);

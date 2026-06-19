@@ -18,11 +18,11 @@ export default function AllocateDriverScreen() {
   const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
-    driverService.getAvailableDrivers(affiliate?.id ?? 'aff_001').then((data) => {
-      setDrivers(data);
-      setLoading(false);
-    });
-  }, [affiliate?.id]);
+    driverService.getAvailableDrivers(affiliate?.id ?? 'aff_001', jobId)
+      .then(setDrivers)
+      .catch((error) => Alert.alert('Could not load drivers', error instanceof Error ? error.message : 'Please try again.'))
+      .finally(() => setLoading(false));
+  }, [affiliate?.id, jobId]);
 
   const handleAssign = async (driverId: string, driverName: string) => {
     Alert.alert(
@@ -33,15 +33,20 @@ export default function AllocateDriverScreen() {
         {
           text: 'Assign', onPress: async () => {
             setAssigning(true);
-            await jobService.assignDriver(jobId, driverId);
-            setAssigning(false);
-            Alert.alert('Driver Assigned', `${driverName} has been assigned to this job.`, [
-              {
-                text: 'Assign Vehicle', onPress: () =>
-                  router.replace({ pathname: '/allocate-vehicle', params: { jobId } }),
-              },
-              { text: 'Done', onPress: () => router.back() },
-            ]);
+            try {
+              await jobService.assignDriver(jobId, driverId);
+              Alert.alert('Driver Assigned', `${driverName} has been assigned to this job.`, [
+                {
+                  text: 'Assign Vehicle', onPress: () =>
+                    router.replace({ pathname: '/allocate-vehicle', params: { jobId } }),
+                },
+                { text: 'Done', onPress: () => router.back() },
+              ]);
+            } catch (error) {
+              Alert.alert('Assignment Failed', error instanceof Error ? error.message : 'Please try another driver.');
+            } finally {
+              setAssigning(false);
+            }
           },
         },
       ],

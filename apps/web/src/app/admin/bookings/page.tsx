@@ -18,6 +18,7 @@ interface ApiBooking {
   operationalStatus?: string | null;
   customerRating?: number | null; customerFeedback?: string | null; assignedDriverId?: string | null;
   acceptedBy?: 'driver' | 'affiliate' | null; affiliateName?: string | null; affiliateDriverName?: string | null;
+  driverName?: string | null; driverType?: string | null; assignedVehicleId?: string | null; vehicleLabel?: string | null;
 }
 
 const STATUS_OPTIONS: (BookingStatus | 'all')[] = ['all', 'pending', 'quoted', 'accepted', 'in_progress', 'rejected', 'completed', 'cancelled'];
@@ -62,8 +63,8 @@ function AdminBookingsPageInner() {
     setSaving(true);
     try {
       const r = await adminApi.put<{ success: boolean; data: ApiBooking }>(`/api/admin/bookings/${id}`, { status });
-      setBookings(prev => prev.map(b => b.id === id ? r.data : b));
-      if (selected?.id === id) setSelected(r.data);
+      setBookings(prev => prev.map(b => b.id === id ? { ...b, ...r.data } : b));
+      if (selected?.id === id) setSelected(prev => prev ? { ...prev, ...r.data } : r.data);
     } finally { setSaving(false); }
   };
 
@@ -72,8 +73,8 @@ function AdminBookingsPageInner() {
     setSaving(true);
     try {
       const r = await adminApi.put<{ success: boolean; data: ApiBooking }>(`/api/admin/bookings/${selected.id}`, { adminNotes: adminNote });
-      setBookings(prev => prev.map(b => b.id === selected.id ? r.data : b));
-      setSelected(r.data);
+      setBookings(prev => prev.map(b => b.id === selected.id ? { ...b, ...r.data } : b));
+      setSelected(prev => prev ? { ...prev, ...r.data } : r.data);
     } finally { setSaving(false); }
   };
 
@@ -102,10 +103,10 @@ function AdminBookingsPageInner() {
       <div className={`grid gap-6 ${selected ? 'lg:grid-cols-3' : 'grid-cols-1'}`}>
         <div className={`bg-white rounded-2xl border border-gray-100 overflow-hidden ${selected ? 'lg:col-span-2' : ''}`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[1180px] text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/50">
-                  {['Reference', 'Customer', 'Journey', 'Vehicle', 'Rating', 'Date', 'Status', 'Accepted by', ''].map(h => (
+                  {['Reference', 'Customer', 'Journey', 'Vehicle', 'Affiliate', 'Driver', 'Rating', 'Date', 'Status', ''].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-brand-grey uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -123,14 +124,28 @@ function AdminBookingsPageInner() {
                       <p className="text-xs truncate text-brand-black font-mono">{b.journey?.pickupPostcode ?? '?'}</p>
                       <p className="text-xs truncate text-brand-grey font-mono">→ {b.journey?.dropoffPostcode ?? '?'}</p>
                     </td>
-                    <td className="px-4 py-3 text-xs capitalize whitespace-nowrap">{getCategoryLabel(b.vehicleCategory as VehicleCategory)}</td>
+                    <td className="px-4 py-3 text-xs capitalize whitespace-nowrap">
+                      <p>{getCategoryLabel(b.vehicleCategory as VehicleCategory)}</p>
+                      {b.vehicleLabel && <p className="text-[10px] text-brand-grey normal-case max-w-36 truncate" title={b.vehicleLabel}>{b.vehicleLabel}</p>}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {b.affiliateName ? <span className="text-xs font-medium text-brand-black">{b.affiliateName}</span> : <span className="text-xs text-brand-grey">Independent / none</span>}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {b.driverName || b.affiliateDriverName ? (
+                        <div>
+                          <p className="text-xs font-medium text-brand-black">{b.driverName ?? b.affiliateDriverName}</p>
+                          {b.driverType && <p className="text-[10px] text-brand-grey">{b.driverType === 'independentDriver' ? 'Independent' : 'Affiliate driver'}</p>}
+                        </div>
+                      ) : <span className="text-xs text-brand-grey">Unassigned</span>}
+                    </td>
                     <td className="px-4 py-3"><StarRating value={b.customerRating} showValue={false} size={11} /></td>
                     <td className="px-4 py-3 text-xs text-brand-grey whitespace-nowrap">{b.journey?.date ?? 'ASAP'}</td>
                     <td className="px-4 py-3">
                       <StatusBadge status={b.status} />
                       {b.operationalStatus && b.operationalStatus !== b.status && <p className="text-[10px] text-brand-grey mt-1 capitalize">{b.operationalStatus.replace(/_/g, ' ')}</p>}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="hidden">
                       {b.acceptedBy === 'driver' && <span className="text-xs font-medium text-brand-black">Independent driver</span>}
                       {b.acceptedBy === 'affiliate' && (
                         <div>
@@ -146,7 +161,7 @@ function AdminBookingsPageInner() {
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={9} className="px-4 py-12 text-center text-brand-grey text-sm">No bookings found</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-12 text-center text-brand-grey text-sm">No bookings found</td></tr>
                 )}
               </tbody>
             </table>

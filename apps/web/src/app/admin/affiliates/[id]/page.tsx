@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Building2, Car, FileText, Star, Users } from 'lucide-react';
 import { adminApi } from '@/lib/api-client';
 
-interface DriverDocument { id: string; type: string; label: string; status: string; expiryDate?: string | null; fileUrl?: string | null; }
+interface DriverDocument { id: string; type?: string; label: string; status: string; expiryDate?: string | null; fileUrl?: string | null; rejectionReason?: string | null; }
 interface AffiliateDriver {
   id: string; fullName: string; email: string; phone: string; status: string;
   rating: number; totalJobs: number; applicationStatus: string; documents: DriverDocument[];
@@ -22,6 +22,7 @@ interface AffiliateDetail {
   createdAt: string;
   drivers: AffiliateDriver[];
   fleetVehicles: AffiliateVehicle[];
+  documents: DriverDocument[];
 }
 
 export default function AdminAffiliateDetailPage() {
@@ -30,13 +31,32 @@ export default function AdminAffiliateDetailPage() {
   const [affiliate, setAffiliate] = useState<AffiliateDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [updatingDocument, setUpdatingDocument] = useState<string | null>(null);
+
+  const load = async () => {
+    const result = await adminApi.get<{ success: boolean; data: AffiliateDetail }>(`/api/admin/affiliates/${id}`);
+    setAffiliate(result.data);
+  };
 
   useEffect(() => {
-    adminApi.get<{ success: boolean; data: AffiliateDetail }>(`/api/admin/affiliates/${id}`)
-      .then(r => setAffiliate(r.data))
+    load()
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const updateDocument = async (documentId: string, action: 'approve' | 'reject') => {
+    const reason = action === 'reject' ? window.prompt('Reason for rejection?') || 'Document was not approved' : undefined;
+    setUpdatingDocument(documentId);
+    setError('');
+    try {
+      await adminApi.put(`/api/admin/affiliates/${id}/documents/${documentId}/${action}`, { reason });
+      await load();
+    } catch (e) {
+      setError((e as Error).message || 'Could not update document');
+    } finally {
+      setUpdatingDocument(null);
+    }
+  };
 
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-400">Loading affiliate...</div>;
   if (error) return <div className="p-6 text-red-500">Error: {error}</div>;
@@ -68,6 +88,33 @@ export default function AdminAffiliateDetailPage() {
           <div><p className="text-lg font-bold flex items-center gap-1 justify-end" style={{ color: '#0a0f1e' }}><Star size={14} className="text-amber-400" />{affiliate.rating || '—'}</p><p className="text-xs text-slate-400">Rating</p></div>
           <div><p className="text-lg font-bold" style={{ color: '#0a0f1e' }}>{affiliate.totalJobs}</p><p className="text-xs text-slate-400">Total jobs</p></div>
           <div><p className="text-lg font-bold" style={{ color: '#0a0f1e' }}>£{affiliate.totalEarnings.toLocaleString()}</p><p className="text-xs text-slate-400">Earnings</p></div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #f0f0f0' }}>
+        <div className="px-6 py-4 flex items-center gap-2" style={{ borderBottom: '1px solid #f9f9f9' }}>
+          <FileText size={16} style={{ color: '#c9a84c' }} />
+          <h2 className="font-semibold" style={{ fontFamily: 'Playfair Display,Georgia,serif', color: '#0a0f1e' }}>Affiliate Documents ({affiliate.documents?.length ?? 0})</h2>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3 p-6">
+          {(affiliate.documents ?? []).map(doc => (
+            <div key={doc.id} className="p-4 rounded-xl bg-slate-50">
+              <div className="flex justify-between gap-3">
+                <div>
+                  <p className="font-medium text-sm" style={{ color: '#0a0f1e' }}>{doc.label}</p>
+                  <p className="text-xs text-slate-400 capitalize">{doc.status}{doc.expiryDate ? ` - expires ${new Date(doc.expiryDate).toLocaleDateString('en-GB')}` : ''}</p>
+                  {doc.rejectionReason && <p className="text-xs text-red-600 mt-1">{doc.rejectionReason}</p>}
+                  {doc.fileUrl && <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 mt-2 inline-block">View document</a>}
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full h-fit font-semibold capitalize ${doc.status === 'approved' ? 'bg-green-50 text-green-700' : doc.status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>{doc.status}</span>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button disabled={updatingDocument === doc.id} onClick={() => void updateDocument(doc.id, 'approve')} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>
+                <button disabled={updatingDocument === doc.id} onClick={() => void updateDocument(doc.id, 'reject')} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>
+              </div>
+            </div>
+          ))}
+          {!affiliate.documents?.length && <p className="text-sm text-slate-400">No affiliate documents submitted yet.</p>}
         </div>
       </div>
 

@@ -28,14 +28,36 @@ export default function OpsVehiclesPage() {
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
+  const [updating, setUpdating] = useState<string | null>(null);
 
   const load = () => opsApi.get<{ data: Vehicle[] }>('/api/ops/vehicles').then(result => setVehicles(result.data));
   useEffect(() => { load().catch(e => setError(e.message)); }, []);
 
   const update = async (id: string, action: 'approve' | 'reject') => {
     const reason = action === 'reject' ? window.prompt('Reason for rejection') || 'Vehicle compliance was not approved' : undefined;
-    await opsApi.put(`/api/ops/vehicles/${id}/${action}`, { reason });
-    await load();
+    setUpdating(id);
+    setError('');
+    try {
+      await opsApi.put(`/api/ops/vehicles/${id}/${action}`, { reason });
+      await load();
+    } catch (e) {
+      setError((e as Error).message || `Could not ${action} vehicle`);
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const saveCompliance = async (vehicle: Vehicle, dates: { motExpiry: string; insuranceExpiry: string; phvLicenceExpiry: string }) => {
+    setUpdating(vehicle.id);
+    setError('');
+    try {
+      await opsApi.put(`/api/ops/vehicles/${vehicle.id}`, dates);
+      await load();
+    } catch (e) {
+      setError((e as Error).message || 'Could not update vehicle compliance');
+    } finally {
+      setUpdating(null);
+    }
   };
 
   const visible = vehicles.filter(vehicle => {
@@ -79,7 +101,43 @@ export default function OpsVehiclesPage() {
 
       <div className="grid lg:grid-cols-2 gap-4">
         {visible.map(vehicle => (
-          <div key={vehicle.id} className="bg-white border border-slate-100 rounded-2xl p-5">
+          <VehicleCard key={vehicle.id} vehicle={vehicle} updating={updating === vehicle.id} onUpdate={update} onSaveCompliance={saveCompliance} />
+        ))}
+      </div>
+
+      {!visible.length && (
+        <div className="py-16 text-center">
+          <Car size={40} className="mx-auto text-slate-300 mb-3" />
+          <p className="text-slate-400">No vehicles match this filter.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function isExpired(value: string) {
+  return !value || new Date(`${value}T23:59:59Z`).getTime() < Date.now();
+}
+
+function VehicleCard({
+  vehicle,
+  updating,
+  onUpdate,
+  onSaveCompliance,
+}: {
+  vehicle: Vehicle;
+  updating: boolean;
+  onUpdate: (id: string, action: 'approve' | 'reject') => void;
+  onSaveCompliance: (vehicle: Vehicle, dates: { motExpiry: string; insuranceExpiry: string; phvLicenceExpiry: string }) => void;
+}) {
+  const hasExpiredCompliance = [vehicle.motExpiry, vehicle.insuranceExpiry, vehicle.phvLicenceExpiry].some(isExpired);
+  const [editing, setEditing] = useState(false);
+  const [motExpiry, setMotExpiry] = useState(vehicle.motExpiry || '');
+  const [insuranceExpiry, setInsuranceExpiry] = useState(vehicle.insuranceExpiry || '');
+  const [phvLicenceExpiry, setPhvLicenceExpiry] = useState(vehicle.phvLicenceExpiry || '');
+
+  return (
+    <div className="bg-white border border-slate-100 rounded-2xl p-5">
             <div className="flex justify-between gap-3">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
@@ -110,36 +168,43 @@ export default function OpsVehiclesPage() {
               <Expiry label="PHV licence" value={vehicle.phvLicenceExpiry} />
             </div>
 
+            {hasExpiredCompliance && <p className="mt-3 text-xs text-red-600">Update expired compliance dates before approving this vehicle.</p>}
             {vehicle.rejectionReason && <p className="mt-3 text-xs text-red-600">{vehicle.rejectionReason}</p>}
 
+            {editing && (
+              <div className="grid sm:grid-cols-3 gap-2 mt-4">
+                <label className="text-xs font-semibold text-slate-500">MOT<input type="date" value={motExpiry} onChange={e => setMotExpiry(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 font-normal text-slate-700" /></label>
+                <label className="text-xs font-semibold text-slate-500">Insurance<input type="date" value={insuranceExpiry} onChange={e => setInsuranceExpiry(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 font-normal text-slate-700" /></label>
+                <label className="text-xs font-semibold text-slate-500">PHV licence<input type="date" value={phvLicenceExpiry} onChange={e => setPhvLicenceExpiry(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 font-normal text-slate-700" /></label>
+              </div>
+            )}
+
             <div className="flex gap-2 mt-4">
+              <button onClick={() => setEditing(value => !value)} disabled={updating} className="px-3 py-2 rounded-lg bg-slate-50 text-slate-600 text-xs font-semibold disabled:opacity-50">
+                {editing ? 'Close dates' : 'Edit compliance'}
+              </button>
+              {editing && (
+                <button onClick={() => onSaveCompliance(vehicle, { motExpiry, insuranceExpiry, phvLicenceExpiry })} disabled={updating} className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold disabled:opacity-50">
+                  {updating ? 'Saving...' : 'Save dates'}
+                </button>
+              )}
               {vehicle.approvalStatus !== 'approved' && (
-                <button onClick={() => update(vehicle.id, 'approve')} className="px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-semibold flex items-center gap-1">
-                  <CheckCircle size={14} /> Approve
+                <button onClick={() => onUpdate(vehicle.id, 'approve')} disabled={updating || hasExpiredCompliance} className="px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-semibold flex items-center gap-1 disabled:opacity-50">
+                  <CheckCircle size={14} /> {updating ? 'Approving...' : 'Approve'}
                 </button>
               )}
               {vehicle.approvalStatus !== 'rejected' && (
-                <button onClick={() => update(vehicle.id, 'reject')} className="px-3 py-2 rounded-lg bg-red-50 text-red-600 text-xs font-semibold flex items-center gap-1">
-                  <XCircle size={14} /> Reject
+                <button onClick={() => onUpdate(vehicle.id, 'reject')} disabled={updating} className="px-3 py-2 rounded-lg bg-red-50 text-red-600 text-xs font-semibold flex items-center gap-1 disabled:opacity-50">
+                  <XCircle size={14} /> {updating ? 'Rejecting...' : 'Reject'}
                 </button>
               )}
             </div>
           </div>
-        ))}
-      </div>
-
-      {!visible.length && (
-        <div className="py-16 text-center">
-          <Car size={40} className="mx-auto text-slate-300 mb-3" />
-          <p className="text-slate-400">No vehicles match this filter.</p>
-        </div>
-      )}
-    </div>
   );
 }
 
 function Expiry({ label, value }: { label: string; value: string }) {
-  const expired = !value || new Date(`${value}T23:59:59Z`).getTime() < Date.now();
+  const expired = isExpired(value);
   return (
     <div className={`p-2 rounded-lg ${expired ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-600'}`}>
       <p className="font-semibold">{label}</p>

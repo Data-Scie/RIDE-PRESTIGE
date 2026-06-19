@@ -2,15 +2,16 @@
 import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Car, Users, History, LogOut, ChevronRight, Building2, Menu, X, Receipt } from 'lucide-react';
+import { LayoutDashboard, Car, Users, History, LogOut, ChevronRight, Building2, Menu, X, Receipt, FileCheck2 } from 'lucide-react';
 import { affiliateApi } from '@/lib/api-client';
+import BrandLogo from '@/components/common/BrandLogo';
 
 interface AffiliateIdentity { companyName: string; tradingName: string; email: string; }
 
 const NAV = [
   { label: 'Overview', items: [{ href: '/affiliate/dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
   { label: 'Rides', items: [{ href: '/affiliate/rides', label: 'Ride Requests', icon: Receipt }, { href: '/affiliate/history', label: 'Ride History', icon: History }] },
-  { label: 'My Fleet', items: [{ href: '/affiliate/drivers', label: 'My Drivers', icon: Users }, { href: '/affiliate/vehicles', label: 'My Vehicles', icon: Car }] },
+  { label: 'My Fleet', items: [{ href: '/affiliate/drivers', label: 'My Drivers', icon: Users }, { href: '/affiliate/vehicles', label: 'My Vehicles', icon: Car }, { href: '/affiliate/documents', label: 'Documents', icon: FileCheck2 }] },
 ];
 
 function AffNavLinks({ onNav }: { onNav?: () => void }) {
@@ -60,9 +61,9 @@ function Sidebar({ onNav, identity }: { onNav?: () => void; identity: AffiliateI
   return (
     <aside className="w-64 min-h-screen flex flex-col shrink-0 bg-white" style={{ borderRight: '1px solid #f1f5f9' }}>
       <div className="p-5" style={{ borderBottom: '1px solid #f1f5f9' }}>
-        <Link href="/affiliate/dashboard" onClick={onNav} className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#10b981,#059669)' }}><Building2 size={16} className="text-white" /></div>
-          <div><p className="font-bold text-slate-800 text-sm" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>Affiliate Portal</p><p style={{ color: '#10b981', fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>{name}</p></div>
+        <Link href="/affiliate/dashboard" onClick={onNav} className="flex flex-col gap-2">
+          <BrandLogo variant="full" width={138} />
+          <p style={{ color: '#10b981', fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>{name}</p>
         </Link>
       </div>
       <Suspense fallback={<div className="flex-1" />}><AffNavLinks onNav={onNav} /></Suspense>
@@ -92,7 +93,7 @@ function AffiliateLayoutInner({ children }: { children: React.ReactNode }) {
       {open && <div className="fixed inset-0 z-50 lg:hidden"><div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} /><div className="absolute left-0 top-0 bottom-0 w-64"><Sidebar onNav={() => setOpen(false)} identity={identity} /></div></div>}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-100">
-          <div className="flex items-center gap-2"><Building2 size={16} className="text-green-500" /><span className="font-bold text-sm text-slate-800">Affiliate</span></div>
+          <div className="flex items-center gap-2"><BrandLogo variant="mark" width={28} /><span className="font-bold text-sm text-slate-800">Affiliate</span></div>
           <button onClick={() => setOpen(!open)} className="text-slate-600">{open ? <X size={20} /> : <Menu size={20} />}</button>
         </header>
         <main className="flex-1 p-4 lg:p-6 overflow-auto">{children}</main>

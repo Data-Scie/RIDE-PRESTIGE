@@ -23,7 +23,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (r) setAffiliate(r.data);
       } else if (role === 'affiliateDriver' || role === 'independentDriver') {
         const r = await api.get<{ success: boolean; data: Driver }>('/api/driver/profile').catch(() => null);
-        if (r) setDriver(r.data);
+        if (r) {
+          setDriver(r.data);
+          setUser(current => current ? { ...current, role: r.data.driverType } : current);
+        }
       }
 
       // Register device push token in background — non-blocking

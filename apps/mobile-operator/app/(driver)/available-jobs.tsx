@@ -12,8 +12,9 @@ export default function AvailableJobsScreen() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const isAffiliate = user?.role === 'affiliateDriver';
-  const isIndependent = user?.role === 'independentDriver';
+  const driverType = driver?.driverType ?? user?.role;
+  const isAffiliate = driverType === 'affiliateDriver';
+  const isIndependent = driverType === 'independentDriver';
 
   const load = useCallback(async () => {
     setLoading(true);

@@ -10,6 +10,32 @@ import type { Job, JobStatus, Stop } from '../types';
 const router = Router();
 router.use(authenticate, requireRole('admin', 'ops'));
 
+const AFFILIATE_DOCUMENTS = [
+  { type: 'operator_licence', label: 'Operator Licence' },
+  { type: 'insurance', label: 'Insurance Document' },
+  { type: 'company_cert', label: 'Company Certificate' },
+  { type: 'proof_of_address', label: 'Proof of Address' },
+];
+
+async function ensureAffiliateDocuments(affiliateId: string) {
+  await prisma.affiliateDocument.createMany({
+    data: AFFILIATE_DOCUMENTS.map(document => ({
+      id: `adoc-${uuid()}`,
+      affiliateId,
+      type: document.type,
+      label: document.label,
+    })),
+    skipDuplicates: true,
+  });
+  return prisma.affiliateDocument.findMany({ where: { affiliateId }, orderBy: { label: 'asc' } });
+}
+
+function hasCurrentDocumentFile(document: { fileUrl: string | null; expiryDate: string | null }): boolean {
+  return Boolean(document.fileUrl && /^https?:\/\//i.test(document.fileUrl)
+    && document.expiryDate
+    && new Date(`${document.expiryDate}T23:59:59.999Z`).getTime() >= Date.now());
+}
+
 function shapeJob(j: {
   id: string; bookingRef: string; bookingId: string | null; customerId: string | null;
   customerName: string; customerPhone: string; customerEmail: string | null;
@@ -113,7 +139,29 @@ router.get('/rides', async (req: Request, res: Response) => {
     if (status) where.status = status;
     if (affiliateId) where.affiliateId = affiliateId;
     const jobs = await prisma.job.findMany({ where, orderBy: { dateTime: 'desc' } });
-    const list = jobs.map(shapeJob);
+    const affiliateIds = [...new Set(jobs.map(job => job.affiliateId).filter((id): id is string => Boolean(id)))];
+    const driverIds = [...new Set(jobs.map(job => job.assignedDriverId).filter((id): id is string => Boolean(id)))];
+    const vehicleIds = [...new Set(jobs.map(job => job.assignedVehicleId).filter((id): id is string => Boolean(id)))];
+    const [affiliates, drivers, vehicles] = await Promise.all([
+      prisma.affiliate.findMany({ where: { id: { in: affiliateIds } }, select: { id: true, companyName: true, tradingName: true } }),
+      prisma.driver.findMany({ where: { id: { in: driverIds } }, select: { id: true, fullName: true, driverType: true } }),
+      prisma.fleetVehicle.findMany({ where: { id: { in: vehicleIds } }, select: { id: true, make: true, model: true, registration: true } }),
+    ]);
+    const affiliateById = new Map(affiliates.map(affiliate => [affiliate.id, affiliate]));
+    const driverById = new Map(drivers.map(driver => [driver.id, driver]));
+    const vehicleById = new Map(vehicles.map(vehicle => [vehicle.id, vehicle]));
+    const list = jobs.map(job => {
+      const affiliate = job.affiliateId ? affiliateById.get(job.affiliateId) : null;
+      const driver = job.assignedDriverId ? driverById.get(job.assignedDriverId) : null;
+      const vehicle = job.assignedVehicleId ? vehicleById.get(job.assignedVehicleId) : null;
+      return {
+        ...shapeJob(job),
+        affiliateName: affiliate?.companyName ?? affiliate?.tradingName ?? null,
+        driverName: driver?.fullName ?? null,
+        driverType: driver?.driverType ?? null,
+        vehicleLabel: vehicle ? `${vehicle.registration} - ${vehicle.make} ${vehicle.model}` : null,
+      };
+    });
     res.json({ success: true, data: list, total: list.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
@@ -574,6 +622,7 @@ router.get('/affiliates/:id', async (req: Request, res: Response) => {
     const a = await prisma.affiliate.findUnique({ where: { id: req.params.id } });
     if (!a) { res.status(404).json({ success: false, message: 'Affiliate not found' }); return; }
     const { passwordHash: _, ...safe } = a;
+    const documents = await ensureAffiliateDocuments(a.id);
     const [affDrivers, affVehicles, affJobs] = await Promise.all([
       prisma.driver.findMany({ where: { affiliateId: a.id }, include: { documents: true } }),
       prisma.fleetVehicle.findMany({ where: { affiliateId: a.id } }),
@@ -585,6 +634,7 @@ router.get('/affiliates/:id', async (req: Request, res: Response) => {
       drivers: affDrivers.map(({ passwordHash: _p, ...d }) => d),
       vehicles: affVehicles,
       jobs: affJobs.map(shapeJob),
+      documents,
     });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
@@ -628,6 +678,51 @@ router.put('/affiliates/:id/suspend', async (req: Request, res: Response) => {
  *     responses:
  *       200: { description: Drivers }
  */
+router.put('/affiliates/:affiliateId/documents/:documentId/approve', async (req: Request, res: Response) => {
+  try {
+    const document = await prisma.affiliateDocument.findFirst({
+      where: { id: req.params.documentId, affiliateId: req.params.affiliateId },
+    });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    if (!hasCurrentDocumentFile(document)) {
+      res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
+      return;
+    }
+    const updated = await prisma.affiliateDocument.update({
+      where: { id: document.id },
+      data: { status: 'approved', rejectionReason: null },
+    });
+    await pushNotification(req.params.affiliateId, 'affiliate', 'Document Approved', `${document.label} has been approved.`, 'document');
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/affiliates/:affiliateId/documents/:documentId/reject', async (req: Request, res: Response) => {
+  try {
+    const { reason } = req.body as { reason?: string };
+    const document = await prisma.affiliateDocument.findFirst({
+      where: { id: req.params.documentId, affiliateId: req.params.affiliateId },
+    });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    const updated = await prisma.affiliateDocument.update({
+      where: { id: document.id },
+      data: { status: 'rejected', rejectionReason: reason || 'Document was not approved' },
+    });
+    await pushNotification(req.params.affiliateId, 'affiliate', 'Document Requires Attention', updated.rejectionReason || 'Document rejected', 'document');
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
 router.get('/drivers', async (_req: Request, res: Response) => {
   try {
     const drivers = await prisma.driver.findMany({
@@ -713,8 +808,7 @@ router.put('/drivers/:driverId/documents/:documentId/approve', async (req: Reque
       res.status(404).json({ success: false, message: 'Document not found' });
       return;
     }
-    if (!document.fileUrl || !document.fileUrl.startsWith('https://') || !document.expiryDate
-      || new Date(`${document.expiryDate}T23:59:59.999Z`).getTime() < Date.now()) {
+    if (!hasCurrentDocumentFile(document)) {
       res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
       return;
     }

@@ -123,15 +123,31 @@ router.get('/payments', async (req: Request, res: Response) => {
 router.get('/earnings', async (req: Request, res: Response) => {
   try {
     const { entityType, entityId, status, dateFrom, dateTo, format } = req.query as Record<string, string>;
-    const where = {
-      ...(entityType ? { entityType } : {}),
-      ...(entityId ? { entityId } : {}),
-      ...(status ? { status } : {}),
-      ...(dateFrom || dateTo ? { date: dateFilter(dateFrom, dateTo) } : {}),
-    };
-    const entries = await prisma.earningEntry.findMany({ where, orderBy: { date: 'desc' } });
-    const affiliateIds = [...new Set(entries.filter(e => e.entityType === 'affiliate').map(e => e.entityId))];
-    const driverIds = [...new Set(entries.filter(e => e.entityType === 'driver').map(e => e.entityId))];
+    const jobs = await prisma.job.findMany({
+      where: {
+        status: 'completed',
+        ...(dateFrom || dateTo ? { completedAt: dateFilter(dateFrom, dateTo) } : {}),
+      },
+      orderBy: { completedAt: 'desc' },
+    });
+
+    const jobIds = jobs.map(job => job.id);
+    const [entries, payments] = await Promise.all([
+      prisma.earningEntry.findMany({
+        where: {
+          jobId: { in: jobIds },
+          ...(entityType ? { entityType } : {}),
+          ...(entityId ? { entityId } : {}),
+          ...(status ? { status } : {}),
+        },
+      }),
+      prisma.payment.findMany({ where: { jobId: { in: jobIds } } }),
+    ]);
+    const entryByJobId = new Map(entries.map(entry => [entry.jobId, entry]));
+    const paymentByJobId = new Map(payments.map(payment => [payment.jobId, payment]));
+
+    const affiliateIds = [...new Set(jobs.map(job => job.affiliateId).filter((id): id is string => Boolean(id)))];
+    const driverIds = [...new Set(jobs.map(job => job.assignedDriverId).filter((id): id is string => Boolean(id)))];
     const [affiliates, drivers] = await Promise.all([
       prisma.affiliate.findMany({ where: { id: { in: affiliateIds } }, select: { id: true, companyName: true } }),
       prisma.driver.findMany({ where: { id: { in: driverIds } }, select: { id: true, fullName: true } }),
@@ -140,9 +156,63 @@ router.get('/earnings', async (req: Request, res: Response) => {
       ...affiliates.map((a): [string, string] => [a.id, a.companyName]),
       ...drivers.map((d): [string, string] => [d.id, d.fullName]),
     ]);
-    const shaped = entries.map(e => ({ ...e, entityName: nameById.get(e.entityId) ?? e.entityId }));
+
+    const round = (value: number) => parseFloat(value.toFixed(2));
+    const shaped = jobs
+      .map(job => {
+        const computedEntityType = job.affiliateId ? 'affiliate' : 'driver';
+        const computedEntityId = job.affiliateId ?? job.assignedDriverId ?? '';
+        const entry = entryByJobId.get(job.id);
+        const payment = paymentByJobId.get(job.id);
+        const operatorPayoutAmount = round(job.affiliatePayoutAmount);
+        const driverPayoutAmount = job.affiliateId ? 0 : round(job.driverPayoutAmount || job.affiliatePayoutAmount);
+        const rideExpenseAmount = round(operatorPayoutAmount);
+        const rideCommissionAmount = round(job.commissionAmount);
+        return {
+          id: entry?.id ?? `ride-ledger-${job.id}`,
+          jobId: job.id,
+          bookingRef: job.bookingRef,
+          entityId: entry?.entityId ?? computedEntityId,
+          entityType: entry?.entityType ?? computedEntityType,
+          entityName: nameById.get(entry?.entityId ?? computedEntityId) ?? 'Unassigned',
+          grossAmount: round(entry?.grossAmount ?? operatorPayoutAmount),
+          commissionDeducted: round(entry?.commissionDeducted ?? 0),
+          netAmount: round(entry?.netAmount ?? operatorPayoutAmount),
+          status: entry?.status ?? 'pending',
+          date: entry?.date ?? job.completedAt ?? job.updatedAt,
+          fareAmount: round(job.fareAmount),
+          rideCommissionAmount,
+          operatorPayoutAmount,
+          driverPayoutAmount,
+          rideExpenseAmount,
+          companyNetAmount: rideCommissionAmount,
+          paymentAmount: round(payment?.amount ?? job.fareAmount),
+          paymentStatus: payment?.status ?? 'pending',
+          paymentMethod: payment?.method ?? null,
+          completedAt: job.completedAt?.toISOString() ?? null,
+          customerName: job.customerName,
+          affiliateId: job.affiliateId,
+          assignedDriverId: job.assignedDriverId,
+        };
+      })
+      .filter(row => !entityType || row.entityType === entityType)
+      .filter(row => !entityId || row.entityId === entityId)
+      .filter(row => !status || row.status === status);
+
     if (format && respondExport(req, res, 'Earnings', shaped.map(e => ({
-      bookingRef: e.bookingRef, entityType: e.entityType, entityName: e.entityName, gross: e.grossAmount, commission: e.commissionDeducted, net: e.netAmount, status: e.status, date: e.date.toISOString(),
+      bookingRef: e.bookingRef,
+      entityType: e.entityType,
+      entityName: e.entityName,
+      customer: e.customerName,
+      customerFare: e.fareAmount,
+      rpCommission: e.rideCommissionAmount,
+      operatorPayout: e.operatorPayoutAmount,
+      driverPayout: e.driverPayoutAmount,
+      rideExpense: e.rideExpenseAmount,
+      companyNet: e.companyNetAmount,
+      payoutStatus: e.status,
+      paymentStatus: e.paymentStatus,
+      date: e.date.toISOString(),
     })))) return;
     res.json({ success: true, data: shaped, total: shaped.length });
   } catch (e) {
@@ -154,19 +224,25 @@ router.get('/earnings', async (req: Request, res: Response) => {
 
 router.get('/company', async (_req: Request, res: Response) => {
   try {
-    const [commissionAgg, revenueAgg, payoutAgg] = await Promise.all([
+    const [commissionAgg, revenueAgg, payoutAgg, driverPayoutAgg] = await Promise.all([
       prisma.job.aggregate({ _sum: { commissionAmount: true }, where: { status: 'completed' } }),
       prisma.job.aggregate({ _sum: { fareAmount: true }, where: { status: 'completed' } }),
-      prisma.earningEntry.aggregate({ _sum: { netAmount: true } }),
+      prisma.job.aggregate({ _sum: { affiliatePayoutAmount: true }, where: { status: 'completed' } }),
+      prisma.job.aggregate({ _sum: { driverPayoutAmount: true }, where: { status: 'completed', affiliateId: null } }),
     ]);
     const round = (n: number | null) => parseFloat((n ?? 0).toFixed(2));
-    const operationalRevenue = round(revenueAgg._sum.fareAmount) - round(payoutAgg._sum.netAmount);
+    const grossTurnover = round(revenueAgg._sum.fareAmount);
+    const rpCommission = round(commissionAgg._sum.commissionAmount);
+    const totalRideExpenses = round(payoutAgg._sum.affiliatePayoutAmount);
+    const operationalRevenue = grossTurnover - totalRideExpenses;
     res.json({
       success: true,
       data: {
-        rpCommission: round(commissionAgg._sum.commissionAmount),
-        grossTurnover: round(revenueAgg._sum.fareAmount),
-        totalPayouts: round(payoutAgg._sum.netAmount),
+        rpCommission,
+        grossTurnover,
+        totalPayouts: totalRideExpenses,
+        totalRideExpenses,
+        independentDriverPayouts: round(driverPayoutAgg._sum.driverPayoutAmount),
         operationalRevenue: parseFloat(operationalRevenue.toFixed(2)),
       },
     });

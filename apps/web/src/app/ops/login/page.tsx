@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
-import { Shield, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
+import BrandLogo from '@/components/common/BrandLogo';
 
 export default function OpsLoginPage() {
   const [email, setEmail]       = useState('');
@@ -35,9 +36,7 @@ export default function OpsLoginPage() {
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#0f172a 0%,#1e293b 100%)' }}>
       <div className="w-full max-w-sm mx-4">
         <div className="text-center mb-8">
-          <div className="inline-flex w-16 h-16 rounded-2xl items-center justify-center mb-4" style={{ background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', boxShadow: '0 8px 32px rgba(59,130,246,0.35)' }}>
-            <Shield size={28} className="text-white" />
-          </div>
+          <BrandLogo variant="full" width={160} className="mx-auto mb-5" />
           <h1 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>Operations Portal</h1>
           <p className="text-slate-400 text-sm">Ride Prestige — Admin Operations</p>
         </div>

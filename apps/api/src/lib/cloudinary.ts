@@ -22,3 +22,20 @@ export function uploadImageBuffer(buffer: Buffer, folder: string): Promise<strin
     stream.end(buffer);
   });
 }
+
+export function uploadDocumentBuffer(buffer: Buffer, folder: string, filename?: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: 'auto',
+        public_id: filename ? filename.replace(/\.[^.]+$/, '') : undefined,
+      },
+      (error, result) => {
+        if (error || !result) { reject(error ?? new Error('Cloudinary upload failed')); return; }
+        resolve(result.secure_url);
+      },
+    );
+    stream.end(buffer);
+  });
+}

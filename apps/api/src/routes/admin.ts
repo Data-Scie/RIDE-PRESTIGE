@@ -17,6 +17,32 @@ const uploadSingleImage = upload.single('image') as unknown as RequestHandler;
 const router = Router();
 router.use(authenticate, requireRole('admin', 'ops'));
 
+const AFFILIATE_DOCUMENTS = [
+  { type: 'operator_licence', label: 'Operator Licence' },
+  { type: 'insurance', label: 'Insurance Document' },
+  { type: 'company_cert', label: 'Company Certificate' },
+  { type: 'proof_of_address', label: 'Proof of Address' },
+];
+
+async function ensureAffiliateDocuments(affiliateId: string) {
+  await prisma.affiliateDocument.createMany({
+    data: AFFILIATE_DOCUMENTS.map(document => ({
+      id: `adoc-${uuid()}`,
+      affiliateId,
+      type: document.type,
+      label: document.label,
+    })),
+    skipDuplicates: true,
+  });
+  return prisma.affiliateDocument.findMany({ where: { affiliateId }, orderBy: { label: 'asc' } });
+}
+
+function hasCurrentDocumentFile(document: { fileUrl: string | null; expiryDate: string | null }): boolean {
+  return Boolean(document.fileUrl && /^https?:\/\//i.test(document.fileUrl)
+    && document.expiryDate
+    && new Date(`${document.expiryDate}T23:59:59.999Z`).getTime() >= Date.now());
+}
+
 // Helper to reshape a Booking row
 function shapeBooking(b: {
   id: string; reference: string; status: string;
@@ -160,24 +186,28 @@ router.get('/bookings', async (req: Request, res: Response) => {
     const jobs = jobIds.length
       ? await prisma.job.findMany({
           where: { id: { in: jobIds } },
-          select: { id: true, status: true, customerRating: true, customerFeedback: true, assignedDriverId: true, affiliateId: true },
+          select: { id: true, status: true, customerRating: true, customerFeedback: true, assignedDriverId: true, assignedVehicleId: true, affiliateId: true },
         })
       : [];
     const jobById = new Map(jobs.map(job => [job.id, job]));
     const driverIds = [...new Set(jobs.map(job => job.assignedDriverId).filter((id): id is string => Boolean(id)))];
     const affiliateIds = [...new Set(jobs.map(job => job.affiliateId).filter((id): id is string => Boolean(id)))];
-    const [acceptedDrivers, acceptedAffiliates] = await Promise.all([
+    const vehicleIds = [...new Set(jobs.map(job => job.assignedVehicleId).filter((id): id is string => Boolean(id)))];
+    const [acceptedDrivers, acceptedAffiliates, assignedVehicles] = await Promise.all([
       prisma.driver.findMany({ where: { id: { in: driverIds } }, select: { id: true, fullName: true, driverType: true } }),
-      prisma.affiliate.findMany({ where: { id: { in: affiliateIds } }, select: { id: true, companyName: true } }),
+      prisma.affiliate.findMany({ where: { id: { in: affiliateIds } }, select: { id: true, companyName: true, tradingName: true } }),
+      prisma.fleetVehicle.findMany({ where: { id: { in: vehicleIds } }, select: { id: true, make: true, model: true, registration: true } }),
     ]);
     const driverById = new Map(acceptedDrivers.map(d => [d.id, d]));
     const affiliateById = new Map(acceptedAffiliates.map(a => [a.id, a]));
+    const vehicleById = new Map(assignedVehicles.map(v => [v.id, v]));
     const shaped = rows.map(row => {
       const booking = shapeBooking(row);
       const linkedJob = row.jobId ? jobById.get(row.jobId) : undefined;
       const operationalStatus = linkedJob?.status;
       const assignedDriver = linkedJob?.assignedDriverId ? driverById.get(linkedJob.assignedDriverId) : undefined;
       const affiliate = linkedJob?.affiliateId ? affiliateById.get(linkedJob.affiliateId) : undefined;
+      const assignedVehicle = linkedJob?.assignedVehicleId ? vehicleById.get(linkedJob.assignedVehicleId) : undefined;
       const acceptedBy: 'driver' | 'affiliate' | null = assignedDriver
         ? (assignedDriver.driverType === 'independentDriver' ? 'driver' : 'affiliate')
         : (affiliate ? 'affiliate' : null);
@@ -189,8 +219,12 @@ router.get('/bookings', async (req: Request, res: Response) => {
         customerFeedback: linkedJob?.customerFeedback ?? null,
         assignedDriverId: linkedJob?.assignedDriverId ?? null,
         acceptedBy,
-        affiliateName: affiliate?.companyName ?? null,
+        affiliateName: affiliate?.companyName ?? affiliate?.tradingName ?? null,
+        driverName: assignedDriver?.fullName ?? null,
+        driverType: assignedDriver?.driverType ?? null,
         affiliateDriverName: assignedDriver && assignedDriver.driverType === 'affiliateDriver' ? assignedDriver.fullName : null,
+        assignedVehicleId: linkedJob?.assignedVehicleId ?? null,
+        vehicleLabel: assignedVehicle ? `${assignedVehicle.registration} - ${assignedVehicle.make} ${assignedVehicle.model}` : null,
       };
     });
     const filtered = status ? shaped.filter(row => row.status === status || row.operationalStatus === status) : shaped;
@@ -745,6 +779,10 @@ router.put('/drivers/:id/documents/:docId', async (req: Request, res: Response) 
     if (!docExists) { res.status(404).json({ success: false, message: 'Document not found' }); return; }
 
     const { status, rejectionReason, expiryDate } = req.body as { status?: string; rejectionReason?: string; expiryDate?: string };
+    if (status === 'approved' && !hasCurrentDocumentFile({ fileUrl: docExists.fileUrl, expiryDate: expiryDate ?? docExists.expiryDate })) {
+      res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
+      return;
+    }
     const doc = await prisma.driverDocument.update({
       where: { id: req.params.docId },
       data: {
@@ -812,12 +850,14 @@ router.get('/affiliates/:id', async (req: Request, res: Response) => {
       },
     });
     if (!affiliate) { res.status(404).json({ success: false, message: 'Affiliate not found' }); return; }
+    const documents = await ensureAffiliateDocuments(affiliate.id);
     const { passwordHash: _, drivers, ...safe } = affiliate;
     res.json({
       success: true,
       data: {
         ...safe,
         drivers: drivers.map(({ passwordHash: __, ...d }) => d),
+        documents,
       },
     });
   } catch (e) {
@@ -876,12 +916,63 @@ router.put('/affiliates/:id/approve', async (req: Request, res: Response) => {
  *     responses:
  *       200: { description: Customers list }
  */
+router.put('/affiliates/:affiliateId/documents/:documentId/approve', async (req: Request, res: Response) => {
+  try {
+    const document = await prisma.affiliateDocument.findFirst({
+      where: { id: req.params.documentId, affiliateId: req.params.affiliateId },
+    });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    if (!hasCurrentDocumentFile(document)) {
+      res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
+      return;
+    }
+    const updated = await prisma.affiliateDocument.update({
+      where: { id: document.id },
+      data: { status: 'approved', rejectionReason: null },
+    });
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/affiliates/:affiliateId/documents/:documentId/reject', async (req: Request, res: Response) => {
+  try {
+    const { reason } = req.body as { reason?: string };
+    const document = await prisma.affiliateDocument.findFirst({
+      where: { id: req.params.documentId, affiliateId: req.params.affiliateId },
+    });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    const updated = await prisma.affiliateDocument.update({
+      where: { id: document.id },
+      data: { status: 'rejected', rejectionReason: reason || 'Document was not approved' },
+    });
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
 router.get('/customers', async (_req: Request, res: Response) => {
   try {
     const [customers, jobs] = await Promise.all([
       prisma.customer.findMany(),
       prisma.job.findMany({ orderBy: { createdAt: 'desc' } }),
     ]);
+    const affiliateIds = [...new Set(jobs.map(job => job.affiliateId).filter((id): id is string => Boolean(id)))];
+    const driverIds = [...new Set(jobs.map(job => job.assignedDriverId).filter((id): id is string => Boolean(id)))];
+    const [affiliates, drivers] = await Promise.all([
+      prisma.affiliate.findMany({ where: { id: { in: affiliateIds } }, select: { id: true, companyName: true, tradingName: true } }),
+      prisma.driver.findMany({ where: { id: { in: driverIds } }, select: { id: true, fullName: true, driverType: true } }),
+    ]);
+    const affiliateById = new Map(affiliates.map(affiliate => [affiliate.id, affiliate]));
+    const driverById = new Map(drivers.map(driver => [driver.id, driver]));
     const customerByEmail = new Map(customers.map(customer => [customer.email.toLowerCase(), customer]));
     const jobGroups = new Map<string, typeof jobs>();
     for (const job of jobs) {
@@ -889,10 +980,17 @@ router.get('/customers', async (_req: Request, res: Response) => {
       jobGroups.set(key, [...(jobGroups.get(key) ?? []), job]);
     }
 
-    const list = Array.from(jobGroups.entries()).map(([key, customerJobs]) => {
+    const list: Record<string, unknown>[] = Array.from(jobGroups.entries()).map(([key, customerJobs]) => {
       const latest = customerJobs[0];
       const registered = latest.customerEmail ? customerByEmail.get(latest.customerEmail.toLowerCase()) : undefined;
       const ratings = customerJobs.map(job => job.driverRating).filter((rating): rating is number => rating !== null);
+      const affiliate = latest.affiliateId ? affiliateById.get(latest.affiliateId) : null;
+      const driver = latest.assignedDriverId ? driverById.get(latest.assignedDriverId) : null;
+      const acceptedBy = affiliate
+        ? 'affiliate'
+        : driver
+          ? 'independent_driver'
+          : 'unassigned';
       return {
         id: registered?.id ?? `guest:${encodeURIComponent(key)}`,
         fullName: registered?.fullName ?? latest.customerName,
@@ -909,7 +1007,17 @@ router.get('/customers', async (_req: Request, res: Response) => {
           bookingRef: latest.bookingRef,
           status: latest.status,
           dateTime: latest.dateTime.toISOString(),
-        } as { bookingRef: string; status: string; dateTime: string } | null,
+          acceptedBy,
+          affiliateId: latest.affiliateId,
+          affiliateName: affiliate?.companyName ?? affiliate?.tradingName ?? null,
+          driverId: latest.assignedDriverId,
+          driverName: driver?.fullName ?? null,
+          driverType: driver?.driverType ?? null,
+          pickupAddress: latest.pickupAddress,
+          dropoffAddress: latest.dropoffAddress,
+          vehicleCategory: latest.vehicleCategory,
+          fareAmount: latest.fareAmount,
+        },
       };
     });
 
@@ -927,7 +1035,11 @@ router.get('/customers', async (_req: Request, res: Response) => {
         });
       }
     }
-    list.sort((a, b) => new Date(b.latestRide?.dateTime ?? b.createdAt).getTime() - new Date(a.latestRide?.dateTime ?? a.createdAt).getTime());
+    const sortDate = (row: Record<string, unknown>) => {
+      const latestRide = row.latestRide as { dateTime?: string } | null | undefined;
+      return new Date(latestRide?.dateTime ?? String(row.createdAt)).getTime();
+    };
+    list.sort((a, b) => sortDate(b) - sortDate(a));
     res.json({ success: true, data: list, total: list.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });

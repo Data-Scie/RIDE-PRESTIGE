@@ -62,6 +62,7 @@ model Affiliate {
 
   drivers       Driver[]
   fleetVehicles FleetVehicle[]
+  documents     AffiliateDocument[]
 }
 
 // ─── Drivers ─────────────────────────────────────────────────────────────────
@@ -116,6 +117,22 @@ model DriverDocument {
   fileUrl          String?
   uploadedAt       DateTime?
   rejectionReason  String?
+}
+
+// Affiliate Documents
+model AffiliateDocument {
+  id               String    @id
+  affiliateId      String
+  affiliate        Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  type             String
+  label            String
+  status           String    @default("missing") // approved | pending | rejected | expired | missing
+  expiryDate       String?
+  fileUrl          String?
+  uploadedAt       DateTime?
+  rejectionReason  String?
+
+  @@unique([affiliateId, type])
 }
 
 // ─── Operational Fleet Vehicles ───────────────────────────────────────────────

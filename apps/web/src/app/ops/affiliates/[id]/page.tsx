@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Phone, Mail, MapPin, Car, Users } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, MapPin, Car, Users, FileText, CheckCircle, XCircle } from 'lucide-react';
 import { opsApi } from '@/lib/api-client';
 
 interface Affiliate {
@@ -12,6 +12,7 @@ interface Affiliate {
 }
 interface Driver  { id: string; fullName: string; email: string; phone: string; status: string; licencePlate?: string; }
 interface Vehicle { id: string; make: string; model: string; registration: string; colour: string; vehicleType: string; status: string; }
+interface AffiliateDocument { id: string; label: string; status: string; expiryDate?: string | null; fileUrl?: string | null; rejectionReason?: string | null; }
 
 const STATUS_DOT: Record<string, string> = { available: '#10b981', busy: '#3b82f6', offline: '#94a3b8' };
 
@@ -20,16 +21,25 @@ export default function AffiliateDetailPage() {
   const [affiliate, setAffiliate] = useState<Affiliate | null>(null);
   const [drivers, setDrivers]     = useState<Driver[]>([]);
   const [vehicles, setVehicles]   = useState<Vehicle[]>([]);
+  const [documents, setDocuments] = useState<AffiliateDocument[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState('');
   const [updating, setUpdating]   = useState(false);
 
   useEffect(() => {
-    opsApi.get<{ success: boolean; data: Affiliate; drivers: Driver[]; vehicles: Vehicle[] }>(`/api/ops/affiliates/${id}`)
-      .then(r => { setAffiliate(r.data); setDrivers(r.drivers ?? []); setVehicles(r.vehicles ?? []); })
+    opsApi.get<{ success: boolean; data: Affiliate; drivers: Driver[]; vehicles: Vehicle[]; documents: AffiliateDocument[] }>(`/api/ops/affiliates/${id}`)
+      .then(r => { setAffiliate(r.data); setDrivers(r.drivers ?? []); setVehicles(r.vehicles ?? []); setDocuments(r.documents ?? []); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const load = async () => {
+    const r = await opsApi.get<{ success: boolean; data: Affiliate; drivers: Driver[]; vehicles: Vehicle[]; documents: AffiliateDocument[] }>(`/api/ops/affiliates/${id}`);
+    setAffiliate(r.data);
+    setDrivers(r.drivers ?? []);
+    setVehicles(r.vehicles ?? []);
+    setDocuments(r.documents ?? []);
+  };
 
   const approve = async () => {
     setUpdating(true);
@@ -39,6 +49,20 @@ export default function AffiliateDetailPage() {
       setAffiliate(r.data);
     } catch (e) {
       setError((e as Error).message || 'Could not approve affiliate');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const updateDocument = async (documentId: string, action: 'approve' | 'reject') => {
+    const reason = action === 'reject' ? window.prompt('Reason for rejection?') || 'Document was not approved' : undefined;
+    setUpdating(true);
+    setError('');
+    try {
+      await opsApi.put(`/api/ops/affiliates/${id}/documents/${documentId}/${action}`, { reason });
+      await load();
+    } catch (e) {
+      setError((e as Error).message || 'Could not update document');
     } finally {
       setUpdating(false);
     }
@@ -93,6 +117,32 @@ export default function AffiliateDetailPage() {
               <p className="font-bold text-slate-800">{value}</p><p className="text-xs text-slate-400 mt-0.5">{label}</p>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
+        <div className="flex items-center justify-between p-5 border-b border-slate-100">
+          <h2 className="font-semibold text-slate-800 flex items-center gap-2"><FileText size={15} className="text-amber-500" /> Documents ({documents.length})</h2>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3 p-5">
+          {documents.map(document => (
+            <div key={document.id} className="p-4 rounded-xl bg-slate-50">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-sm text-slate-800">{document.label}</p>
+                  <p className="text-xs text-slate-400 capitalize">{document.status}{document.expiryDate ? ` - expires ${new Date(document.expiryDate).toLocaleDateString('en-GB')}` : ''}</p>
+                  {document.rejectionReason && <p className="text-xs text-red-600 mt-1">{document.rejectionReason}</p>}
+                  {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 mt-2 inline-block">View document</a>}
+                </div>
+                {document.status === 'approved' ? <CheckCircle size={18} className="text-green-500" /> : <XCircle size={18} className="text-amber-500" />}
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button disabled={updating} onClick={() => void updateDocument(document.id, 'approve')} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>
+                <button disabled={updating} onClick={() => void updateDocument(document.id, 'reject')} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>
+              </div>
+            </div>
+          ))}
+          {!documents.length && <p className="text-sm text-slate-400">No documents submitted yet.</p>}
         </div>
       </div>
 
