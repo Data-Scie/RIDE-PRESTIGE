@@ -35,7 +35,7 @@ export const siteSettings: SiteSettings = {
   siteName: 'Ride Prestige',
   tagline: 'RIDE PRESTIGE',
   heroSubtitle: 'Coach and minibus hire across Sheffield and the UK',
-  logoUrl: '/logo.svg',
+  logoUrl: '/brand/ride-prestige-mark.png',
   faviconUrl: '/favicon.ico',
   brandColor: '#000000',
   accentColor: '#c9a84c',

@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS: SiteSettings = {
   siteName: 'Ride Prestige',
   tagline: 'Premium Transport Services',
   heroSubtitle: 'Luxury transport, delivered with precision.',
-  logoUrl: '/logo.svg',
+  logoUrl: '/brand/ride-prestige-mark.png',
   faviconUrl: '/favicon.ico',
   brandColor: '#c9a84c',
   accentColor: '#0a0f1e',
@@ -123,7 +123,7 @@ export default function AdminSettingsPage() {
             <div className="grid sm:grid-cols-2 gap-5">
               <div>
                 <label className="label">Logo URL</label>
-                <input value={site.logoUrl} onChange={e => setSite(p => ({ ...p, logoUrl: e.target.value }))} className="input-field" placeholder="/logo.svg" />
+                <input value={site.logoUrl} onChange={e => setSite(p => ({ ...p, logoUrl: e.target.value }))} className="input-field" placeholder="/brand/ride-prestige-mark.png" />
                 <p className="text-xs text-brand-grey mt-1">Place logo file in /public/ and reference the path here</p>
               </div>
               <div>
