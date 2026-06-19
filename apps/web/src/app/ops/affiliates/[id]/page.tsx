@@ -60,7 +60,7 @@ export default function AffiliateDetailPage() {
     setUpdating(true);
     setError('');
     try {
-      await opsApi.put(`/api/ops/affiliates/${id}/documents/${documentId}/${action}`, { reason, override });
+      await opsApi.put(`/api/ops/affiliates/${id}/documents/${documentId}/${action}${override ? '?override=true' : ''}`, { reason, override, approveAnyway: override });
       await load();
     } catch (e) {
       setError((e as Error).message || 'Could not update document');

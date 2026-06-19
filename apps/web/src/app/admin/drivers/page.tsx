@@ -84,7 +84,7 @@ export default function AdminDriversPage() {
     setUpdating(driver.id);
     setError('');
     try {
-      if (action === 'approve') await adminApi.put(`/api/admin/drivers/${driver.id}/approve`, { approve: true, override });
+      if (action === 'approve') await adminApi.put(`/api/admin/drivers/${driver.id}/approve${override ? '?override=true' : ''}`, { approve: true, override, approveAnyway: override });
       else await adminApi.put(`/api/admin/drivers/${driver.id}/${action}`, {});
       await load();
     } catch (e) {
@@ -102,7 +102,7 @@ export default function AdminDriversPage() {
     setUpdatingDocument(documentId);
     setError('');
     try {
-      await adminApi.put(`/api/admin/drivers/${driverId}/documents/${documentId}`, { status, rejectionReason, override });
+      await adminApi.put(`/api/admin/drivers/${driverId}/documents/${documentId}${override ? '?override=true' : ''}`, { status, rejectionReason, override, approveAnyway: override });
       await load();
     } catch (e) {
       setError((e as Error).message || 'Could not update document');

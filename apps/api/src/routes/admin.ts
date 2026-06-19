@@ -52,6 +52,17 @@ function hasCurrentDocumentFile(document: { fileUrl: string | null; expiryDate: 
     && new Date(`${document.expiryDate}T23:59:59.999Z`).getTime() >= Date.now());
 }
 
+function isOverrideApproval(req: Request): boolean {
+  const bodyOverride = (req.body as { override?: unknown; approveAnyway?: unknown })?.override
+    ?? (req.body as { approveAnyway?: unknown })?.approveAnyway;
+  const queryOverride = req.query.override;
+  return bodyOverride === true
+    || bodyOverride === 'true'
+    || bodyOverride === '1'
+    || queryOverride === 'true'
+    || queryOverride === '1';
+}
+
 // Helper to reshape a Booking row
 function shapeBooking(b: {
   id: string; reference: string; status: string;
@@ -729,7 +740,8 @@ router.put('/drivers/:id/approve', async (req: Request, res: Response) => {
   try {
     const exists = await prisma.driver.findUnique({ where: { id: req.params.id } });
     if (!exists) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
-    const { approve, override } = req.body as { approve: boolean; override?: boolean };
+    const { approve } = req.body as { approve: boolean };
+    const override = isOverrideApproval(req);
     if (approve && override) {
       await ensureDriverDocuments(req.params.id);
       await prisma.driverDocument.updateMany({
@@ -841,7 +853,8 @@ router.put('/drivers/:id/documents/:docId', async (req: Request, res: Response) 
     const docExists = await prisma.driverDocument.findFirst({ where: { id: req.params.docId, driverId: req.params.id } });
     if (!docExists) { res.status(404).json({ success: false, message: 'Document not found' }); return; }
 
-    const { status, rejectionReason, expiryDate, override } = req.body as { status?: string; rejectionReason?: string; expiryDate?: string; override?: boolean };
+    const { status, rejectionReason, expiryDate } = req.body as { status?: string; rejectionReason?: string; expiryDate?: string };
+    const override = isOverrideApproval(req);
     if (status === 'approved' && !override && !hasCurrentDocumentFile({ fileUrl: docExists.fileUrl, expiryDate: expiryDate ?? docExists.expiryDate })) {
       res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
       return;
@@ -995,7 +1008,7 @@ router.put('/affiliates/:affiliateId/documents/:documentId/approve', async (req:
       res.status(404).json({ success: false, message: 'Document not found' });
       return;
     }
-    const { override } = req.body as { override?: boolean };
+    const override = isOverrideApproval(req);
     if (!override && !hasCurrentDocumentFile(document)) {
       res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
       return;
@@ -1039,7 +1052,7 @@ router.put('/vehicles/:vehicleId/documents/:documentId/approve', async (req: Req
       res.status(404).json({ success: false, message: 'Document not found' });
       return;
     }
-    const { override } = req.body as { override?: boolean };
+    const override = isOverrideApproval(req);
     if (!override && !hasCurrentVehicleDocumentFile(document)) {
       res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
       return;

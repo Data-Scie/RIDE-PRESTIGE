@@ -51,7 +51,7 @@ export default function AdminAffiliateDetailPage() {
     setUpdatingDocument(documentId);
     setError('');
     try {
-      await adminApi.put(`/api/admin/affiliates/${id}/documents/${documentId}/${action}`, { reason, override });
+      await adminApi.put(`/api/admin/affiliates/${id}/documents/${documentId}/${action}${override ? '?override=true' : ''}`, { reason, override, approveAnyway: override });
       await load();
     } catch (e) {
       setError((e as Error).message || 'Could not update document');
@@ -66,7 +66,7 @@ export default function AdminAffiliateDetailPage() {
     setUpdatingDocument(documentId);
     setError('');
     try {
-      await adminApi.put(`/api/admin/vehicles/${vehicleId}/documents/${documentId}/${action}`, { reason, override });
+      await adminApi.put(`/api/admin/vehicles/${vehicleId}/documents/${documentId}/${action}${override ? '?override=true' : ''}`, { reason, override, approveAnyway: override });
       await load();
     } catch (e) {
       setError((e as Error).message || 'Could not update vehicle document');

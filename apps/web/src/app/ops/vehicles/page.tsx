@@ -40,7 +40,7 @@ export default function OpsVehiclesPage() {
     setUpdating(id);
     setError('');
     try {
-      await opsApi.put(`/api/ops/vehicles/${id}/${action}`, { reason, override });
+      await opsApi.put(`/api/ops/vehicles/${id}/${action}${override ? '?override=true' : ''}`, { reason, override, approveAnyway: override });
       await load();
     } catch (e) {
       setError((e as Error).message || `Could not ${action} vehicle`);
@@ -68,7 +68,7 @@ export default function OpsVehiclesPage() {
     setUpdating(`${vehicleId}:${documentId}`);
     setError('');
     try {
-      await opsApi.put(`/api/ops/vehicles/${vehicleId}/documents/${documentId}/${action}`, { reason, override });
+      await opsApi.put(`/api/ops/vehicles/${vehicleId}/documents/${documentId}/${action}${override ? '?override=true' : ''}`, { reason, override, approveAnyway: override });
       await load();
     } catch (e) {
       setError((e as Error).message || `Could not ${action} vehicle document`);

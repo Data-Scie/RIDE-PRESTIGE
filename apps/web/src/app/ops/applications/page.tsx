@@ -49,7 +49,8 @@ export default function OpsApplicationsPage() {
     setUpdating(path);
     setError('');
     try {
-      await opsApi.put(`${path}/${action}`, body);
+      const query = body.override || body.approveAnyway ? '?override=true' : '';
+      await opsApi.put(`${path}/${action}${query}`, { ...body, approveAnyway: Boolean(body.override || body.approveAnyway) });
       if (refresh) await load();
     } catch (e) {
       setError((e as Error).message || 'Action failed');

@@ -74,7 +74,7 @@ export default function DriverDetailPage() {
 
   const updateDocument = async (documentId: string, action: 'approve' | 'reject', reason?: string, override = false) => {
     if (override && !window.confirm('Approve this document without a valid uploaded file? Use this only when you have verified compliance another way.')) return;
-    await opsApi.put(`/api/ops/drivers/${id}/documents/${documentId}/${action}`, { reason, override });
+    await opsApi.put(`/api/ops/drivers/${id}/documents/${documentId}/${action}${override ? '?override=true' : ''}`, { reason, override, approveAnyway: override });
     await load();
   };
 
