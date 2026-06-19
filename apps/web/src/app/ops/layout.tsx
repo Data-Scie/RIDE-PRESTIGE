@@ -86,7 +86,7 @@ export default function OpsLayout({ children }: { children: React.ReactNode }) {
       )}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="lg:hidden flex items-center justify-between px-4 py-3" style={{ background: '#0f172a', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-          <div className="flex items-center gap-2"><BrandLogo variant="mark" width={28} /><span className="text-white font-bold text-sm">Operations</span></div>
+          <div className="flex items-center gap-2"><BrandLogo variant="full" width={112} /><span className="text-white font-bold text-sm">Operations</span></div>
           <button onClick={() => setMobileOpen(!mobileOpen)} className="text-white">{mobileOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </header>
         <main className="flex-1 p-4 lg:p-6 overflow-auto">

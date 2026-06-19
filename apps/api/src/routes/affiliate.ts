@@ -2,6 +2,7 @@ import { Router, Request, Response, RequestHandler } from 'express';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import { v4 as uuid } from 'uuid';
+import type { FleetVehicle } from '@prisma/client';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
 import { storeDocumentFile, validateDocumentFile } from '../lib/documentUpload';
@@ -460,13 +461,22 @@ router.post('/jobs/:id/assign-vehicle', async (req: Request, res: Response) => {
     }
     const { vehicleId } = req.body as { vehicleId: string };
     const vehicle = await prisma.fleetVehicle.findFirst({
-      where: { id: vehicleId, affiliateId: affId, status: 'available', isApproved: true, approvalStatus: 'approved' },
+      where: {
+        id: vehicleId,
+        affiliateId: affId,
+        isApproved: true,
+        approvalStatus: 'approved',
+        OR: [{ status: 'available' }, ...(job.assignedVehicleId === vehicleId ? [{ status: 'in_use' }] : [])],
+      },
     });
     if (!vehicle) { res.status(404).json({ success: false, message: 'Vehicle not found' }); return; }
     if (!isVehicleEligible(vehicle, job)) {
       res.status(409).json({ success: false, message: 'Vehicle does not meet category, capacity, or compliance requirements' }); return;
     }
     const updated = await prisma.$transaction(async tx => {
+      if (job.assignedVehicleId && job.assignedVehicleId !== vehicleId) {
+        await tx.fleetVehicle.update({ where: { id: job.assignedVehicleId }, data: { status: 'available' } });
+      }
       const updatedJob = await tx.job.update({ where: { id: job.id }, data: { assignedVehicleId: vehicleId, status: 'vehicle_assigned' } });
       await tx.fleetVehicle.update({ where: { id: vehicleId }, data: { status: 'in_use' } });
       await tx.rideStatusHistory.create({
@@ -847,7 +857,23 @@ router.put('/vehicles/:id', async (req: Request, res: Response) => {
       where: { id: req.params.id, affiliateId: affId },
     });
     if (!exists) { res.status(404).json({ success: false, message: 'Vehicle not found' }); return; }
-    const { id: _id, affiliateId: _affiliateId, ...data } = req.body;
+    const b = req.body as Partial<FleetVehicle>;
+    const data: Partial<FleetVehicle> = {};
+    if (b.make !== undefined) data.make = b.make;
+    if (b.model !== undefined) data.model = b.model;
+    if (b.year !== undefined) data.year = Number(b.year);
+    if (b.registration !== undefined) data.registration = String(b.registration).toUpperCase();
+    if (b.colour !== undefined) data.colour = b.colour;
+    if (b.vehicleType !== undefined) data.vehicleType = b.vehicleType;
+    if (b.vehicleCategory !== undefined) data.vehicleCategory = b.vehicleCategory;
+    if (b.passengerCapacity !== undefined) data.passengerCapacity = Number(b.passengerCapacity);
+    if (b.luggageCapacity !== undefined) data.luggageCapacity = Number(b.luggageCapacity);
+    if (b.motExpiry !== undefined) data.motExpiry = b.motExpiry;
+    if (b.insuranceExpiry !== undefined) data.insuranceExpiry = b.insuranceExpiry;
+    if (b.phvLicenceExpiry !== undefined) data.phvLicenceExpiry = b.phvLicenceExpiry;
+    data.isApproved = false;
+    data.approvalStatus = 'pending';
+    data.rejectionReason = null;
     const v = await prisma.fleetVehicle.update({ where: { id: req.params.id }, data });
     res.json({ success: true, data: v });
   } catch (e) {

@@ -12,8 +12,8 @@ const hardcodedDefaults = {
 
 export type PricingConfig = typeof hardcodedDefaults;
 
-function positiveOrDefault(value: number, fallback: number): number {
-  return Number.isFinite(value) && value > 0 ? value : fallback;
+function numberOrDefault(value: number, fallback: number): number {
+  return Number.isFinite(value) ? value : fallback;
 }
 
 export async function getPricingConfig(): Promise<PricingConfig> {
@@ -21,25 +21,25 @@ export async function getPricingConfig(): Promise<PricingConfig> {
   if (!p) return hardcodedDefaults;
   return {
     prestige: {
-      ratePerMile: positiveOrDefault(p.prestigeRatePerMile, hardcodedDefaults.prestige.ratePerMile),
-      hourlyRate: positiveOrDefault(p.prestigeHourlyRate, hardcodedDefaults.prestige.hourlyRate),
+      ratePerMile: numberOrDefault(p.prestigeRatePerMile, hardcodedDefaults.prestige.ratePerMile),
+      hourlyRate: numberOrDefault(p.prestigeHourlyRate, hardcodedDefaults.prestige.hourlyRate),
     },
     minibus: {
-      ratePerMile: positiveOrDefault(p.minibusRatePerMile, hardcodedDefaults.minibus.ratePerMile),
-      rate16Seater: positiveOrDefault(p.minibusRate16Seater, hardcodedDefaults.minibus.rate16Seater),
-      rate24Seater: positiveOrDefault(p.minibusRate24Seater, hardcodedDefaults.minibus.rate24Seater),
-      rate32Seater: positiveOrDefault(p.minibusRate32Seater, hardcodedDefaults.minibus.rate32Seater),
+      ratePerMile: numberOrDefault(p.minibusRatePerMile, hardcodedDefaults.minibus.ratePerMile),
+      rate16Seater: numberOrDefault(p.minibusRate16Seater, hardcodedDefaults.minibus.rate16Seater),
+      rate24Seater: numberOrDefault(p.minibusRate24Seater, hardcodedDefaults.minibus.rate24Seater),
+      rate32Seater: numberOrDefault(p.minibusRate32Seater, hardcodedDefaults.minibus.rate32Seater),
     },
     coaches: {
-      ratePerMile: positiveOrDefault(p.coachesRatePerMile, hardcodedDefaults.coaches.ratePerMile),
-      hourlyRate: positiveOrDefault(p.coachesHourlyRate, hardcodedDefaults.coaches.hourlyRate),
+      ratePerMile: numberOrDefault(p.coachesRatePerMile, hardcodedDefaults.coaches.ratePerMile),
+      hourlyRate: numberOrDefault(p.coachesHourlyRate, hardcodedDefaults.coaches.hourlyRate),
     },
     taxi: {
-      ratePerMile: positiveOrDefault(p.taxiRatePerMile, hardcodedDefaults.taxi.ratePerMile),
-      minimumFare: positiveOrDefault(p.taxiMinimumFare, hardcodedDefaults.taxi.minimumFare),
+      ratePerMile: numberOrDefault(p.taxiRatePerMile, hardcodedDefaults.taxi.ratePerMile),
+      minimumFare: numberOrDefault(p.taxiMinimumFare, hardcodedDefaults.taxi.minimumFare),
     },
-    commissionPercentage: positiveOrDefault(p.commissionPercentage, hardcodedDefaults.commissionPercentage),
-    driverPayoutPercentage: positiveOrDefault(p.driverPayoutPercentage, hardcodedDefaults.driverPayoutPercentage),
+    commissionPercentage: numberOrDefault(p.commissionPercentage, hardcodedDefaults.commissionPercentage),
+    driverPayoutPercentage: numberOrDefault(p.driverPayoutPercentage, hardcodedDefaults.driverPayoutPercentage),
   };
 }
 

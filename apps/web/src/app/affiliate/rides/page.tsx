@@ -68,8 +68,8 @@ export default function AffiliateRidesPage() {
     setAssigningError('');
     try {
       await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/accept`, {});
-      await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/assign-driver`, { driverId: selectedDriver });
       await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/assign-vehicle`, { vehicleId: selectedVehicle });
+      await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/assign-driver`, { driverId: selectedDriver });
       await load();
       setAssignModal(null); setSelectedDriver(''); setSelectedVehicle('');
     } catch (e) {

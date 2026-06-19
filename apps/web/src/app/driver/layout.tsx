@@ -114,7 +114,7 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
       {open && <div className="fixed inset-0 z-50 lg:hidden"><div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} /><div className="absolute left-0 top-0 bottom-0 w-64"><Sidebar profile={profile} onNav={() => setOpen(false)} /></div></div>}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-100">
-          <div className="flex items-center gap-2"><BrandLogo variant="mark" width={28} /><div><p className="font-bold text-sm text-slate-800">{profile?.fullName || 'Driver Portal'}</p><p className="text-[10px] text-slate-400">{profile?.email}</p></div></div>
+          <div className="flex items-center gap-2 min-w-0"><BrandLogo variant="full" width={112} /><div className="min-w-0"><p className="font-bold text-sm text-slate-800 truncate">{profile?.fullName || 'Driver Portal'}</p><p className="text-[10px] text-slate-400 truncate">{profile?.email}</p></div></div>
           <button onClick={() => setOpen(!open)} className="text-slate-600">{open ? <X size={20} /> : <Menu size={20} />}</button>
         </header>
         <main className="flex-1 p-4 lg:p-6 overflow-auto">{children}</main>

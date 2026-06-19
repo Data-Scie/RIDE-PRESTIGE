@@ -43,6 +43,7 @@ export default function AffiliateVehiclesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const set = (key: keyof typeof form, value: string) => setForm(previous => ({ ...previous, [key]: value }));
@@ -56,22 +57,55 @@ export default function AffiliateVehiclesPage() {
     loadVehicles().catch(e => setError(e.message)).finally(() => setLoading(false));
   }, []);
 
-  const addVehicle = async (event: React.FormEvent) => {
+  const openAddModal = () => {
+    setError('');
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setModal(true);
+  };
+
+  const openEditModal = (vehicle: Vehicle) => {
+    setError('');
+    setEditingId(vehicle.id);
+    setForm({
+      make: vehicle.make,
+      model: vehicle.model,
+      year: String(vehicle.year),
+      registration: vehicle.registration,
+      colour: vehicle.colour,
+      vehicleType: vehicle.vehicleType,
+      vehicleCategory: vehicle.vehicleCategory,
+      passengerCapacity: String(vehicle.passengerCapacity),
+      luggageCapacity: String(vehicle.luggageCapacity),
+      motExpiry: vehicle.motExpiry,
+      insuranceExpiry: vehicle.insuranceExpiry,
+      phvLicenceExpiry: vehicle.phvLicenceExpiry,
+    });
+    setModal(true);
+  };
+
+  const saveVehicle = async (event: React.FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
     setError('');
     try {
-      await affiliateApi.post('/api/affiliate/vehicles', {
+      const payload = {
         ...form,
         year: Number(form.year),
         passengerCapacity: Number(form.passengerCapacity),
         luggageCapacity: Number(form.luggageCapacity),
-      });
+      };
+      if (editingId) {
+        await affiliateApi.put(`/api/affiliate/vehicles/${editingId}`, payload);
+      } else {
+        await affiliateApi.post('/api/affiliate/vehicles', payload);
+      }
       await loadVehicles();
       setForm(EMPTY_FORM);
+      setEditingId(null);
       setModal(false);
     } catch (e) {
-      setError((e as Error).message || 'Could not add vehicle');
+      setError((e as Error).message || 'Could not save vehicle');
     } finally {
       setSubmitting(false);
     }
@@ -97,7 +131,7 @@ export default function AffiliateVehiclesPage() {
           <h1 className="text-2xl font-bold text-slate-800">My Vehicles</h1>
           <p className="text-slate-500 text-sm">{availableCount} available · {vehicles.length} total</p>
         </div>
-        <button onClick={() => { setError(''); setModal(true); }} className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white bg-green-600">
+        <button onClick={openAddModal} className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white bg-green-600">
           <Plus size={15} /> Add Vehicle
         </button>
       </div>
@@ -117,6 +151,7 @@ export default function AffiliateVehiclesPage() {
               <p className="text-sm text-slate-500 mt-1">{vehicle.registration} · {vehicle.colour} · {vehicle.vehicleType}</p>
               <p className="text-xs text-slate-400 mt-1">{vehicle.passengerCapacity} passengers · {vehicle.luggageCapacity} luggage · {vehicle.vehicleCategory}</p>
               <div className="flex gap-2 mt-4 pt-3 border-t border-slate-100">
+                <button onClick={() => openEditModal(vehicle)} className="px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50">Edit</button>
                 <button onClick={() => removeVehicle(vehicle.id)} className="ml-auto p-2 rounded-xl border border-red-100 text-red-400 hover:bg-red-50" aria-label={`Remove ${vehicle.registration}`}><Trash2 size={14} /></button>
               </div>
             </div>
@@ -129,10 +164,10 @@ export default function AffiliateVehiclesPage() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-6 my-6">
             <div className="flex items-center justify-between mb-5">
-              <div><h3 className="font-bold text-slate-800 text-lg">Add Vehicle</h3><p className="text-xs text-slate-500">Vehicle and compliance details are required before it can receive rides.</p></div>
-              <button onClick={() => setModal(false)}><X size={18} className="text-slate-400" /></button>
+              <div><h3 className="font-bold text-slate-800 text-lg">{editingId ? 'Edit Vehicle' : 'Add Vehicle'}</h3><p className="text-xs text-slate-500">Vehicle and compliance details are required before it can receive rides.</p></div>
+              <button onClick={() => { setModal(false); setEditingId(null); }}><X size={18} className="text-slate-400" /></button>
             </div>
-            <form onSubmit={addVehicle} className="space-y-5">
+            <form onSubmit={saveVehicle} className="space-y-5">
               <div className="grid sm:grid-cols-3 gap-4">
                 <Field label="Make *"><input required value={form.make} onChange={e => set('make', e.target.value)} className={inputClass} placeholder="Mercedes" /></Field>
                 <Field label="Model *"><input required value={form.model} onChange={e => set('model', e.target.value)} className={inputClass} placeholder="E-Class" /></Field>
@@ -155,8 +190,8 @@ export default function AffiliateVehiclesPage() {
               </div>
 
               <div className="flex gap-3">
-                <button type="submit" disabled={submitting} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm text-white bg-green-600 disabled:opacity-60"><Save size={14} /> {submitting ? 'Adding...' : 'Add Vehicle'}</button>
-                <button type="button" onClick={() => setModal(false)} className="flex-1 py-3 rounded-xl font-semibold text-sm bg-slate-100 text-slate-600">Cancel</button>
+                <button type="submit" disabled={submitting} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm text-white bg-green-600 disabled:opacity-60"><Save size={14} /> {submitting ? 'Saving...' : editingId ? 'Save Changes' : 'Add Vehicle'}</button>
+                <button type="button" onClick={() => { setModal(false); setEditingId(null); }} className="flex-1 py-3 rounded-xl font-semibold text-sm bg-slate-100 text-slate-600">Cancel</button>
               </div>
             </form>
           </div>
