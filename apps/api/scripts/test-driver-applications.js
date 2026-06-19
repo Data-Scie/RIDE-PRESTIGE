@@ -57,11 +57,36 @@ async function submitAndApproveIndependentVehicleDocuments(vehicleId, driverToke
   }
 }
 
+async function createApprovedAffiliate(suffix, opsToken, password) {
+  const email = `driver.application.affiliate.${suffix}@example.com`;
+  const registered = await request('/api/auth/register/affiliate', {
+    method: 'POST',
+    body: {
+      companyName: `Driver Application Test Affiliate ${suffix}`,
+      tradingName: `Driver Application ${suffix}`,
+      contactPerson: 'Driver Application Manager',
+      email,
+      phone: '+44 7700 900124',
+      password,
+      address: '2 Integration Test Road',
+      city: 'Sheffield',
+      postcode: 'S1 2AB',
+      operatorLicenceNumber: `OB-DRIVER-${suffix}`,
+      companyRegNumber: `DRIVER${suffix}`,
+      serviceAreas: ['S1', 'S10'],
+      bankAccountName: 'Driver Application Test',
+      sortCode: '000000',
+      accountNumber: '00000000',
+    },
+  });
+  await request(`/api/ops/affiliates/${registered.affiliate.id}/approve`, { method: 'PUT', token: opsToken, body: {} });
+  const token = await login(email, password, 'affiliate');
+  return { id: registered.affiliate.id, token };
+}
+
 async function main() {
   const suffix = Date.now();
   const password = 'DriverTest@2026!';
-  const affiliate = await prisma.affiliate.findUnique({ where: { id: 'aff-1' } });
-  assert(affiliate?.isApproved, 'Approved seed affiliate aff-1 is required');
 
   const affiliateEmail = `affiliate.driver.${suffix}@example.com`;
   const independentEmail = `independent.driver.${suffix}@example.com`;
@@ -75,8 +100,12 @@ async function main() {
   let vehicleId;
   let ineligibleVehicleId;
   let independentVehicleId;
+  let affiliateId;
 
   try {
+    const opsToken = await login('ops@rideprestige.co.uk', 'Ops@2026!', 'ops');
+    const affiliate = await createApprovedAffiliate(suffix, opsToken, password);
+    affiliateId = affiliate.id;
     const common = {
       phone: '+44 7700 900123',
       password,
@@ -103,7 +132,7 @@ async function main() {
         insuranceExpiry: '2027-06-14',
         phvLicenceExpiry: '2027-06-14',
         status: 'available',
-        affiliateId: affiliate.id,
+        affiliateId: affiliateId,
         isApproved: true,
         approvalStatus: 'approved',
       },
@@ -125,7 +154,7 @@ async function main() {
         insuranceExpiry: '2027-06-14',
         phvLicenceExpiry: '2027-06-14',
         status: 'available',
-        affiliateId: affiliate.id,
+        affiliateId: affiliateId,
         isApproved: true,
         approvalStatus: 'approved',
       },
@@ -139,7 +168,7 @@ async function main() {
         fullName: 'Affiliate Application Test',
         email: affiliateEmail,
         driverType: 'affiliateDriver',
-        affiliateId: affiliate.id,
+        affiliateId: affiliateId,
       },
     });
     affiliateDriverId = affiliateApplication.user.id;
@@ -170,10 +199,9 @@ async function main() {
     });
     rejectedDriverId = rejectedApplication.user.id;
 
-    const [adminToken, opsToken, affiliateToken] = await Promise.all([
+    const [adminToken, affiliateToken] = await Promise.all([
       login('admin@rideprestige.co.uk', 'Admin@2026!', 'admin'),
-      login('ops@rideprestige.co.uk', 'Ops@2026!', 'ops'),
-      login('affiliate@settransfers.co.uk', 'Affiliate@123', 'affiliate'),
+      Promise.resolve(affiliate.token),
     ]);
 
     const [opsApplications, affiliateDrivers] = await Promise.all([
@@ -185,7 +213,7 @@ async function main() {
     const opsIndependent = opsApplications.data.find(driver => driver.id === independentDriverId);
     const opsRejected = opsApplications.data.find(driver => driver.id === rejectedDriverId);
     assert(opsAffiliate?.applicationStatus === 'pending', 'Affiliate driver application missing from Operations');
-    assert(opsAffiliate?.affiliate?.id === affiliate.id, 'Affiliate relationship missing in Operations');
+    assert(opsAffiliate?.affiliate?.id === affiliateId, 'Affiliate relationship missing in Operations');
     assert(opsIndependent?.applicationStatus === 'pending', 'Independent driver application missing from Operations');
     assert(opsRejected?.applicationStatus === 'pending', 'Rejectable driver application missing from Operations');
     assert(affiliateDrivers.data.some(driver => driver.id === affiliateDriverId), 'Applicant missing from selected affiliate portal');
@@ -299,7 +327,7 @@ async function main() {
       body: { vehicleId },
     });
     const allocated = await prisma.job.findUnique({ where: { id: jobId } });
-    assert(allocated?.affiliateId === affiliate.id, 'Booking was not accepted by the affiliate');
+    assert(allocated?.affiliateId === affiliateId, 'Booking was not accepted by the affiliate');
     assert(allocated?.assignedDriverId === affiliateDriverId, 'Affiliate could not allocate its approved driver');
     assert(allocated?.status === 'vehicle_assigned', 'Driver and vehicle allocation did not create an assigned request');
 
@@ -373,6 +401,11 @@ async function main() {
       await prisma.driver.deleteMany({
         where: { id: { in: [affiliateDriverId, independentDriverId, rejectedDriverId].filter(Boolean) } },
       });
+    }
+    if (affiliateId) {
+      await prisma.notification.deleteMany({ where: { recipientId: affiliateId } });
+      await prisma.affiliateDocument.deleteMany({ where: { affiliateId } });
+      await prisma.affiliate.deleteMany({ where: { id: affiliateId } });
     }
     await prisma.$disconnect();
   }

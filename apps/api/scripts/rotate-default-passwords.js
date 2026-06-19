@@ -6,7 +6,6 @@
  *   RP_OPS_PASSWORD="..."
  *
  * Optional:
- *   RP_AFFILIATE_PASSWORD="..."
  *   RP_DRIVER_PASSWORD="..."
  *   RP_CUSTOMER_PASSWORD="..."
  *
@@ -48,7 +47,6 @@ async function main() {
   const updates = [
     ['admin', 'admin@rideprestige.co.uk', await updateAdmin('admin@rideprestige.co.uk', process.env.RP_ADMIN_PASSWORD)],
     ['ops', 'ops@rideprestige.co.uk', await updateAdmin('ops@rideprestige.co.uk', process.env.RP_OPS_PASSWORD)],
-    ['affiliate', 'affiliate@settransfers.co.uk', await updateModel('affiliate', 'affiliate@settransfers.co.uk', process.env.RP_AFFILIATE_PASSWORD)],
     ['driver', 'driver@rideprestige.co.uk', await updateModel('driver', 'driver@rideprestige.co.uk', process.env.RP_DRIVER_PASSWORD)],
     ['customer', 'james@example.com', await updateModel('customer', 'james@example.com', process.env.RP_CUSTOMER_PASSWORD)],
   ];

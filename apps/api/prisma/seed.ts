@@ -70,34 +70,7 @@ async function main() {
 
   // ─── Affiliates ────────────────────────────────────────────────────────────
 
-  await prisma.affiliate.upsert({
-    where: { id: 'aff-1' },
-    update: {},
-    create: {
-      id: 'aff-1',
-      companyName: 'Sheffield Executive Transport Ltd',
-      tradingName: 'SET Transfers',
-      contactPerson: 'David Clarke',
-      email: 'affiliate@settransfers.co.uk',
-      phone: '+44 114 555 0101',
-      passwordHash: hash('Affiliate@123'),
-      address: '12 Business Park, Sheffield',
-      city: 'Sheffield',
-      postcode: 'S1 2GH',
-      operatorLicenceNumber: 'OB1234567',
-      companyRegNumber: '12345678',
-      vatNumber: 'GB123456789',
-      serviceAreas: ['Sheffield', 'Rotherham', 'Barnsley', 'Doncaster'],
-      bankAccountName: 'Sheffield Executive Transport Ltd',
-      sortCode: '20-00-00',
-      accountNumber: '12345678',
-      isApproved: true,
-      rating: 4.8,
-      totalJobs: 142,
-      totalEarnings: 28400,
-      createdAt: new Date('2026-01-10T09:00:00Z'),
-    },
-  });
+  // No approved demo affiliate is seeded. Affiliates must register and pass document review.
 
   await prisma.affiliate.upsert({
     where: { id: 'aff-2' },
@@ -145,8 +118,8 @@ async function main() {
       drivingLicenceNumber: 'ALI8506154MO9PQ',
       privateHireBadgeNumber: 'SY-PHV-1001',
       nationalInsurance: 'AB123456C',
-      driverType: 'affiliateDriver',
-      affiliateId: 'aff-1',
+      driverType: 'independentDriver',
+      affiliateId: null,
       status: 'available',
       rating: 4.9,
       totalJobs: 87,
@@ -196,7 +169,7 @@ async function main() {
     create: {
       id: 'drv-3',
       fullName: 'James Okafor',
-      email: 'james.okafor@settransfers.co.uk',
+      email: 'james.okafor@example.com',
       phone: '+44 7700 100003',
       passwordHash: hash('Driver@123'),
       address: '41 Crookes Road',
@@ -205,8 +178,8 @@ async function main() {
       dateOfBirth: '1992-03-08',
       drivingLicenceNumber: 'OKAFO920308JM9CD',
       privateHireBadgeNumber: 'SY-PHV-1003',
-      driverType: 'affiliateDriver',
-      affiliateId: 'aff-1',
+      driverType: 'independentDriver',
+      affiliateId: null,
       status: 'offline',
       rating: 0,
       totalJobs: 0,
@@ -316,21 +289,21 @@ async function main() {
       vehicleType: 'Executive', vehicleCategory: 'prestige',
       colour: 'Obsidian Black', passengerCapacity: 3, luggageCapacity: 3,
       motExpiry: '2026-12-01', insuranceExpiry: '2027-03-31', phvLicenceExpiry: '2027-01-01',
-      status: 'available', affiliateId: 'aff-1', assignedDriverId: 'drv-1',
+      status: 'available', ownerDriverId: 'drv-1', assignedDriverId: 'drv-1', isApproved: true, approvalStatus: 'approved',
     },
     {
       id: 'fv-2', make: 'Range Rover', model: 'Sport', year: 2022, registration: 'SH22 RRS',
       vehicleType: 'Luxury', vehicleCategory: 'prestige',
       colour: 'Santorini Black', passengerCapacity: 4, luggageCapacity: 4,
       motExpiry: '2026-11-15', insuranceExpiry: '2027-01-31', phvLicenceExpiry: '2027-01-01',
-      status: 'available', affiliateId: 'aff-1',
+      status: 'available', isApproved: true, approvalStatus: 'approved',
     },
     {
       id: 'fv-3', make: 'Ford', model: 'Transit', year: 2021, registration: 'SH21 MIN',
       vehicleType: 'Minibus', vehicleCategory: 'minibus',
       colour: 'White', passengerCapacity: 16, luggageCapacity: 16,
       motExpiry: '2026-08-20', insuranceExpiry: '2027-02-28', phvLicenceExpiry: '2027-01-01',
-      status: 'available', affiliateId: 'aff-1',
+      status: 'available', isApproved: true, approvalStatus: 'approved',
     },
     {
       id: 'fv-4', make: 'Toyota', model: 'Corolla', year: 2022, registration: 'SH22 TAX',
@@ -474,7 +447,7 @@ async function main() {
       estimatedDuration: '55 min',
       flightNumber: 'EZY1234',
       status: 'driver_accepted',
-      affiliateId: 'aff-1',
+      affiliateId: null,
       assignedDriverId: 'drv-1',
       assignedVehicleId: 'fv-1',
       createdAt: new Date('2026-06-10T08:00:00Z'),
@@ -552,7 +525,7 @@ async function main() {
       estimatedDuration: '2h 45min',
       flightNumber: 'BA0117',
       status: 'completed',
-      affiliateId: 'aff-1',
+      affiliateId: null,
       assignedDriverId: 'drv-1',
       assignedVehicleId: 'fv-2',
       createdAt: new Date('2026-05-28T10:00:00Z'),
@@ -631,20 +604,7 @@ async function main() {
 
   // ─── Notifications ─────────────────────────────────────────────────────────
 
-  await prisma.notification.upsert({
-    where: { id: 'notif-1' },
-    update: {},
-    create: {
-      id: 'notif-1',
-      recipientId: 'aff-1',
-      recipientRole: 'affiliate',
-      title: 'New Job Available',
-      body: 'A new minibus job (RP-2026-1002) is available for you to accept.',
-      type: 'job',
-      isRead: false,
-      createdAt: new Date('2026-06-09T10:00:00Z'),
-    },
-  });
+  await prisma.notification.deleteMany({ where: { id: 'notif-1' } });
 
   await prisma.notification.upsert({
     where: { id: 'notif-2' },

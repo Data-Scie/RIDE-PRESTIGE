@@ -114,20 +114,19 @@ async function main() {
   const suffix = Date.now();
   const opsToken = await login('ops@rideprestige.co.uk', 'Ops@2026!', 'ops');
   const adminToken = await login('admin@rideprestige.co.uk', 'Admin@2026!', 'admin');
-  const aff1 = { affiliateId: 'aff-1', token: await login('affiliate@settransfers.co.uk', 'Affiliate@123', 'affiliate') };
   const affiliates = [];
-  const seedVehicleIds = [];
   let bookingId;
   let jobId;
   let reference;
 
   try {
+    // Affiliate A: approved and has a matching 'prestige' vehicle
+    affiliates.push(await createApprovedAffiliate(0, suffix, opsToken, 'prestige'));
     // Affiliate B: also approved, also has a 'prestige' vehicle -> should ALSO see the new job
     affiliates.push(await createApprovedAffiliate(1, suffix, opsToken, 'prestige'));
     // Affiliate C: approved, but only has a 'coaches' vehicle -> must NOT see a 'prestige' job
     affiliates.push(await createApprovedAffiliate(2, suffix, opsToken, 'coaches'));
-    seedVehicleIds.push(await createApprovedAffiliateVehicle(aff1.token, opsToken, suffix, 'prestige', 'A'));
-    const [affB, affC] = affiliates;
+    const [affA, affB, affC] = affiliates;
 
     const created = await request('/api/public/booking', {
       method: 'POST',
@@ -145,7 +144,7 @@ async function main() {
 
     // Before anyone accepts: every category-matching affiliate sees it, non-matching does not.
     const [aff1New, affBNew, affCNew] = await Promise.all([
-      request('/api/affiliate/jobs/new', { token: aff1.token }),
+      request('/api/affiliate/jobs/new', { token: affA.token }),
       request('/api/affiliate/jobs/new', { token: affB.token }),
       request('/api/affiliate/jobs/new', { token: affC.token }),
     ]);
@@ -162,9 +161,9 @@ async function main() {
 
     // Affiliate A accepts -> must disappear from every other affiliate's view, and never appear
     // in another affiliate's "accepted" list, even though it matched their category too.
-    await request(`/api/affiliate/jobs/${jobId}/accept`, { method: 'POST', token: aff1.token });
+    await request(`/api/affiliate/jobs/${jobId}/accept`, { method: 'POST', token: affA.token });
     const [aff1Accepted, affBNewAfter, affBAcceptedAfter] = await Promise.all([
-      request('/api/affiliate/jobs/accepted', { token: aff1.token }),
+      request('/api/affiliate/jobs/accepted', { token: affA.token }),
       request('/api/affiliate/jobs/new', { token: affB.token }),
       request('/api/affiliate/jobs/accepted', { token: affB.token }),
     ]);
@@ -201,7 +200,6 @@ async function main() {
     }
     if (jobId) await prisma.job.deleteMany({ where: { id: jobId } });
     if (bookingId) await prisma.booking.deleteMany({ where: { id: bookingId } });
-    if (seedVehicleIds.length) await prisma.fleetVehicle.deleteMany({ where: { id: { in: seedVehicleIds } } });
     if (affiliates.length) {
       await prisma.fleetVehicle.deleteMany({ where: { id: { in: affiliates.map(a => a.vehicleId) } } });
       await prisma.notification.deleteMany({ where: { recipientId: { in: affiliates.map(a => a.affiliateId) } } });
