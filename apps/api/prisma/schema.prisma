@@ -162,6 +162,23 @@ model FleetVehicle {
   rejectionReason   String?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @default(now()) @updatedAt
+
+  documents         VehicleDocument[]
+}
+
+model VehicleDocument {
+  id               String       @id
+  vehicleId        String
+  vehicle          FleetVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  type             String
+  label            String
+  status           String       @default("missing") // approved | pending | rejected | expired | missing
+  expiryDate       String?
+  fileUrl          String?
+  uploadedAt       DateTime?
+  rejectionReason  String?
+
+  @@unique([vehicleId, type])
 }
 
 // ─── Website Fleet (CMS) ─────────────────────────────────────────────────────

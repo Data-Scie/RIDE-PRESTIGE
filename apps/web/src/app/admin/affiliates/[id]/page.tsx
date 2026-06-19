@@ -13,6 +13,7 @@ interface AffiliateDriver {
 interface AffiliateVehicle {
   id: string; make: string; model: string; registration: string; vehicleCategory: string;
   status: string; approvalStatus: string; isApproved: boolean;
+  documents?: DriverDocument[];
 }
 interface AffiliateDetail {
   id: string; companyName: string; tradingName: string; contactPerson: string;
@@ -53,6 +54,20 @@ export default function AdminAffiliateDetailPage() {
       await load();
     } catch (e) {
       setError((e as Error).message || 'Could not update document');
+    } finally {
+      setUpdatingDocument(null);
+    }
+  };
+
+  const updateVehicleDocument = async (vehicleId: string, documentId: string, action: 'approve' | 'reject') => {
+    const reason = action === 'reject' ? window.prompt('Reason for rejection?') || 'Vehicle document was not approved' : undefined;
+    setUpdatingDocument(documentId);
+    setError('');
+    try {
+      await adminApi.put(`/api/admin/vehicles/${vehicleId}/documents/${documentId}/${action}`, { reason });
+      await load();
+    } catch (e) {
+      setError((e as Error).message || 'Could not update vehicle document');
     } finally {
       setUpdatingDocument(null);
     }
@@ -152,12 +167,30 @@ export default function AdminAffiliateDetailPage() {
         </div>
         {!affiliate.fleetVehicles.length && <p className="px-6 py-8 text-sm text-slate-400">No vehicles yet.</p>}
         {affiliate.fleetVehicles.map(vehicle => (
-          <div key={vehicle.id} className="px-6 py-4 flex items-center justify-between gap-4 flex-wrap" style={{ borderBottom: '1px solid #f9f9f9' }}>
-            <div>
-              <p className="font-medium text-sm" style={{ color: '#0a0f1e' }}>{vehicle.make} {vehicle.model}</p>
-              <p className="text-xs text-slate-400 font-mono">{vehicle.registration} · {vehicle.vehicleCategory}</p>
+          <div key={vehicle.id} className="px-6 py-4" style={{ borderBottom: '1px solid #f9f9f9' }}>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="font-medium text-sm" style={{ color: '#0a0f1e' }}>{vehicle.make} {vehicle.model}</p>
+                <p className="text-xs text-slate-400 font-mono">{vehicle.registration} · {vehicle.vehicleCategory}</p>
+              </div>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${vehicle.approvalStatus === 'approved' ? 'bg-green-50 text-green-700' : vehicle.approvalStatus === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>{vehicle.approvalStatus}</span>
             </div>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${vehicle.approvalStatus === 'approved' ? 'bg-green-50 text-green-700' : vehicle.approvalStatus === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>{vehicle.approvalStatus}</span>
+            {!!vehicle.documents?.length && (
+              <div className="mt-3 grid sm:grid-cols-3 gap-2">
+                {vehicle.documents.map(doc => (
+                  <div key={doc.id} className="rounded-xl bg-slate-50 p-3">
+                    <p className="text-xs font-semibold text-slate-700">{doc.label}</p>
+                    <p className="text-[11px] text-slate-400 capitalize">{doc.status}{doc.expiryDate ? ` - expires ${new Date(doc.expiryDate).toLocaleDateString('en-GB')}` : ''}</p>
+                    {doc.rejectionReason && <p className="mt-1 text-[11px] text-red-600">{doc.rejectionReason}</p>}
+                    {doc.fileUrl && <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-blue-600">View document</a>}
+                    <div className="mt-2 flex gap-1">
+                      <button disabled={updatingDocument === doc.id} onClick={() => void updateVehicleDocument(vehicle.id, doc.id, 'approve')} className="rounded-lg bg-green-600 px-2 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50">Approve</button>
+                      <button disabled={updatingDocument === doc.id} onClick={() => void updateVehicleDocument(vehicle.id, doc.id, 'reject')} className="rounded-lg bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-600 disabled:opacity-50">Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>

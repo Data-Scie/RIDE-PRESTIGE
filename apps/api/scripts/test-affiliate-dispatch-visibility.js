@@ -8,23 +8,58 @@ function assert(condition, message) {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, {
-    method: options.method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(`${options.method || 'GET'} ${path}: ${response.status} ${payload.message || 'Request failed'}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 30000);
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      method: options.method || 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(`${options.method || 'GET'} ${path}: ${response.status} ${payload.message || 'Request failed'}`);
+    }
+    return payload;
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`${options.method || 'GET'} ${path}: request timed out`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  return payload;
 }
 
 async function login(email, password, role) {
   return (await request('/api/auth/login', { method: 'POST', body: { email, password, role } })).token;
+}
+
+async function submitAndApproveAffiliateVehicleDocuments(vehicleId, affiliateToken, opsToken) {
+  const vehicles = (await request('/api/affiliate/vehicles', { token: affiliateToken })).data;
+  const vehicle = vehicles.find(item => item.id === vehicleId);
+  assert(vehicle, 'Registered affiliate vehicle was not returned');
+  assert(vehicle.documents?.length > 0, 'Affiliate vehicle document slots were not created');
+
+  for (const document of vehicle.documents) {
+    await request(`/api/affiliate/vehicles/${vehicleId}/documents/${document.id}`, {
+      method: 'PUT',
+      token: affiliateToken,
+      body: {
+        fileUrl: `https://documents.example.com/${vehicleId}/${document.type}.pdf`,
+        expiryDate: '2028-12-31',
+      },
+    });
+    await request(`/api/ops/vehicles/${vehicleId}/documents/${document.id}/approve`, {
+      method: 'PUT',
+      token: opsToken,
+      body: {},
+    });
+  }
 }
 
 async function createApprovedAffiliate(index, suffix, opsToken, vehicleCategory) {
@@ -53,8 +88,26 @@ async function createApprovedAffiliate(index, suffix, opsToken, vehicleCategory)
       motExpiry: '2028-12-31', insuranceExpiry: '2028-12-31', phvLicenceExpiry: '2028-12-31',
     },
   })).data;
+  await submitAndApproveAffiliateVehicleDocuments(vehicle.id, token, opsToken);
   await request(`/api/ops/vehicles/${vehicle.id}/approve`, { method: 'PUT', token: opsToken, body: {} });
   return { affiliateId, vehicleId: vehicle.id, email, token };
+}
+
+async function createApprovedAffiliateVehicle(token, opsToken, suffix, vehicleCategory, label) {
+  const vehicle = (await request('/api/affiliate/vehicles', {
+    method: 'POST',
+    token,
+    body: {
+      make: 'Mercedes', model: `Dispatch Seed ${label}`, year: 2026,
+      registration: `DSA${String(suffix).slice(-5)}${label}`,
+      vehicleType: 'Executive', vehicleCategory, colour: 'Black',
+      passengerCapacity: 4, luggageCapacity: 3,
+      motExpiry: '2028-12-31', insuranceExpiry: '2028-12-31', phvLicenceExpiry: '2028-12-31',
+    },
+  })).data;
+  await submitAndApproveAffiliateVehicleDocuments(vehicle.id, token, opsToken);
+  await request(`/api/ops/vehicles/${vehicle.id}/approve`, { method: 'PUT', token: opsToken, body: {} });
+  return vehicle.id;
 }
 
 async function main() {
@@ -63,6 +116,7 @@ async function main() {
   const adminToken = await login('admin@rideprestige.co.uk', 'Admin@2026!', 'admin');
   const aff1 = { affiliateId: 'aff-1', token: await login('affiliate@settransfers.co.uk', 'Affiliate@123', 'affiliate') };
   const affiliates = [];
+  const seedVehicleIds = [];
   let bookingId;
   let jobId;
   let reference;
@@ -72,6 +126,7 @@ async function main() {
     affiliates.push(await createApprovedAffiliate(1, suffix, opsToken, 'prestige'));
     // Affiliate C: approved, but only has a 'coaches' vehicle -> must NOT see a 'prestige' job
     affiliates.push(await createApprovedAffiliate(2, suffix, opsToken, 'coaches'));
+    seedVehicleIds.push(await createApprovedAffiliateVehicle(aff1.token, opsToken, suffix, 'prestige', 'A'));
     const [affB, affC] = affiliates;
 
     const created = await request('/api/public/booking', {
@@ -146,6 +201,7 @@ async function main() {
     }
     if (jobId) await prisma.job.deleteMany({ where: { id: jobId } });
     if (bookingId) await prisma.booking.deleteMany({ where: { id: bookingId } });
+    if (seedVehicleIds.length) await prisma.fleetVehicle.deleteMany({ where: { id: { in: seedVehicleIds } } });
     if (affiliates.length) {
       await prisma.fleetVehicle.deleteMany({ where: { id: { in: affiliates.map(a => a.vehicleId) } } });
       await prisma.notification.deleteMany({ where: { recipientId: { in: affiliates.map(a => a.affiliateId) } } });

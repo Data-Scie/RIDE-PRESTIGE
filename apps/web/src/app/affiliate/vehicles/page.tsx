@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { Car, Plus, Save, Trash2, X } from 'lucide-react';
-import { affiliateApi } from '@/lib/api-client';
+import { affiliateApi, getPortalToken } from '@/lib/api-client';
+
+interface VehicleDocument {
+  id: string;
+  label: string;
+  type: string;
+  status: string;
+  expiryDate?: string;
+  fileUrl?: string;
+  rejectionReason?: string;
+}
 
 interface Vehicle {
   id: string;
@@ -16,9 +26,12 @@ interface Vehicle {
   passengerCapacity: number;
   luggageCapacity: number;
   status: 'available' | 'in_use' | 'maintenance' | 'offline';
+  approvalStatus?: string;
+  rejectionReason?: string;
   motExpiry: string;
   insuranceExpiry: string;
   phvLicenceExpiry: string;
+  documents?: VehicleDocument[];
 }
 
 const EMPTY_FORM = {
@@ -120,6 +133,36 @@ export default function AffiliateVehiclesPage() {
     }
   };
 
+  const submitVehicleDocument = async (vehicleId: string, document: VehicleDocument, fileUrl: string, expiryDate: string) => {
+    try {
+      await affiliateApi.put(`/api/affiliate/vehicles/${vehicleId}/documents/${document.id}`, { fileUrl, expiryDate });
+      await loadVehicles();
+    } catch (e) {
+      setError((e as Error).message || 'Could not submit vehicle document');
+    }
+  };
+
+  const uploadVehicleDocument = async (vehicleId: string, document: VehicleDocument, file: File, expiryDate: string) => {
+    try {
+      const token = getPortalToken('affiliate');
+      if (!token) throw new Error('Not authenticated');
+      const form = new FormData();
+      form.append('document', file);
+      form.append('expiryDate', expiryDate);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const response = await fetch(`${apiUrl}/api/affiliate/vehicles/${vehicleId}/documents/${document.id}/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const payload = await response.json().catch(() => ({ message: 'Upload failed' }));
+      if (!response.ok) throw new Error(payload.message || 'Upload failed');
+      await loadVehicles();
+    } catch (e) {
+      setError((e as Error).message || 'Could not upload vehicle document');
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-400">Loading vehicles...</div>;
 
   const availableCount = vehicles.filter(vehicle => vehicle.status === 'available').length;
@@ -150,6 +193,26 @@ export default function AffiliateVehiclesPage() {
               <h3 className="font-bold text-slate-800">{vehicle.make} {vehicle.model} ({vehicle.year})</h3>
               <p className="text-sm text-slate-500 mt-1">{vehicle.registration} · {vehicle.colour} · {vehicle.vehicleType}</p>
               <p className="text-xs text-slate-400 mt-1">{vehicle.passengerCapacity} passengers · {vehicle.luggageCapacity} luggage · {vehicle.vehicleCategory}</p>
+              <div className="mt-3">
+                <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${
+                  vehicle.approvalStatus === 'approved' ? 'bg-green-50 text-green-700' :
+                  vehicle.approvalStatus === 'rejected' ? 'bg-red-50 text-red-600' :
+                  'bg-amber-50 text-amber-700'
+                }`}>{vehicle.approvalStatus ?? 'pending approval'}</span>
+                {vehicle.rejectionReason && <p className="mt-2 text-xs text-red-600">{vehicle.rejectionReason}</p>}
+              </div>
+              {!!vehicle.documents?.length && (
+                <div className="mt-4 grid gap-3">
+                  {vehicle.documents.map(document => (
+                    <VehicleDocumentForm
+                      key={document.id}
+                      document={document}
+                      onSubmit={(doc, fileUrl, expiryDate) => submitVehicleDocument(vehicle.id, doc, fileUrl, expiryDate)}
+                      onUpload={(doc, file, expiryDate) => uploadVehicleDocument(vehicle.id, doc, file, expiryDate)}
+                    />
+                  ))}
+                </div>
+              )}
               <div className="flex gap-2 mt-4 pt-3 border-t border-slate-100">
                 <button onClick={() => openEditModal(vehicle)} className="px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50">Edit</button>
                 <button onClick={() => removeVehicle(vehicle.id)} className="ml-auto p-2 rounded-xl border border-red-100 text-red-400 hover:bg-red-50" aria-label={`Remove ${vehicle.registration}`}><Trash2 size={14} /></button>
@@ -203,4 +266,47 @@ export default function AffiliateVehiclesPage() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="block"><span className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">{label}</span>{children}</label>;
+}
+
+function VehicleDocumentForm({
+  document,
+  onSubmit,
+  onUpload,
+}: {
+  document: VehicleDocument;
+  onSubmit: (document: VehicleDocument, fileUrl: string, expiryDate: string) => Promise<void>;
+  onUpload: (document: VehicleDocument, file: File, expiryDate: string) => Promise<void>;
+}) {
+  const [fileUrl, setFileUrl] = useState(document.fileUrl || '');
+  const [expiryDate, setExpiryDate] = useState(document.expiryDate || '');
+  const [file, setFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    setSubmitting(true);
+    try {
+      if (file) await onUpload(document, file, expiryDate);
+      else await onSubmit(document, fileUrl, expiryDate);
+      setFile(null);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-slate-700">{document.label}</p>
+        <span className="text-[11px] font-semibold capitalize text-slate-500">{document.status}</span>
+      </div>
+      {document.rejectionReason && <p className="mt-1 text-[11px] text-red-600">{document.rejectionReason}</p>}
+      {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[11px] text-blue-600">View uploaded document</a>}
+      <input type="file" accept=".pdf,image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs" />
+      <input type="url" value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="Or paste hosted document URL" className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs" />
+      <input required type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs" />
+      <button onClick={submit} disabled={submitting || !expiryDate || (!file && !fileUrl)} className="mt-2 rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+        {submitting ? 'Submitting...' : 'Submit document'}
+      </button>
+    </div>
+  );
 }

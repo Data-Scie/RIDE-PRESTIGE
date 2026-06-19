@@ -8,16 +8,28 @@ function assert(condition, message) {
 }
 
 async function rawRequest(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, {
-    method: options.method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-  const payload = await response.json();
-  return { response, payload };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 30000);
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      method: options.method || 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
+    });
+    const payload = await response.json();
+    return { response, payload };
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`${options.method || 'GET'} ${path}: request timed out`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function request(path, options = {}) {
@@ -33,6 +45,29 @@ async function login(email, password, role) {
     method: 'POST',
     body: { email, password, role },
   })).token;
+}
+
+async function submitAndApproveVehicleDocuments(vehicleId, driverToken, opsToken) {
+  const vehicles = (await request('/api/driver/vehicles', { token: driverToken })).data;
+  const vehicle = vehicles.find(item => item.id === vehicleId);
+  assert(vehicle, 'Registered independent vehicle was not returned');
+  assert(vehicle.documents?.length > 0, 'Independent vehicle document slots were not created');
+
+  for (const document of vehicle.documents) {
+    await request(`/api/driver/vehicles/${vehicleId}/documents/${document.id}`, {
+      method: 'PUT',
+      token: driverToken,
+      body: {
+        fileUrl: `https://documents.example.com/${vehicleId}/${document.type}.pdf`,
+        expiryDate: '2028-12-31',
+      },
+    });
+    await request(`/api/ops/vehicles/${vehicleId}/documents/${document.id}/approve`, {
+      method: 'PUT',
+      token: opsToken,
+      body: {},
+    });
+  }
 }
 
 async function createCompliantDriver(index, suffix, opsToken) {
@@ -93,6 +128,7 @@ async function createCompliantDriver(index, suffix, opsToken) {
       phvLicenceExpiry: '2028-12-31',
     },
   })).data;
+  await submitAndApproveVehicleDocuments(vehicle.id, token, opsToken);
   await request(`/api/ops/vehicles/${vehicle.id}/approve`, { method: 'PUT', token: opsToken, body: {} });
   await request('/api/driver/status', { method: 'PUT', token, body: { status: 'available' } });
   return { driverId, vehicleId: vehicle.id, email, token };

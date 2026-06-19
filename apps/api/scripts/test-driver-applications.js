@@ -34,6 +34,29 @@ async function login(email, password, role) {
   return result.token;
 }
 
+async function submitAndApproveIndependentVehicleDocuments(vehicleId, driverToken, opsToken) {
+  const vehicles = (await request('/api/driver/vehicles', { token: driverToken })).data;
+  const vehicle = vehicles.find(item => item.id === vehicleId);
+  assert(vehicle, 'Registered independent vehicle was not returned');
+  assert(vehicle.documents?.length > 0, 'Independent vehicle document slots were not created');
+
+  for (const document of vehicle.documents) {
+    await request(`/api/driver/vehicles/${vehicleId}/documents/${document.id}`, {
+      method: 'PUT',
+      token: driverToken,
+      body: {
+        fileUrl: `https://documents.example.com/${vehicleId}/${document.type}.pdf`,
+        expiryDate: '2028-12-31',
+      },
+    });
+    await request(`/api/ops/vehicles/${vehicleId}/documents/${document.id}/approve`, {
+      method: 'PUT',
+      token: opsToken,
+      body: {},
+    });
+  }
+}
+
 async function main() {
   const suffix = Date.now();
   const password = 'DriverTest@2026!';
@@ -226,6 +249,7 @@ async function main() {
       },
     })).data;
     independentVehicleId = independentVehicle.id;
+    await submitAndApproveIndependentVehicleDocuments(independentVehicleId, independentDriverToken, opsToken);
     await request(`/api/ops/vehicles/${independentVehicleId}/approve`, { method: 'PUT', token: opsToken, body: {} });
     await request('/api/driver/status', { method: 'PUT', token: independentDriverToken, body: { status: 'available' } });
 

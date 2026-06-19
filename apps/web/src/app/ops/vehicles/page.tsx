@@ -20,6 +20,7 @@ type Vehicle = {
   rejectionReason?: string;
   ownerDriver?: { id: string; fullName: string; email: string; phone: string } | null;
   ownerAffiliate?: { id: string; tradingName: string; companyName: string } | null;
+  documents?: Array<{ id: string; label: string; status: string; expiryDate?: string; fileUrl?: string; rejectionReason?: string }>;
 };
 
 export default function OpsVehiclesPage() {
@@ -55,6 +56,20 @@ export default function OpsVehiclesPage() {
       await load();
     } catch (e) {
       setError((e as Error).message || 'Could not update vehicle compliance');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const updateDocument = async (vehicleId: string, documentId: string, action: 'approve' | 'reject') => {
+    const reason = action === 'reject' ? window.prompt('Reason for rejection') || 'Vehicle document was not approved' : undefined;
+    setUpdating(`${vehicleId}:${documentId}`);
+    setError('');
+    try {
+      await opsApi.put(`/api/ops/vehicles/${vehicleId}/documents/${documentId}/${action}`, { reason });
+      await load();
+    } catch (e) {
+      setError((e as Error).message || `Could not ${action} vehicle document`);
     } finally {
       setUpdating(null);
     }
@@ -101,7 +116,7 @@ export default function OpsVehiclesPage() {
 
       <div className="grid lg:grid-cols-2 gap-4">
         {visible.map(vehicle => (
-          <VehicleCard key={vehicle.id} vehicle={vehicle} updating={updating === vehicle.id} onUpdate={update} onSaveCompliance={saveCompliance} />
+          <VehicleCard key={vehicle.id} vehicle={vehicle} updating={updating === vehicle.id} onUpdate={update} onSaveCompliance={saveCompliance} onUpdateDocument={updateDocument} updatingKey={updating} />
         ))}
       </div>
 
@@ -122,15 +137,20 @@ function isExpired(value: string) {
 function VehicleCard({
   vehicle,
   updating,
+  updatingKey,
   onUpdate,
   onSaveCompliance,
+  onUpdateDocument,
 }: {
   vehicle: Vehicle;
   updating: boolean;
+  updatingKey: string | null;
   onUpdate: (id: string, action: 'approve' | 'reject') => void;
   onSaveCompliance: (vehicle: Vehicle, dates: { motExpiry: string; insuranceExpiry: string; phvLicenceExpiry: string }) => void;
+  onUpdateDocument: (vehicleId: string, documentId: string, action: 'approve' | 'reject') => void;
 }) {
   const hasExpiredCompliance = [vehicle.motExpiry, vehicle.insuranceExpiry, vehicle.phvLicenceExpiry].some(isExpired);
+  const documentsApproved = (vehicle.documents?.length ?? 0) >= 3 && (vehicle.documents ?? []).every(document => document.status === 'approved' && !!document.fileUrl && !!document.expiryDate && !isExpired(document.expiryDate));
   const [editing, setEditing] = useState(false);
   const [motExpiry, setMotExpiry] = useState(vehicle.motExpiry || '');
   const [insuranceExpiry, setInsuranceExpiry] = useState(vehicle.insuranceExpiry || '');
@@ -169,7 +189,33 @@ function VehicleCard({
             </div>
 
             {hasExpiredCompliance && <p className="mt-3 text-xs text-red-600">Update expired compliance dates before approving this vehicle.</p>}
+            {!documentsApproved && <p className="mt-3 text-xs text-amber-600">Approve current MOT, insurance, and PHV document uploads before approving this vehicle.</p>}
             {vehicle.rejectionReason && <p className="mt-3 text-xs text-red-600">{vehicle.rejectionReason}</p>}
+
+            {!!vehicle.documents?.length && (
+              <div className="mt-4 grid gap-2">
+                {vehicle.documents.map(document => {
+                  const busy = updatingKey === `${vehicle.id}:${document.id}`;
+                  const current = !!document.fileUrl && !!document.expiryDate && !isExpired(document.expiryDate);
+                  return (
+                    <div key={document.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-700">{document.label}</p>
+                          <p className={`mt-1 text-[11px] font-semibold capitalize ${current ? 'text-slate-500' : 'text-red-600'}`}>{document.status} · {document.expiryDate || 'missing expiry'}</p>
+                          {document.rejectionReason && <p className="mt-1 text-[11px] text-red-600">{document.rejectionReason}</p>}
+                          {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-blue-600">Open document</a>}
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => onUpdateDocument(vehicle.id, document.id, 'approve')} disabled={busy || !current || document.status === 'approved'} className="rounded-lg bg-green-600 px-2 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50">Approve</button>
+                          <button onClick={() => onUpdateDocument(vehicle.id, document.id, 'reject')} disabled={busy} className="rounded-lg bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-600 disabled:opacity-50">Reject</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {editing && (
               <div className="grid sm:grid-cols-3 gap-2 mt-4">
@@ -189,7 +235,7 @@ function VehicleCard({
                 </button>
               )}
               {vehicle.approvalStatus !== 'approved' && (
-                <button onClick={() => onUpdate(vehicle.id, 'approve')} disabled={updating || hasExpiredCompliance} className="px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-semibold flex items-center gap-1 disabled:opacity-50">
+                <button onClick={() => onUpdate(vehicle.id, 'approve')} disabled={updating || hasExpiredCompliance || !documentsApproved} className="px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-semibold flex items-center gap-1 disabled:opacity-50">
                   <CheckCircle size={14} /> {updating ? 'Approving...' : 'Approve'}
                 </button>
               )}

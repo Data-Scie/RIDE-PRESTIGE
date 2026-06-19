@@ -22,6 +22,7 @@ type Vehicle = {
   passengerCapacity: number;
   approvalStatus: string;
   rejectionReason?: string;
+  documents?: DocumentRecord[];
 };
 
 const emptyVehicle = {
@@ -75,6 +76,32 @@ export default function DriverCompliancePage() {
     await load();
   };
 
+  const submitVehicleDocument = async (vehicleId: string, document: DocumentRecord, fileUrl: string, expiryDate: string) => {
+    setError('');
+    await driverApi.put(`/api/driver/vehicles/${vehicleId}/documents/${document.id}`, { fileUrl, expiryDate });
+    setMessage(`${document.label} submitted for vehicle review.`);
+    await load();
+  };
+
+  const uploadVehicleDocument = async (vehicleId: string, document: DocumentRecord, file: File, expiryDate: string) => {
+    setError('');
+    const token = getPortalToken('driver');
+    if (!token) throw new Error('Not authenticated');
+    const form = new FormData();
+    form.append('document', file);
+    form.append('expiryDate', expiryDate);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const response = await fetch(`${apiUrl}/api/driver/vehicles/${vehicleId}/documents/${document.id}/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const payload = await response.json().catch(() => ({ message: 'Upload failed' }));
+    if (!response.ok) throw new Error(payload.message || 'Upload failed');
+    setMessage(`${document.label} uploaded for vehicle review.`);
+    await load();
+  };
+
   const submitVehicle = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
@@ -110,6 +137,19 @@ export default function DriverCompliancePage() {
               <p className="text-sm text-slate-500">{item.registration} · {item.vehicleCategory} · {item.passengerCapacity} passengers</p>
               <span className="inline-block mt-2 text-xs font-semibold capitalize">{item.approvalStatus}</span>
               {item.rejectionReason && <p className="text-xs text-red-600 mt-1">{item.rejectionReason}</p>}
+              {!!item.documents?.length && (
+                <div className="mt-4 grid gap-3">
+                  {item.documents.map(document => (
+                    <DocumentForm
+                      key={document.id}
+                      document={document}
+                      onSubmit={(doc, fileUrl, expiryDate) => submitVehicleDocument(item.id, doc, fileUrl, expiryDate)}
+                      onUpload={(doc, file, expiryDate) => uploadVehicleDocument(item.id, doc, file, expiryDate)}
+                      onError={setError}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           ))}
           {!vehicles.length && <p className="text-sm text-slate-400">No independent vehicle registered.</p>}

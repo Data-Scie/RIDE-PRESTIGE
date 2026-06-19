@@ -3,6 +3,12 @@ import { v4 as uuid } from 'uuid';
 import { Prisma } from '@prisma/client';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
+import {
+  areVehicleDocumentsApproved,
+  ensureVehicleDocuments,
+  hasCurrentDocumentFile as hasCurrentVehicleDocumentFile,
+  syncVehicleDocumentExpiries,
+} from '../lib/vehicleDocuments';
 import { applyCommission, getPricingConfig } from '../services/fareService';
 import { pushNotification } from '../services/notificationService';
 import type { Job, JobStatus, Stop } from '../types';
@@ -432,8 +438,10 @@ router.get('/vehicles', async (req: Request, res: Response) => {
     if (ownerType === 'independent') where.ownerDriverId = { not: null };
     else if (ownerType === 'affiliate') where.affiliateId = { not: null };
 
-    const vehicles = await prisma.fleetVehicle.findMany({ where });
-    const enriched = await Promise.all(vehicles.map(async v => {
+    const vehicles = await prisma.fleetVehicle.findMany({ where, include: { documents: true } });
+    await Promise.all(vehicles.map(vehicle => syncVehicleDocumentExpiries(vehicle.id)));
+    const refreshed = await prisma.fleetVehicle.findMany({ where, include: { documents: true } });
+    const enriched = await Promise.all(refreshed.map(async v => {
       const ownerDriver = v.ownerDriverId
         ? await prisma.driver.findUnique({ where: { id: v.ownerDriverId }, select: { id: true, fullName: true, email: true, phone: true } })
         : null;
@@ -484,6 +492,7 @@ router.post('/vehicles', async (req: Request, res: Response) => {
   try {
     const { id: _id, status: _s, ...b } = req.body;
     const v = await prisma.fleetVehicle.create({ data: { id: `fv-${uuid()}`, status: 'available', ...b } });
+    await syncVehicleDocumentExpiries(v.id);
     res.status(201).json({ success: true, data: v });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
@@ -512,6 +521,7 @@ router.put('/vehicles/:id', async (req: Request, res: Response) => {
     if (!exists) { res.status(404).json({ success: false, message: 'Vehicle not found' }); return; }
     const { id: _id, ...data } = req.body;
     const v = await prisma.fleetVehicle.update({ where: { id: req.params.id }, data });
+    await syncVehicleDocumentExpiries(v.id);
     res.json({ success: true, data: v });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
@@ -533,6 +543,11 @@ router.put('/vehicles/:id/approve', async (req: Request, res: Response) => {
       res.status(409).json({ success: false, message: 'Expired vehicle compliance cannot be approved' });
       return;
     }
+    const documents = await ensureVehicleDocuments(vehicle.id);
+    if (!areVehicleDocumentsApproved(documents)) {
+      res.status(409).json({ success: false, message: 'Approve all uploaded current vehicle documents before approving this vehicle' });
+      return;
+    }
     const updated = await prisma.fleetVehicle.update({
       where: { id: vehicle.id },
       data: { isApproved: true, approvalStatus: 'approved', rejectionReason: null, status: 'available' },
@@ -540,6 +555,53 @@ router.put('/vehicles/:id/approve', async (req: Request, res: Response) => {
     if (updated.ownerDriverId) {
       await pushNotification(updated.ownerDriverId, 'driver', 'Vehicle Approved', `${updated.make} ${updated.model} (${updated.registration}) is approved for direct rides.`, 'document');
     }
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/vehicles/:vehicleId/documents/:documentId/approve', async (req: Request, res: Response) => {
+  try {
+    const document = await prisma.vehicleDocument.findFirst({
+      where: { id: req.params.documentId, vehicleId: req.params.vehicleId },
+    });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    if (!hasCurrentVehicleDocumentFile(document)) {
+      res.status(409).json({ success: false, message: 'A current uploaded document is required before approval' });
+      return;
+    }
+    const updated = await prisma.vehicleDocument.update({
+      where: { id: document.id },
+      data: { status: 'approved', rejectionReason: null },
+    });
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/vehicles/:vehicleId/documents/:documentId/reject', async (req: Request, res: Response) => {
+  try {
+    const { reason } = req.body as { reason?: string };
+    const document = await prisma.vehicleDocument.findFirst({
+      where: { id: req.params.documentId, vehicleId: req.params.vehicleId },
+    });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    const updated = await prisma.vehicleDocument.update({
+      where: { id: document.id },
+      data: { status: 'rejected', rejectionReason: reason || 'Document was not approved' },
+    });
+    await prisma.fleetVehicle.update({
+      where: { id: req.params.vehicleId },
+      data: { isApproved: false, approvalStatus: 'rejected', status: 'offline', rejectionReason: updated.rejectionReason },
+    });
     res.json({ success: true, data: updated });
   } catch {
     res.status(500).json({ success: false, message: 'Database error' });

@@ -4,6 +4,11 @@ import multer from 'multer';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
 import { storeDocumentFile, validateDocumentFile } from '../lib/documentUpload';
+import {
+  ensureVehicleDocuments,
+  isDocumentUrl as isVehicleDocumentUrl,
+  syncVehicleDocumentExpiries,
+} from '../lib/vehicleDocuments';
 import { pushNotification } from '../services/notificationService';
 import {
   claimIndependentRide,
@@ -585,9 +590,16 @@ router.get('/vehicles', async (req: Request, res: Response) => {
     }
     const vehicles = await prisma.fleetVehicle.findMany({
       where: { ownerDriverId: driver.id },
+      include: { documents: true },
       orderBy: { createdAt: 'desc' },
     });
-    res.json({ success: true, data: vehicles });
+    await Promise.all(vehicles.map(vehicle => syncVehicleDocumentExpiries(vehicle.id)));
+    const refreshed = await prisma.fleetVehicle.findMany({
+      where: { ownerDriverId: driver.id },
+      include: { documents: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ success: true, data: refreshed });
   } catch {
     res.status(500).json({ success: false, message: 'Database error' });
   }
@@ -636,9 +648,90 @@ router.post('/vehicles', async (req: Request, res: Response) => {
         isApproved: false,
       },
     });
+    await syncVehicleDocumentExpiries(vehicle.id);
     res.status(201).json({ success: true, data: vehicle });
   } catch (e) {
     res.status(409).json({ success: false, message: 'Vehicle could not be registered; check the registration is unique' });
+  }
+});
+
+router.put('/vehicles/:vehicleId/documents/:documentId', async (req: Request, res: Response) => {
+  try {
+    const drvId = getDrvId(req);
+    const { fileUrl, expiryDate } = req.body as { fileUrl?: string; expiryDate?: string };
+    const expiry = expiryDate ? new Date(`${expiryDate}T23:59:59.999Z`) : null;
+    if (!fileUrl || !isVehicleDocumentUrl(fileUrl) || !expiryDate || !expiry || expiry.getTime() < Date.now()) {
+      res.status(400).json({ success: false, message: 'A document URL and current expiry date are required' });
+      return;
+    }
+    const vehicle = await prisma.fleetVehicle.findFirst({ where: { id: req.params.vehicleId, ownerDriverId: drvId } });
+    if (!vehicle) {
+      res.status(404).json({ success: false, message: 'Vehicle not found' });
+      return;
+    }
+    await ensureVehicleDocuments(vehicle.id);
+    const document = await prisma.vehicleDocument.findFirst({
+      where: { id: req.params.documentId, vehicleId: vehicle.id },
+    });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    const updated = await prisma.vehicleDocument.update({
+      where: { id: document.id },
+      data: { fileUrl, expiryDate, status: 'pending', uploadedAt: new Date(), rejectionReason: null },
+    });
+    await prisma.fleetVehicle.update({
+      where: { id: vehicle.id },
+      data: { approvalStatus: 'pending', isApproved: false, status: 'offline', rejectionReason: null },
+    });
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.post('/vehicles/:vehicleId/documents/:documentId/upload', uploadSingleDocument, async (req: Request, res: Response) => {
+  try {
+    const drvId = getDrvId(req);
+    const { expiryDate } = req.body as { expiryDate?: string };
+    const expiry = expiryDate ? new Date(`${expiryDate}T23:59:59.999Z`) : null;
+    if (!expiryDate || !expiry || expiry.getTime() < Date.now()) {
+      res.status(400).json({ success: false, message: 'A current expiry date is required' });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ success: false, message: 'Document file is required' });
+      return;
+    }
+    const validationError = validateDocumentFile(req.file);
+    if (validationError) {
+      res.status(400).json({ success: false, message: validationError });
+      return;
+    }
+    const vehicle = await prisma.fleetVehicle.findFirst({ where: { id: req.params.vehicleId, ownerDriverId: drvId } });
+    if (!vehicle) {
+      res.status(404).json({ success: false, message: 'Vehicle not found' });
+      return;
+    }
+    await ensureVehicleDocuments(vehicle.id);
+    const document = await prisma.vehicleDocument.findFirst({ where: { id: req.params.documentId, vehicleId: vehicle.id } });
+    if (!document) {
+      res.status(404).json({ success: false, message: 'Document not found' });
+      return;
+    }
+    const fileUrl = await storeDocumentFile(req, req.file, vehicle.id, document.type);
+    const updated = await prisma.vehicleDocument.update({
+      where: { id: document.id },
+      data: { fileUrl, expiryDate, status: 'pending', uploadedAt: new Date(), rejectionReason: null },
+    });
+    await prisma.fleetVehicle.update({
+      where: { id: vehicle.id },
+      data: { approvalStatus: 'pending', isApproved: false, status: 'offline', rejectionReason: null },
+    });
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Document upload failed' });
   }
 });
 

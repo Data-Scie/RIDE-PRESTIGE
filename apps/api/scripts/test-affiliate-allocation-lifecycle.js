@@ -37,6 +37,29 @@ async function login(email, password, role) {
   })).token;
 }
 
+async function submitAndApproveAffiliateVehicleDocuments(vehicleId, affiliateToken, opsToken) {
+  const vehicles = (await request('/api/affiliate/vehicles', { token: affiliateToken })).data;
+  const vehicle = vehicles.find(item => item.id === vehicleId);
+  assert(vehicle, 'Registered affiliate vehicle was not returned');
+  assert(vehicle.documents?.length > 0, 'Affiliate vehicle document slots were not created');
+
+  for (const document of vehicle.documents) {
+    await request(`/api/affiliate/vehicles/${vehicleId}/documents/${document.id}`, {
+      method: 'PUT',
+      token: affiliateToken,
+      body: {
+        fileUrl: `https://documents.example.com/${vehicleId}/${document.type}.pdf`,
+        expiryDate: '2028-12-31',
+      },
+    });
+    await request(`/api/ops/vehicles/${vehicleId}/documents/${document.id}/approve`, {
+      method: 'PUT',
+      token: opsToken,
+      body: {},
+    });
+  }
+}
+
 async function main() {
   const suffix = Date.now();
   const password = 'AffiliateFlow@2026!';
@@ -136,6 +159,7 @@ async function main() {
       },
     })).data;
     vehicleId = vehicle.id;
+    await submitAndApproveAffiliateVehicleDocuments(vehicleId, affiliateToken, opsToken);
     await request(`/api/ops/vehicles/${vehicleId}/approve`, { method: 'PUT', token: opsToken, body: {} });
 
     const created = await request('/api/public/booking', {
