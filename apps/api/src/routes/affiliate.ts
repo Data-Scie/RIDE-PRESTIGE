@@ -418,8 +418,27 @@ router.post('/jobs/:id/assign-driver', async (req: Request, res: Response) => {
     }
     const nextStatus = job.assignedVehicleId ? 'vehicle_assigned' : 'driver_assigned';
     const updated = await prisma.$transaction(async tx => {
+      if (job.assignedDriverId && job.assignedDriverId !== driverId) {
+        const otherActiveJob = await tx.job.findFirst({
+          where: {
+            id: { not: job.id },
+            assignedDriverId: job.assignedDriverId,
+            status: { in: ACTIVE_DRIVER_JOB_STATUSES },
+          },
+          select: { id: true },
+        });
+        if (!otherActiveJob) {
+          await tx.driver.update({ where: { id: job.assignedDriverId }, data: { status: 'available', assignedVehicleId: null } });
+        }
+      }
       const updatedJob = await tx.job.update({ where: { id: job.id }, data: { assignedDriverId: driverId, status: nextStatus } });
-      await tx.driver.update({ where: { id: driverId }, data: { status: 'busy' } });
+      await tx.driver.update({
+        where: { id: driverId },
+        data: {
+          status: job.assignedVehicleId ? 'busy' : 'available',
+          assignedVehicleId: job.assignedVehicleId ?? null,
+        },
+      });
       await tx.rideStatusHistory.create({
         data: { jobId: job.id, fromStatus: job.status, toStatus: nextStatus, changedBy: affId, changedByRole: 'affiliate', notes: `Driver ${driver.fullName} assigned` },
       });
@@ -475,7 +494,7 @@ router.post('/jobs/:id/assign-vehicle', async (req: Request, res: Response) => {
       },
     });
     if (!vehicle) { res.status(404).json({ success: false, message: 'Vehicle not found' }); return; }
-    if (!isVehicleEligible(vehicle, job)) {
+    if (vehicle.id !== job.assignedVehicleId && !isVehicleEligible(vehicle, job)) {
       res.status(409).json({ success: false, message: 'Vehicle does not meet category, capacity, or compliance requirements' }); return;
     }
     const updated = await prisma.$transaction(async tx => {
@@ -483,7 +502,19 @@ router.post('/jobs/:id/assign-vehicle', async (req: Request, res: Response) => {
         await tx.fleetVehicle.update({ where: { id: job.assignedVehicleId }, data: { status: 'available' } });
       }
       const updatedJob = await tx.job.update({ where: { id: job.id }, data: { assignedVehicleId: vehicleId, status: 'vehicle_assigned' } });
-      await tx.fleetVehicle.update({ where: { id: vehicleId }, data: { status: 'in_use' } });
+      await tx.fleetVehicle.update({
+        where: { id: vehicleId },
+        data: {
+          status: job.assignedDriverId ? 'in_use' : 'available',
+          assignedDriverId: job.assignedDriverId ?? null,
+        },
+      });
+      if (job.assignedDriverId) {
+        await tx.driver.update({
+          where: { id: job.assignedDriverId },
+          data: { status: 'busy', assignedVehicleId: vehicleId },
+        });
+      }
       await tx.rideStatusHistory.create({
         data: { jobId: job.id, fromStatus: job.status, toStatus: 'vehicle_assigned', changedBy: affId, changedByRole: 'affiliate', notes: `Vehicle ${vehicle.registration} assigned` },
       });
@@ -494,6 +525,53 @@ router.post('/jobs/:id/assign-vehicle', async (req: Request, res: Response) => {
     }
     res.json({ success: true, message: 'Vehicle assigned', data: shapeJob(updated) });
   } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.post('/jobs/:id/reset-allocation', async (req: Request, res: Response) => {
+  try {
+    const affId = getAffId(req);
+    const job = await prisma.job.findFirst({ where: { id: req.params.id, affiliateId: affId } });
+    if (!job) { res.status(404).json({ success: false, message: 'Job not found' }); return; }
+    if (!['needs_allocation', 'driver_assigned', 'vehicle_assigned'].includes(job.status)) {
+      res.status(409).json({ success: false, message: `Cannot reset allocation in status: ${job.status}` }); return;
+    }
+    const updated = await prisma.$transaction(async tx => {
+      if (job.assignedDriverId) {
+        const otherActiveJob = await tx.job.findFirst({
+          where: {
+            id: { not: job.id },
+            assignedDriverId: job.assignedDriverId,
+            status: { in: ACTIVE_DRIVER_JOB_STATUSES },
+          },
+          select: { id: true },
+        });
+        if (!otherActiveJob) {
+          await tx.driver.update({ where: { id: job.assignedDriverId }, data: { status: 'available', assignedVehicleId: null } });
+        }
+      }
+      if (job.assignedVehicleId) {
+        await tx.fleetVehicle.update({ where: { id: job.assignedVehicleId }, data: { status: 'available', assignedDriverId: null } });
+      }
+      const resetJob = await tx.job.update({
+        where: { id: job.id },
+        data: { assignedDriverId: null, assignedVehicleId: null, status: 'needs_allocation' },
+      });
+      await tx.rideStatusHistory.create({
+        data: {
+          jobId: job.id,
+          fromStatus: job.status,
+          toStatus: 'needs_allocation',
+          changedBy: affId,
+          changedByRole: 'affiliate',
+          notes: 'Allocation reset for reassignment',
+        },
+      });
+      return resetJob;
+    });
+    res.json({ success: true, message: 'Allocation reset', data: shapeJob(updated) });
+  } catch {
     res.status(500).json({ success: false, message: 'Database error' });
   }
 });
@@ -527,7 +605,15 @@ router.get('/drivers', async (req: Request, res: Response) => {
         })
       : null;
     const drivers = await prisma.driver.findMany({
-      where: { affiliateId: affId, ...(status ? { status } : {}) },
+      where: {
+        affiliateId: affId,
+        ...(status ? {
+          OR: [
+            { status },
+            ...(job?.assignedDriverId ? [{ id: job.assignedDriverId }] : []),
+          ],
+        } : {}),
+      },
       include: { documents: true },
       orderBy: { joinedDate: 'desc' },
     });
@@ -535,7 +621,7 @@ router.get('/drivers', async (req: Request, res: Response) => {
       ? (job ? drivers.filter(driver =>
           driver.isApproved
           && driver.applicationStatus === 'approved'
-          && driver.status === 'available'
+          && (driver.status === 'available' || driver.id === job.assignedDriverId)
           && driver.documentsStatus === 'approved'
           && isDriverDocumentEligible(driver.documents)) : [])
       : drivers;
@@ -716,15 +802,6 @@ router.get('/vehicles', async (req: Request, res: Response) => {
   try {
     const affId = getAffId(req);
     const { status, jobId } = req.query as { status?: string; jobId?: string };
-    const vehicles = await prisma.fleetVehicle.findMany({
-      where: { affiliateId: affId, ...(status ? { status } : {}) },
-      include: { documents: true },
-    });
-    await Promise.all(vehicles.map(vehicle => syncVehicleDocumentExpiries(vehicle.id)));
-    const refreshedVehicles = await prisma.fleetVehicle.findMany({
-      where: { affiliateId: affId, ...(status ? { status } : {}) },
-      include: { documents: true },
-    });
     const job = jobId
       ? await prisma.job.findFirst({
           where: {
@@ -736,7 +813,26 @@ router.get('/vehicles', async (req: Request, res: Response) => {
           },
         })
       : null;
-    const list = jobId ? (job ? refreshedVehicles.filter(vehicle => isVehicleEligible(vehicle, job)) : []) : refreshedVehicles;
+    const where = {
+      affiliateId: affId,
+      ...(status ? {
+        OR: [
+          { status },
+          ...(job?.assignedVehicleId ? [{ id: job.assignedVehicleId }] : []),
+        ],
+      } : {}),
+    };
+    const vehicles = await prisma.fleetVehicle.findMany({
+      where,
+      include: { documents: true },
+    });
+    await Promise.all(vehicles.map(vehicle => syncVehicleDocumentExpiries(vehicle.id)));
+    const refreshedVehicles = await prisma.fleetVehicle.findMany({
+      where,
+      include: { documents: true },
+    });
+    const list = jobId ? (job ? refreshedVehicles.filter(vehicle =>
+      vehicle.id === job.assignedVehicleId || isVehicleEligible(vehicle, job)) : []) : refreshedVehicles;
     res.json({ success: true, data: list, total: list.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });

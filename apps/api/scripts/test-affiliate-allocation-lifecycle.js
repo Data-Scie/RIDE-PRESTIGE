@@ -188,6 +188,15 @@ async function main() {
     assert(eligibleVehicles.data.some(vehicle => vehicle.id === vehicleId), 'Approved affiliate vehicle is not eligible for allocation');
 
     await request(`/api/affiliate/jobs/${jobId}/accept`, { method: 'POST', token: affiliateToken, body: {} });
+    const driverFirst = await request(`/api/affiliate/jobs/${jobId}/assign-driver`, { method: 'POST', token: affiliateToken, body: { driverId } });
+    assert(driverFirst.data.status === 'driver_assigned', 'Driver-first partial allocation was not saved');
+    const driverAfterPartial = await prisma.driver.findUnique({ where: { id: driverId } });
+    assert(driverAfterPartial?.status === 'available', 'Partial driver allocation must not make the driver unavailable');
+    const eligibleAfterPartial = await request(`/api/affiliate/drivers?status=available&jobId=${jobId}`, { token: affiliateToken });
+    assert(eligibleAfterPartial.data.some(driver => driver.id === driverId), 'Same partially assigned driver disappeared from allocation list');
+    const reset = await request(`/api/affiliate/jobs/${jobId}/reset-allocation`, { method: 'POST', token: affiliateToken, body: {} });
+    assert(reset.data.status === 'needs_allocation' && !reset.data.assignedDriverId && !reset.data.assignedVehicleId, 'Allocation reset did not clear partial assignment');
+
     await request(`/api/affiliate/jobs/${jobId}/assign-vehicle`, { method: 'POST', token: affiliateToken, body: { vehicleId } });
     const assigned = await request(`/api/affiliate/jobs/${jobId}/assign-driver`, { method: 'POST', token: affiliateToken, body: { driverId } });
     assert(assigned.data.status === 'vehicle_assigned', 'Assigned affiliate ride is not ready for driver acceptance');
@@ -236,6 +245,7 @@ async function main() {
         'affiliate vehicle approval',
         'booking appears to matching affiliate',
         'eligible driver and vehicle filtering',
+        'partial allocation recovery and reset',
         'vehicle then driver allocation',
         'driver portal current ride and allocated vehicle',
         'driver acceptance and status progression',

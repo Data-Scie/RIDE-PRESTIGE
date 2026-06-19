@@ -16,6 +16,8 @@ import type { Job, JobStatus, Stop } from '../types';
 const router = Router();
 router.use(authenticate, requireRole('admin', 'ops'));
 
+const ACTIVE_DRIVER_JOB_STATUSES = ['driver_assigned', 'vehicle_assigned', 'driver_accepted', 'on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress'];
+
 const AFFILIATE_DOCUMENTS = [
   { type: 'operator_licence', label: 'Operator Licence' },
   { type: 'insurance', label: 'Insurance Document' },
@@ -360,6 +362,52 @@ router.put('/rides/:id/status', async (req: Request, res: Response) => {
     }
     res.json({ success: true, data: shapeJob(updated) });
   } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.post('/rides/:id/reset-allocation', async (req: Request, res: Response) => {
+  try {
+    const job = await prisma.job.findUnique({ where: { id: req.params.id } });
+    if (!job) { res.status(404).json({ success: false, message: 'Ride not found' }); return; }
+    if (!['needs_allocation', 'driver_assigned', 'vehicle_assigned'].includes(job.status)) {
+      res.status(409).json({ success: false, message: `Cannot reset allocation in status: ${job.status}` }); return;
+    }
+    const updated = await prisma.$transaction(async tx => {
+      if (job.assignedDriverId) {
+        const otherActiveJob = await tx.job.findFirst({
+          where: {
+            id: { not: job.id },
+            assignedDriverId: job.assignedDriverId,
+            status: { in: ACTIVE_DRIVER_JOB_STATUSES },
+          },
+          select: { id: true },
+        });
+        if (!otherActiveJob) {
+          await tx.driver.update({ where: { id: job.assignedDriverId }, data: { status: 'available', assignedVehicleId: null } });
+        }
+      }
+      if (job.assignedVehicleId) {
+        await tx.fleetVehicle.update({ where: { id: job.assignedVehicleId }, data: { status: 'available', assignedDriverId: null } });
+      }
+      const resetJob = await tx.job.update({
+        where: { id: job.id },
+        data: { assignedDriverId: null, assignedVehicleId: null, status: job.affiliateId ? 'needs_allocation' : 'awaiting_affiliate' },
+      });
+      await tx.rideStatusHistory.create({
+        data: {
+          jobId: job.id,
+          fromStatus: job.status,
+          toStatus: resetJob.status,
+          changedBy: req.user?.id ?? 'ops',
+          changedByRole: req.user?.role ?? 'ops',
+          notes: 'Allocation reset by operations',
+        },
+      });
+      return resetJob;
+    });
+    res.json({ success: true, message: 'Allocation reset', data: shapeJob(updated) });
+  } catch {
     res.status(500).json({ success: false, message: 'Database error' });
   }
 });

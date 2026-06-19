@@ -51,6 +51,7 @@ export default function AffiliateRidesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [assignModal, setAssignModal] = useState<string | null>(null);
+  const [assignRide, setAssignRide] = useState<Job | null>(null);
   const [selectedDriver, setSelectedDriver] = useState('');
   const [selectedVehicle, setSelectedVehicle] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -78,9 +79,11 @@ export default function AffiliateRidesPage() {
   }, []);
 
   const acceptRide = async (id: string) => {
+    const ride = [...pending, ...active].find(item => item.id === id) ?? null;
     setAssignModal(id);
-    setSelectedDriver('');
-    setSelectedVehicle('');
+    setAssignRide(ride);
+    setSelectedDriver(ride?.assignedDriverId ?? '');
+    setSelectedVehicle(ride?.assignedVehicleId ?? '');
     setAssigningError('');
     try {
       const [d, v] = await Promise.all([
@@ -104,17 +107,31 @@ export default function AffiliateRidesPage() {
     setSubmitting(true);
     setAssigningError('');
     try {
-      await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/accept`, {});
+      if (assignRide?.status === 'awaiting_affiliate' || pending.some(ride => ride.id === assignModal)) {
+        await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/accept`, {});
+      }
       await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/assign-vehicle`, { vehicleId: selectedVehicle });
       await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/assign-driver`, { driverId: selectedDriver });
       await load();
       setAssignModal(null);
+      setAssignRide(null);
       setSelectedDriver('');
       setSelectedVehicle('');
     } catch (e) {
       setAssigningError(e instanceof Error ? e.message : 'Assignment failed');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const resetAllocation = async (id: string) => {
+    if (!window.confirm('Reset this ride allocation and release its driver/vehicle?')) return;
+    setError('');
+    try {
+      await affiliateApi.post(`/api/affiliate/jobs/${id}/reset-allocation`, {});
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not reset allocation');
     }
   };
 
@@ -192,7 +209,15 @@ export default function AffiliateRidesPage() {
                         <span className="rounded-full bg-slate-50 border border-slate-100 px-2 py-1">Vehicle: {assignedVehicle ? `${assignedVehicle.make} ${assignedVehicle.model} - ${assignedVehicle.registration}` : 'Not allocated'}</span>
                       </div>
                     </div>
-                    <div className="text-right"><p className="font-bold text-xl text-slate-800">GBP {ride.yourEarnings}</p><p className="text-xs text-slate-400">Partner payout</p>{ride.distance && <p className="text-xs text-slate-400">{ride.distance}</p>}</div>
+                    <div className="text-right space-y-2">
+                      <div><p className="font-bold text-xl text-slate-800">GBP {ride.yourEarnings}</p><p className="text-xs text-slate-400">Partner payout</p>{ride.distance && <p className="text-xs text-slate-400">{ride.distance}</p>}</div>
+                      {['needs_allocation', 'driver_assigned', 'vehicle_assigned'].includes(ride.status) && (
+                        <div className="flex gap-2 justify-end">
+                          <button onClick={() => acceptRide(ride.id)} className="px-3 py-2 rounded-xl bg-slate-800 text-white text-xs font-semibold">Manage allocation</button>
+                          <button onClick={() => resetAllocation(ride.id)} className="px-3 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-semibold">Reset</button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -213,6 +238,7 @@ export default function AffiliateRidesPage() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6">
             <h3 className="font-bold text-slate-800 text-lg mb-5" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>Assign Driver &amp; Vehicle</h3>
+            {assignRide && <p className="mb-4 text-xs text-slate-500">Ride {assignRide.bookingRef} · {assignRide.status.replace(/_/g, ' ')}</p>}
             {assigningError && <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">{assigningError}</div>}
             <div className="space-y-4">
               <div>
@@ -240,7 +266,7 @@ export default function AffiliateRidesPage() {
               <button onClick={confirmAssign} disabled={!selectedDriver || !selectedVehicle || submitting} className="flex-1 py-3 rounded-xl font-semibold text-sm text-white disabled:opacity-50" style={{ background: '#10b981' }}>
                 {submitting ? 'Assigning...' : 'Confirm Assignment'}
               </button>
-              <button onClick={() => setAssignModal(null)} className="flex-1 py-3 rounded-xl font-semibold text-sm" style={{ background: '#f1f5f9', color: '#64748b' }}>Cancel</button>
+              <button onClick={() => { setAssignModal(null); setAssignRide(null); }} className="flex-1 py-3 rounded-xl font-semibold text-sm" style={{ background: '#f1f5f9', color: '#64748b' }}>Cancel</button>
             </div>
           </div>
         </div>
