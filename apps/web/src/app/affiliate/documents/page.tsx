@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { FileCheck2 } from 'lucide-react';
-import { affiliateApi, getPortalToken } from '@/lib/api-client';
+import { affiliateApi } from '@/lib/api-client';
 
 type DocumentRecord = {
   id: string;
@@ -37,15 +37,11 @@ export default function AffiliateDocumentsPage() {
 
   const uploadDocument = async (document: DocumentRecord, file: File, expiryDate: string) => {
     setError('');
-    const token = getPortalToken('affiliate');
-    if (!token) throw new Error('Not authenticated');
     const form = new FormData();
     form.append('document', file);
     form.append('expiryDate', expiryDate);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-    const response = await fetch(`${apiUrl}/api/affiliate/documents/${document.id}/upload`, {
+    const response = await fetch(`/api/backend/affiliate/documents/${document.id}/upload`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
       body: form,
     });
     const payload = await response.json().catch(() => ({ message: 'Upload failed' }));

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Car, FileCheck2, Plus } from 'lucide-react';
-import { driverApi, getPortalToken } from '@/lib/api-client';
+import { driverApi } from '@/lib/api-client';
 
 type DocumentRecord = {
   id: string;
@@ -59,15 +59,11 @@ export default function DriverCompliancePage() {
 
   const uploadDocument = async (document: DocumentRecord, file: File, expiryDate: string) => {
     setError('');
-    const token = getPortalToken('driver');
-    if (!token) throw new Error('Not authenticated');
     const form = new FormData();
     form.append('document', file);
     form.append('expiryDate', expiryDate);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-    const response = await fetch(`${apiUrl}/api/driver/documents/${document.id}/upload`, {
+    const response = await fetch(`/api/backend/driver/documents/${document.id}/upload`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
       body: form,
     });
     const payload = await response.json().catch(() => ({ message: 'Upload failed' }));
@@ -85,15 +81,11 @@ export default function DriverCompliancePage() {
 
   const uploadVehicleDocument = async (vehicleId: string, document: DocumentRecord, file: File, expiryDate: string) => {
     setError('');
-    const token = getPortalToken('driver');
-    if (!token) throw new Error('Not authenticated');
     const form = new FormData();
     form.append('document', file);
     form.append('expiryDate', expiryDate);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-    const response = await fetch(`${apiUrl}/api/driver/vehicles/${vehicleId}/documents/${document.id}/upload`, {
+    const response = await fetch(`/api/backend/driver/vehicles/${vehicleId}/documents/${document.id}/upload`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
       body: form,
     });
     const payload = await response.json().catch(() => ({ message: 'Upload failed' }));
@@ -217,7 +209,7 @@ function DocumentForm({
       {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-blue-600">View uploaded document</a>}
       <input type="file" accept=".pdf,image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} className="mt-3 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white" />
       <p className="mt-2 text-[11px] text-slate-400">Or paste a hosted document URL.</p>
-      <input type="url" required value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="Secure document URL" className="mt-3 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+      <input type="url" value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="Secure document URL" className="mt-3 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" />
       <input required type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className="mt-2 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" />
       <button onClick={submit} disabled={submitting || !expiryDate || (!file && !fileUrl)} className="mt-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs font-semibold disabled:opacity-50">{submitting ? 'Submitting...' : 'Submit for review'}</button>
     </div>

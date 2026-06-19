@@ -12,6 +12,7 @@ import {
 import { applyCommission, getPricingConfig } from '../services/fareService';
 import { pushNotification } from '../services/notificationService';
 import { recordRideFlowEvent, shapeRideFlowEvent } from '../lib/rideFlow';
+import { ensureDriverDocuments } from '../lib/driverDocuments';
 import type { Job, JobStatus, Stop } from '../types';
 
 const router = Router();
@@ -643,6 +644,12 @@ router.put('/vehicles/:id/approve', async (req: Request, res: Response) => {
       res.status(409).json({ success: false, message: 'Approve all uploaded current vehicle documents before approving this vehicle' });
       return;
     }
+    if (override) {
+      await prisma.vehicleDocument.updateMany({
+        where: { vehicleId: vehicle.id, status: { not: 'approved' } },
+        data: { status: 'approved', rejectionReason: null },
+      });
+    }
     const updated = await prisma.fleetVehicle.update({
       where: { id: vehicle.id },
       data: { isApproved: true, approvalStatus: 'approved', rejectionReason: null, status: 'available' },
@@ -891,7 +898,15 @@ router.get('/drivers', async (_req: Request, res: Response) => {
       },
       orderBy: { joinedDate: 'desc' },
     });
-    const list = drivers.map(({ passwordHash: _, ...d }) => d);
+    await Promise.all(drivers.map(driver => ensureDriverDocuments(driver.id)));
+    const refreshed = await prisma.driver.findMany({
+      include: {
+        documents: true,
+        affiliate: { select: { id: true, companyName: true } },
+      },
+      orderBy: { joinedDate: 'desc' },
+    });
+    const list = refreshed.map(({ passwordHash: _, ...d }) => d);
     res.json({ success: true, data: list, total: list.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
@@ -924,7 +939,16 @@ router.get('/drivers/:id', async (req: Request, res: Response) => {
       },
     });
     if (!d) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
-    const { passwordHash: _, ...safe } = d;
+    await ensureDriverDocuments(d.id);
+    const refreshed = await prisma.driver.findUnique({
+      where: { id: req.params.id },
+      include: {
+        documents: true,
+        affiliate: { select: { id: true, companyName: true } },
+      },
+    });
+    if (!refreshed) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+    const { passwordHash: _, ...safe } = refreshed;
     const [driverJobs, driverEarnings] = await Promise.all([
       prisma.job.findMany({ where: { assignedDriverId: d.id } }),
       prisma.earningEntry.findMany({ where: { entityId: d.id } }),
@@ -946,9 +970,17 @@ router.put('/drivers/:id/approve', async (req: Request, res: Response) => {
   try {
     const exists = await prisma.driver.findUnique({ where: { id: req.params.id } });
     if (!exists) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+    const { override } = req.body as { override?: boolean };
+    if (override) {
+      await ensureDriverDocuments(req.params.id);
+      await prisma.driverDocument.updateMany({
+        where: { driverId: req.params.id, status: { not: 'approved' } },
+        data: { status: 'approved', rejectionReason: null },
+      });
+    }
     const d = await prisma.driver.update({
       where: { id: req.params.id },
-      data: { isApproved: true, applicationStatus: 'approved', status: 'offline' },
+      data: { isApproved: true, applicationStatus: 'approved', status: 'offline', documentsStatus: override ? 'approved' : exists.documentsStatus },
       include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
     });
     const { passwordHash: _, ...safe } = d;

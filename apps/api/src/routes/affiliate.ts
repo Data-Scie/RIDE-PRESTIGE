@@ -11,6 +11,7 @@ import {
   isDocumentUrl as isVehicleDocumentUrl,
   syncVehicleDocumentExpiries,
 } from '../lib/vehicleDocuments';
+import { ensureDriverDocuments } from '../lib/driverDocuments';
 import { recordRideFlowEvent } from '../lib/rideFlow';
 import { pushNotification } from '../services/notificationService';
 import { isDriverDocumentEligible, isVehicleEligible } from '../services/dispatchService';
@@ -675,7 +676,13 @@ router.get('/drivers', async (req: Request, res: Response) => {
           && driver.documentsStatus === 'approved'
           && isDriverDocumentEligible(driver.documents)) : [])
       : drivers;
-    const list = eligibleDrivers.map(({ passwordHash: _, ...d }) => d);
+    await Promise.all(eligibleDrivers.map(driver => ensureDriverDocuments(driver.id)));
+    const refreshedDrivers = await prisma.driver.findMany({
+      where: { id: { in: eligibleDrivers.map(driver => driver.id) } },
+      include: { documents: true },
+      orderBy: { joinedDate: 'desc' },
+    });
+    const list = refreshedDrivers.map(({ passwordHash: _, ...d }) => d);
     res.json({ success: true, data: list, total: list.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
@@ -778,11 +785,77 @@ router.get('/drivers/:id', async (req: Request, res: Response) => {
       include: { documents: true },
     });
     if (!d) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
-    const { passwordHash: _, ...safe } = d;
-    const driverJobs = await prisma.job.findMany({ where: { assignedDriverId: d.id } });
+    await ensureDriverDocuments(d.id);
+    const refreshed = await prisma.driver.findFirst({
+      where: { id: req.params.id, affiliateId: affId },
+      include: { documents: true },
+    });
+    if (!refreshed) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+    const { passwordHash: _, ...safe } = refreshed;
+    const driverJobs = await prisma.job.findMany({ where: { assignedDriverId: refreshed.id } });
     res.json({ success: true, data: safe, jobs: driverJobs.map(shapeJob) });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.put('/drivers/:driverId/documents/:documentId', async (req: Request, res: Response) => {
+  try {
+    const affId = getAffId(req);
+    const { fileUrl, expiryDate } = req.body as { fileUrl?: string; expiryDate?: string };
+    const expiry = expiryDate ? new Date(`${expiryDate}T23:59:59.999Z`) : null;
+    if (!fileUrl || !isDocumentUrl(fileUrl) || !expiryDate || !expiry || expiry.getTime() < Date.now()) {
+      res.status(400).json({ success: false, message: 'A document URL and current expiry date are required' });
+      return;
+    }
+    const driver = await prisma.driver.findFirst({ where: { id: req.params.driverId, affiliateId: affId } });
+    if (!driver) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+    await ensureDriverDocuments(driver.id);
+    const document = await prisma.driverDocument.findFirst({ where: { id: req.params.documentId, driverId: driver.id } });
+    if (!document) { res.status(404).json({ success: false, message: 'Document not found' }); return; }
+    const updated = await prisma.driverDocument.update({
+      where: { id: document.id },
+      data: { fileUrl, expiryDate, status: 'pending', uploadedAt: new Date(), rejectionReason: null },
+    });
+    await prisma.driver.update({ where: { id: driver.id }, data: { documentsStatus: 'pending', status: 'offline' } });
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+router.post('/drivers/:driverId/documents/:documentId/upload', uploadSingleDocument, async (req: Request, res: Response) => {
+  try {
+    const affId = getAffId(req);
+    const { expiryDate } = req.body as { expiryDate?: string };
+    const expiry = expiryDate ? new Date(`${expiryDate}T23:59:59.999Z`) : null;
+    if (!expiryDate || !expiry || expiry.getTime() < Date.now()) {
+      res.status(400).json({ success: false, message: 'A current expiry date is required' });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ success: false, message: 'Document file is required' });
+      return;
+    }
+    const validationError = validateDocumentFile(req.file);
+    if (validationError) {
+      res.status(400).json({ success: false, message: validationError });
+      return;
+    }
+    const driver = await prisma.driver.findFirst({ where: { id: req.params.driverId, affiliateId: affId } });
+    if (!driver) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+    await ensureDriverDocuments(driver.id);
+    const document = await prisma.driverDocument.findFirst({ where: { id: req.params.documentId, driverId: driver.id } });
+    if (!document) { res.status(404).json({ success: false, message: 'Document not found' }); return; }
+    const fileUrl = await storeDocumentFile(req, req.file, driver.id, document.type);
+    const updated = await prisma.driverDocument.update({
+      where: { id: document.id },
+      data: { fileUrl, expiryDate, status: 'pending', uploadedAt: new Date(), rejectionReason: null },
+    });
+    await prisma.driver.update({ where: { id: driver.id }, data: { documentsStatus: 'pending', status: 'offline' } });
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Document upload failed' });
   }
 });
 

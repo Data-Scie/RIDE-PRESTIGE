@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Car, Plus, Save, Trash2, X } from 'lucide-react';
-import { affiliateApi, getPortalToken } from '@/lib/api-client';
+import { affiliateApi } from '@/lib/api-client';
 
 interface VehicleDocument {
   id: string;
@@ -144,15 +144,11 @@ export default function AffiliateVehiclesPage() {
 
   const uploadVehicleDocument = async (vehicleId: string, document: VehicleDocument, file: File, expiryDate: string) => {
     try {
-      const token = getPortalToken('affiliate');
-      if (!token) throw new Error('Not authenticated');
       const form = new FormData();
       form.append('document', file);
       form.append('expiryDate', expiryDate);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${apiUrl}/api/affiliate/vehicles/${vehicleId}/documents/${document.id}/upload`, {
+      const response = await fetch(`/api/backend/affiliate/vehicles/${vehicleId}/documents/${document.id}/upload`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
       const payload = await response.json().catch(() => ({ message: 'Upload failed' }));

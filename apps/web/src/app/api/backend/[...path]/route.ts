@@ -28,7 +28,7 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   request.nextUrl.searchParams.forEach((value, key) => upstreamUrl.searchParams.append(key, value));
 
   try {
-    const body = ['GET', 'HEAD'].includes(request.method) ? undefined : await request.text();
+    const body = ['GET', 'HEAD'].includes(request.method) ? undefined : await request.arrayBuffer();
     const upstream = await fetch(upstreamUrl, {
       method: request.method,
       headers: {

@@ -5,6 +5,7 @@ import multer from 'multer';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
 import { shapeRideFlowEvent } from '../lib/rideFlow';
+import { ensureDriverDocuments } from '../lib/driverDocuments';
 import { DEFAULT_CONTENT_PAGES } from '../data/cmsDefaults';
 import { DEFAULT_WEBSITE_VEHICLES } from '../data/defaultWebsiteFleet';
 import { isCloudinaryConfigured, uploadImageBuffer } from '../lib/cloudinary';
@@ -592,7 +593,13 @@ router.get('/drivers', async (req: Request, res: Response) => {
       include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
       orderBy: { joinedDate: 'desc' },
     });
-    const list = drivers.map(({ passwordHash: _, ...d }) => d);
+    await Promise.all(drivers.map(driver => ensureDriverDocuments(driver.id)));
+    const refreshed = await prisma.driver.findMany({
+      where,
+      include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
+      orderBy: { joinedDate: 'desc' },
+    });
+    const list = refreshed.map(({ passwordHash: _, ...d }) => d);
     res.json({ success: true, data: list, total: list.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
@@ -722,11 +729,18 @@ router.put('/drivers/:id/approve', async (req: Request, res: Response) => {
   try {
     const exists = await prisma.driver.findUnique({ where: { id: req.params.id } });
     if (!exists) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
-    const { approve } = req.body as { approve: boolean };
+    const { approve, override } = req.body as { approve: boolean; override?: boolean };
+    if (approve && override) {
+      await ensureDriverDocuments(req.params.id);
+      await prisma.driverDocument.updateMany({
+        where: { driverId: req.params.id, status: { not: 'approved' } },
+        data: { status: 'approved', rejectionReason: null },
+      });
+    }
     const d = await prisma.driver.update({
       where: { id: req.params.id },
       data: approve
-        ? { isApproved: true, applicationStatus: 'approved', status: 'offline' }
+        ? { isApproved: true, applicationStatus: 'approved', status: 'offline', documentsStatus: override ? 'approved' : exists.documentsStatus }
         : { isApproved: false, applicationStatus: 'rejected', status: 'offline' },
       include: { documents: true, affiliate: { select: { id: true, companyName: true } } },
     });

@@ -159,6 +159,13 @@ export default function OpsApplicationsPage() {
                 <div className="flex gap-2">
                   <Link href={`/ops/drivers/${d.id}`} className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-50">Review documents</Link>
                   <button disabled={updating === `/api/ops/drivers/${d.id}`} onClick={() => act(`/api/ops/drivers/${d.id}`, 'approve')} className="px-3 py-2 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>
+                  <button
+                    disabled={updating === `/api/ops/drivers/${d.id}`}
+                    onClick={() => window.confirm('Approve this driver even if documents are missing? Use this only after manual verification.') && act(`/api/ops/drivers/${d.id}`, 'approve', true, { override: true })}
+                    className="px-3 py-2 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 disabled:opacity-50"
+                  >
+                    Approve anyway
+                  </button>
                   <button disabled={updating === `/api/ops/drivers/${d.id}`} onClick={() => act(`/api/ops/drivers/${d.id}`, 'reject')} className="px-3 py-2 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>
                 </div>
               )}
@@ -187,6 +194,13 @@ export default function OpsApplicationsPage() {
                   {d.applicationStatus === 'pending' && (
                     <>
                       <button disabled={updating === `/api/ops/drivers/${d.id}`} onClick={() => act(`/api/ops/drivers/${d.id}`, 'approve')} className="px-3 py-2 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve driver</button>
+                      <button
+                        disabled={updating === `/api/ops/drivers/${d.id}`}
+                        onClick={() => window.confirm('Approve this driver even if documents are missing? Use this only after manual verification.') && act(`/api/ops/drivers/${d.id}`, 'approve', true, { override: true })}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 disabled:opacity-50"
+                      >
+                        Approve driver anyway
+                      </button>
                       <button disabled={updating === `/api/ops/drivers/${d.id}`} onClick={() => act(`/api/ops/drivers/${d.id}`, 'reject')} className="px-3 py-2 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject driver</button>
                     </>
                   )}

@@ -10,6 +10,7 @@ import {
   isDocumentUrl as isVehicleDocumentUrl,
   syncVehicleDocumentExpiries,
 } from '../lib/vehicleDocuments';
+import { ensureDriverDocuments } from '../lib/driverDocuments';
 import { pushNotification } from '../services/notificationService';
 import {
   claimIndependentRide,
@@ -971,7 +972,7 @@ router.get('/documents', async (req: Request, res: Response) => {
     const drvId = getDrvId(req);
     const d = await prisma.driver.findUnique({ where: { id: drvId } });
     if (!d) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
-    const docs = await prisma.driverDocument.findMany({ where: { driverId: drvId } });
+    const docs = await ensureDriverDocuments(drvId);
     res.json({ success: true, data: docs, overallStatus: d.documentsStatus });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });

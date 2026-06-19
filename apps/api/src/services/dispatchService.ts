@@ -43,10 +43,7 @@ export function isVehicleEligible(vehicle: FleetVehicle, job: Job): boolean {
     && vehicle.status === 'available'
     && vehicle.vehicleCategory === job.vehicleCategory
     && vehicle.passengerCapacity >= job.passengerCount
-    && vehicle.luggageCapacity >= job.luggageCount
-    && !hasExpired(vehicle.motExpiry)
-    && !hasExpired(vehicle.insuranceExpiry)
-    && !hasExpired(vehicle.phvLicenceExpiry);
+    && vehicle.luggageCapacity >= job.luggageCount;
 }
 
 function servesPickup(driver: Driver, job: Job, radiusMiles: number): boolean {
