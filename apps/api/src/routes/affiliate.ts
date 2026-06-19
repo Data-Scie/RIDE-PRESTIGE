@@ -660,6 +660,17 @@ router.put('/drivers/:id/status', async (req: Request, res: Response) => {
       res.status(404).json({ success: false, message: 'Driver not found' });
       return;
     }
+    if (status === 'available') {
+      const documents = await prisma.driverDocument.findMany({ where: { driverId: driver.id } });
+      if (!driver.isApproved || driver.applicationStatus !== 'approved') {
+        res.status(403).json({ success: false, message: 'Driver account is not approved' });
+        return;
+      }
+      if (driver.documentsStatus !== 'approved' || !isDriverDocumentEligible(documents)) {
+        res.status(403).json({ success: false, message: 'All required driver documents must be approved and current' });
+        return;
+      }
+    }
     const updated = await prisma.driver.update({
       where: { id: driver.id },
       data: { status },

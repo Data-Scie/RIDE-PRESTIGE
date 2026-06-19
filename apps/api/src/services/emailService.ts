@@ -6,6 +6,7 @@ interface EmailInput {
 }
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
+const EMAIL_TIMEOUT_MS = 8000;
 
 export async function sendTransactionalEmail(input: EmailInput): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
@@ -17,6 +18,8 @@ export async function sendTransactionalEmail(input: EmailInput): Promise<boolean
     return false;
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EMAIL_TIMEOUT_MS);
   try {
     const response = await fetch(RESEND_API_URL, {
       method: 'POST',
@@ -24,6 +27,7 @@ export async function sendTransactionalEmail(input: EmailInput): Promise<boolean
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
+      signal: controller.signal,
       body: JSON.stringify({
         from,
         to: input.to,
@@ -36,6 +40,8 @@ export async function sendTransactionalEmail(input: EmailInput): Promise<boolean
   } catch (error) {
     console.error('Transactional email failed:', error);
     return false;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

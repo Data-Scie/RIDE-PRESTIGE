@@ -183,8 +183,12 @@ async function main() {
     const earnings = await prisma.earningEntry.findMany({ where: { jobId } });
     assert(earnings.length === 1 && earnings[0].entityType === 'driver', 'Independent completion must create only a driver earning');
 
+    const expiryBooking = await createBooking(suffix, 'expiry');
+    bookingIds.push(expiryBooking.data.booking.id);
+    jobIds.push(expiryBooking.data.booking.jobId);
+    references.push(expiryBooking.data.booking.reference);
     const expiringOffer = await prisma.rideOffer.findFirst({
-      where: { jobId: declineBooking.data.booking.jobId, status: 'pending' },
+      where: { jobId: expiryBooking.data.booking.jobId, status: 'pending' },
     });
     assert(expiringOffer, 'Expiry test offer was not found');
     await prisma.rideOffer.update({

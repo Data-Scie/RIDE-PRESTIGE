@@ -1,40 +1,75 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { Clock, Route, CheckCircle, X } from 'lucide-react';
+
+import { useEffect, useState } from 'react';
+import { CheckCircle, Clock, Route, X } from 'lucide-react';
 import { affiliateApi } from '@/lib/api-client';
 
 interface Job {
-  id: string; bookingRef: string; status: string;
-  customerName: string; customerPhone: string;
-  pickupAddress: string; dropoffAddress: string;
-  yourEarnings: number; vehicleCategory: string;
-  passengerCount: number; distance?: string; dateTime: string;
+  id: string;
+  bookingRef: string;
+  status: string;
+  customerName: string;
+  customerPhone: string;
+  pickupAddress: string;
+  dropoffAddress: string;
+  yourEarnings: number;
+  vehicleCategory: string;
+  passengerCount: number;
+  distance?: string;
+  dateTime: string;
+  assignedDriverId?: string | null;
+  assignedVehicleId?: string | null;
 }
-interface Driver  { id: string; fullName: string; status: string; documentsStatus?: string; applicationStatus?: string; isApproved?: boolean; }
-interface Vehicle { id: string; make: string; model: string; registration: string; status: string; vehicleCategory?: string; passengerCapacity?: number; luggageCapacity?: number; isApproved?: boolean; approvalStatus?: string; }
+
+interface Driver {
+  id: string;
+  fullName: string;
+  status: string;
+  documentsStatus?: string;
+  applicationStatus?: string;
+  isApproved?: boolean;
+}
+
+interface Vehicle {
+  id: string;
+  make: string;
+  model: string;
+  registration: string;
+  status: string;
+  vehicleCategory?: string;
+  passengerCapacity?: number;
+  luggageCapacity?: number;
+  isApproved?: boolean;
+  approvalStatus?: string;
+}
 
 export default function AffiliateRidesPage() {
-  const [pending, setPending]   = useState<Job[]>([]);
-  const [active, setActive]     = useState<Job[]>([]);
-  const [drivers, setDrivers]   = useState<Driver[]>([]);
+  const [pending, setPending] = useState<Job[]>([]);
+  const [active, setActive] = useState<Job[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
-  const [assignModal, setAssignModal]     = useState<string | null>(null);
-  const [selectedDriver, setSelectedDriver]   = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [assignModal, setAssignModal] = useState<string | null>(null);
+  const [selectedDriver, setSelectedDriver] = useState('');
   const [selectedVehicle, setSelectedVehicle] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [assigningError, setAssigningError] = useState('');
 
   const load = () => Promise.all([
-      affiliateApi.get<{ success: boolean; data: Job[] }>('/api/affiliate/jobs/new'),
-      affiliateApi.get<{ success: boolean; data: Job[] }>('/api/affiliate/jobs/accepted'),
-      affiliateApi.get<{ success: boolean; data: Driver[] }>('/api/affiliate/drivers'),
-      affiliateApi.get<{ success: boolean; data: Vehicle[] }>('/api/affiliate/vehicles'),
-    ])
-      .then(([p, a, d, v]) => { setPending(p.data); setActive(a.data); setDrivers(d.data); setVehicles(v.data); })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+    affiliateApi.get<{ success: boolean; data: Job[] }>('/api/affiliate/jobs/new'),
+    affiliateApi.get<{ success: boolean; data: Job[] }>('/api/affiliate/jobs/accepted'),
+    affiliateApi.get<{ success: boolean; data: Driver[] }>('/api/affiliate/drivers'),
+    affiliateApi.get<{ success: boolean; data: Vehicle[] }>('/api/affiliate/vehicles'),
+  ])
+    .then(([p, a, d, v]) => {
+      setPending(p.data);
+      setActive(a.data);
+      setDrivers(d.data);
+      setVehicles(v.data);
+    })
+    .catch(e => setError(e.message))
+    .finally(() => setLoading(false));
 
   useEffect(() => {
     load();
@@ -58,10 +93,12 @@ export default function AffiliateRidesPage() {
       setAssigningError(e instanceof Error ? e.message : 'Could not load eligible drivers and vehicles');
     }
   };
-  const declineRide  = async (id: string) => {
+
+  const declineRide = async (id: string) => {
     await affiliateApi.post(`/api/affiliate/jobs/${id}/reject`, {});
     setPending(prev => prev.filter(r => r.id !== id));
   };
+
   const confirmAssign = async () => {
     if (!selectedDriver || !selectedVehicle || !assignModal) return;
     setSubmitting(true);
@@ -71,20 +108,24 @@ export default function AffiliateRidesPage() {
       await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/assign-vehicle`, { vehicleId: selectedVehicle });
       await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/assign-driver`, { driverId: selectedDriver });
       await load();
-      setAssignModal(null); setSelectedDriver(''); setSelectedVehicle('');
+      setAssignModal(null);
+      setSelectedDriver('');
+      setSelectedVehicle('');
     } catch (e) {
       setAssigningError(e instanceof Error ? e.message : 'Assignment failed');
-    } finally { setSubmitting(false); }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-slate-400">Loading rides…</div>;
-  if (error)   return <div className="p-6 text-red-500">Error: {error}</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-slate-400">Loading rides...</div>;
+  if (error) return <div className="p-6 text-red-500">Error: {error}</div>;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>Ride Requests</h1>
-        <p className="text-slate-500 text-sm">{pending.length} incoming · {active.length} active</p>
+        <p className="text-slate-500 text-sm">{pending.length} incoming - {active.length} active</p>
       </div>
 
       {pending.length > 0 && (
@@ -112,7 +153,7 @@ export default function AffiliateRidesPage() {
                     <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
                       {ride.distance && <span className="flex items-center gap-1"><Route size={11} /> {ride.distance}</span>}
                       <span className="flex items-center gap-1"><Clock size={11} /> {new Date(ride.dateTime).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</span>
-                      <span className="font-bold text-lg text-green-700">Payout £{ride.yourEarnings}</span>
+                      <span className="font-bold text-lg text-green-700">Payout GBP {ride.yourEarnings}</span>
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 shrink-0">
@@ -134,20 +175,28 @@ export default function AffiliateRidesPage() {
         <div>
           <h2 className="font-semibold text-slate-700 mb-3 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Active Rides</h2>
           <div className="space-y-3">
-            {active.map(ride => (
-              <div key={ride.id} className="bg-white rounded-2xl border border-green-200 shadow-sm p-5">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-sm font-bold text-slate-800">{ride.bookingRef}</span>
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold capitalize">{ride.status.replace(/_/g, ' ')}</span>
+            {active.map(ride => {
+              const assignedDriver = drivers.find(driver => driver.id === ride.assignedDriverId);
+              const assignedVehicle = vehicles.find(vehicle => vehicle.id === ride.assignedVehicleId);
+              return (
+                <div key={ride.id} className="bg-white rounded-2xl border border-green-200 shadow-sm p-5">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono text-sm font-bold text-slate-800">{ride.bookingRef}</span>
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold capitalize">{ride.status.replace(/_/g, ' ')}</span>
+                      </div>
+                      <p className="text-sm text-slate-600">{ride.pickupAddress} -&gt; {ride.dropoffAddress}</p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                        <span className="rounded-full bg-slate-50 border border-slate-100 px-2 py-1">Driver: {assignedDriver?.fullName || 'Not allocated'}</span>
+                        <span className="rounded-full bg-slate-50 border border-slate-100 px-2 py-1">Vehicle: {assignedVehicle ? `${assignedVehicle.make} ${assignedVehicle.model} - ${assignedVehicle.registration}` : 'Not allocated'}</span>
+                      </div>
                     </div>
-                    <p className="text-sm text-slate-600">{ride.pickupAddress} → {ride.dropoffAddress}</p>
+                    <div className="text-right"><p className="font-bold text-xl text-slate-800">GBP {ride.yourEarnings}</p><p className="text-xs text-slate-400">Partner payout</p>{ride.distance && <p className="text-xs text-slate-400">{ride.distance}</p>}</div>
                   </div>
-                  <div className="text-right"><p className="font-bold text-xl text-slate-800">£{ride.yourEarnings}</p><p className="text-xs text-slate-400">Partner payout</p>{ride.distance && <p className="text-xs text-slate-400">{ride.distance}</p>}</div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -169,7 +218,7 @@ export default function AffiliateRidesPage() {
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Select Driver *</label>
                 <select value={selectedDriver} onChange={e => setSelectedDriver(e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400">
-                  <option value="">Choose a driver…</option>
+                  <option value="">Choose a driver...</option>
                   {drivers.map(d => (
                     <option key={d.id} value={d.id}>{d.fullName}</option>
                   ))}
@@ -179,9 +228,9 @@ export default function AffiliateRidesPage() {
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Select Vehicle *</label>
                 <select value={selectedVehicle} onChange={e => setSelectedVehicle(e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400">
-                  <option value="">Choose a vehicle…</option>
+                  <option value="">Choose a vehicle...</option>
                   {vehicles.map(v => (
-                    <option key={v.id} value={v.id}>{v.make} {v.model} · {v.registration}</option>
+                    <option key={v.id} value={v.id}>{v.make} {v.model} - {v.registration}</option>
                   ))}
                 </select>
                 {vehicles.length === 0 && <p className="mt-2 text-xs text-amber-600">No approved available vehicles match this ride category, capacity, and compliance requirements.</p>}
@@ -189,7 +238,7 @@ export default function AffiliateRidesPage() {
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={confirmAssign} disabled={!selectedDriver || !selectedVehicle || submitting} className="flex-1 py-3 rounded-xl font-semibold text-sm text-white disabled:opacity-50" style={{ background: '#10b981' }}>
-                {submitting ? 'Assigning…' : 'Confirm Assignment'}
+                {submitting ? 'Assigning...' : 'Confirm Assignment'}
               </button>
               <button onClick={() => setAssignModal(null)} className="flex-1 py-3 rounded-xl font-semibold text-sm" style={{ background: '#f1f5f9', color: '#64748b' }}>Cancel</button>
             </div>
