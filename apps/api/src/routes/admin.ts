@@ -6,6 +6,7 @@ import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
 import { DEFAULT_CONTENT_PAGES } from '../data/cmsDefaults';
 import { isCloudinaryConfigured, uploadImageBuffer } from '../lib/cloudinary';
+import type { UploadedFile } from '../lib/documentUpload';
 import type { WebsiteVehicle, Promotion, FAQItem, NavigationItem, SupportTicket } from '../types';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
@@ -372,7 +373,7 @@ router.post('/uploads/vehicle-image', uploadSingleImage, async (req: Request, re
       res.status(503).json({ success: false, message: 'Image upload is not configured. Paste an image URL instead, or ask an admin to set CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET.' });
       return;
     }
-    const file = (req as Request & { file?: Express.Multer.File }).file;
+    const file = (req as Request & { file?: UploadedFile }).file;
     if (!file) { res.status(400).json({ success: false, message: 'No image file provided' }); return; }
     if (!file.mimetype.startsWith('image/')) { res.status(400).json({ success: false, message: 'File must be an image' }); return; }
     const url = await uploadImageBuffer(file.buffer, 'ride-prestige/vehicles');
