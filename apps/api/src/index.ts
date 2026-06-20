@@ -1,6 +1,9 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { attachSentryErrorHandler, initSentry } from './lib/sentry';
+initSentry();
+
 import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
@@ -190,6 +193,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // ─── Error Handlers ───────────────────────────────────────────────────────────
 
 app.use(notFound);
+attachSentryErrorHandler(app);
 app.use(errorHandler);
 
 // ─── Start ────────────────────────────────────────────────────────────────────
