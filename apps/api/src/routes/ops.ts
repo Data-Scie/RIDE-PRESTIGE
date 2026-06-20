@@ -133,6 +133,82 @@ router.get('/dashboard', async (_req: Request, res: Response) => {
   }
 });
 
+// ─── Documents overview ───────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/ops/documents:
+ *   get:
+ *     summary: List every affiliate, driver, and vehicle document in one place
+ *     tags: [Operations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Documents }
+ */
+router.get('/documents', async (_req: Request, res: Response) => {
+  try {
+    const [affiliates, drivers, vehicles] = await Promise.all([
+      prisma.affiliate.findMany(),
+      prisma.driver.findMany({ include: { affiliate: { select: { id: true, companyName: true } } } }),
+      prisma.fleetVehicle.findMany(),
+    ]);
+
+    await Promise.all([
+      ...affiliates.map(a => ensureAffiliateDocuments(a.id)),
+      ...drivers.map(d => ensureDriverDocuments(d.id)),
+      ...vehicles.map(v => ensureVehicleDocuments(v.id)),
+    ]);
+
+    const [affiliateDocs, driverDocs, vehicleDocs] = await Promise.all([
+      prisma.affiliateDocument.findMany(),
+      prisma.driverDocument.findMany(),
+      prisma.vehicleDocument.findMany(),
+    ]);
+
+    const affiliateById = new Map(affiliates.map(a => [a.id, a]));
+    const driverById = new Map(drivers.map(d => [d.id, d]));
+    const vehicleById = new Map(vehicles.map(v => [v.id, v]));
+
+    const rows = [
+      ...affiliateDocs.map(doc => {
+        const affiliate = affiliateById.get(doc.affiliateId);
+        return {
+          id: doc.id, documentType: doc.type, label: doc.label, status: doc.status,
+          fileUrl: doc.fileUrl, expiryDate: doc.expiryDate, rejectionReason: doc.rejectionReason,
+          entityKind: 'affiliate' as const, entityId: doc.affiliateId,
+          entityName: affiliate?.companyName ?? 'Unknown affiliate',
+          affiliateId: doc.affiliateId, affiliateName: affiliate?.companyName ?? null,
+        };
+      }),
+      ...driverDocs.map(doc => {
+        const driver = driverById.get(doc.driverId);
+        return {
+          id: doc.id, documentType: doc.type, label: doc.label, status: doc.status,
+          fileUrl: doc.fileUrl, expiryDate: doc.expiryDate, rejectionReason: doc.rejectionReason,
+          entityKind: 'driver' as const, entityId: doc.driverId,
+          entityName: driver?.fullName ?? 'Unknown driver',
+          affiliateId: driver?.affiliateId ?? null, affiliateName: driver?.affiliate?.companyName ?? null,
+        };
+      }),
+      ...vehicleDocs.map(doc => {
+        const vehicle = vehicleById.get(doc.vehicleId);
+        return {
+          id: doc.id, documentType: doc.type, label: doc.label, status: doc.status,
+          fileUrl: doc.fileUrl, expiryDate: doc.expiryDate, rejectionReason: doc.rejectionReason,
+          entityKind: 'vehicle' as const, entityId: doc.vehicleId,
+          entityName: vehicle ? `${vehicle.make} ${vehicle.model} (${vehicle.registration})` : 'Unknown vehicle',
+          affiliateId: vehicle?.affiliateId ?? null, affiliateName: null,
+        };
+      }),
+    ];
+
+    res.json({ success: true, data: rows, total: rows.length });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
 // ─── Rides / Jobs ─────────────────────────────────────────────────────────────
 
 /**
