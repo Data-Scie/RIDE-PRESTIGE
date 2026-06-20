@@ -290,25 +290,29 @@ router.post('/quote', async (req: Request, res: Response) => {
     return;
   }
 
-  const pricing = await getPricingConfig();
-  const miles   = await estimateDistance(pickupPostcode, dropoffPostcode);
-  const hours   = estimateHours(miles);
-  const calc    = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
-  const quoteId = `qt-${uuid()}`;
-  const ref     = `RP-QUOTE-${Date.now()}`;
-  const expiry  = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  try {
+    const pricing = await getPricingConfig();
+    const miles   = await estimateDistance(pickupPostcode, dropoffPostcode);
+    const hours   = estimateHours(miles);
+    const calc    = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
+    const quoteId = `qt-${uuid()}`;
+    const ref     = `RP-QUOTE-${Date.now()}`;
+    const expiry  = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-  const quote = {
-    id: quoteId,
-    bookingRef: ref,
-    createdAt: new Date().toISOString(),
-    expiresAt: expiry,
-    journey: { pickupPostcode, dropoffPostcode, passengers, vehicleCategory, bookingType, date, time, notes },
-    calculation: calc,
-    status: 'pending',
-  };
+    const quote = {
+      id: quoteId,
+      bookingRef: ref,
+      createdAt: new Date().toISOString(),
+      expiresAt: expiry,
+      journey: { pickupPostcode, dropoffPostcode, passengers, vehicleCategory, bookingType, date, time, notes },
+      calculation: calc,
+      status: 'pending',
+    };
 
-  res.json({ success: true, data: quote });
+    res.json({ success: true, data: quote });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Could not calculate quote' });
+  }
 });
 
 // ─── Booking ──────────────────────────────────────────────────────────────────

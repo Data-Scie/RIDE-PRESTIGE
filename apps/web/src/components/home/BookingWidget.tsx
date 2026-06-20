@@ -115,6 +115,7 @@ export default function BookingWidget() {
             <MapPin size={15} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#000000', flexShrink: 0 }} />
             <input
               type="text"
+              aria-label="Pickup postcode"
               placeholder="Pickup postcode (e.g. S1 1AX)"
               value={pickup}
               maxLength={8}
@@ -138,6 +139,7 @@ export default function BookingWidget() {
             <MapPin size={15} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: GOLD, flexShrink: 0 }} />
             <input
               type="text"
+              aria-label="Drop-off postcode"
               placeholder="Drop-off postcode (e.g. M1 1AB)"
               value={dropoff}
               maxLength={8}

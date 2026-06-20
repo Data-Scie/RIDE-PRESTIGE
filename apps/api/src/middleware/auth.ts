@@ -2,7 +2,12 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import type { TokenPayload, PortalRole } from '../types';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'ride-prestige-super-secret-jwt-key-2026';
+function requireEnv(name: string, value: string | undefined): string {
+  if (!value) throw new Error(`${name} environment variable is not set`);
+  return value;
+}
+
+const JWT_SECRET = requireEnv('JWT_SECRET', process.env.JWT_SECRET);
 
 export function signToken(payload: TokenPayload): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });

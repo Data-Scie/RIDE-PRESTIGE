@@ -65,11 +65,11 @@ export default function AdminLoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block mb-2"
+              <label htmlFor="admin-login-email" className="block mb-2"
                 style={{ color: '#6b7280', fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                 Email address
               </label>
-              <input type="email" autoComplete="email" placeholder="admin@rideprestige.co.uk"
+              <input id="admin-login-email" type="email" autoComplete="email" placeholder="admin@rideprestige.co.uk"
                 value={email} onChange={e => { setEmail(e.target.value); setError(''); }}
                 className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all"
                 style={{ background: '#f4f5f8', border: '1px solid #e5e7eb', color: '#0a0f1e', fontFamily: 'inherit' }}
@@ -79,12 +79,12 @@ export default function AdminLoginPage() {
             </div>
 
             <div>
-              <label className="block mb-2"
+              <label htmlFor="admin-login-password" className="block mb-2"
                 style={{ color: '#6b7280', fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                 Password
               </label>
               <div className="relative">
-                <input type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="••••••••"
+                <input id="admin-login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="••••••••"
                   value={password} onChange={e => { setPassword(e.target.value); setError(''); }}
                   className="w-full rounded-xl px-4 py-3 pr-11 text-sm outline-none transition-all"
                   style={{ background: '#f4f5f8', border: '1px solid #e5e7eb', color: '#0a0f1e', fontFamily: 'inherit' }}

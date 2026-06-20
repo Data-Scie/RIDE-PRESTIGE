@@ -45,13 +45,13 @@ export default function OpsLoginPage() {
           {error && <div className="mb-4 px-4 py-3 rounded-xl text-sm text-red-300" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>{error}</div>}
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-400">Email address</label>
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="ops@rideprestige.co.uk" className="w-full px-4 py-3 rounded-xl text-sm outline-none" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontFamily: 'inherit' }} />
+              <label htmlFor="ops-login-email" className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-400">Email address</label>
+              <input id="ops-login-email" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="ops@rideprestige.co.uk" className="w-full px-4 py-3 rounded-xl text-sm outline-none" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontFamily: 'inherit' }} />
             </div>
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-400">Password</label>
+              <label htmlFor="ops-login-password" className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-400">Password</label>
               <div className="relative">
-                <input type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••••" className="w-full px-4 py-3 pr-11 rounded-xl text-sm outline-none" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontFamily: 'inherit' }} />
+                <input id="ops-login-password" type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••••" className="w-full px-4 py-3 pr-11 rounded-xl text-sm outline-none" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontFamily: 'inherit' }} />
                 <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">{showPw ? <EyeOff size={16} /> : <Eye size={16} />}</button>
               </div>
             </div>

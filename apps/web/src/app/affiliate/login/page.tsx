@@ -45,13 +45,13 @@ export default function AffiliateLoginPage() {
           {error && <div className="mb-4 px-4 py-3 rounded-xl text-sm text-red-600 bg-red-50 border border-red-100">{error}</div>}
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Email address</label>
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="info@yourcompany.co.uk" className="w-full px-4 py-3 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400" />
+              <label htmlFor="affiliate-login-email" className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Email address</label>
+              <input id="affiliate-login-email" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="info@yourcompany.co.uk" className="w-full px-4 py-3 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400" />
             </div>
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Password</label>
+              <label htmlFor="affiliate-login-password" className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Password</label>
               <div className="relative">
-                <input type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full px-4 py-3 pr-11 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400" />
+                <input id="affiliate-login-password" type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full px-4 py-3 pr-11 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400" />
                 <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff size={16} /> : <Eye size={16} />}</button>
               </div>
             </div>

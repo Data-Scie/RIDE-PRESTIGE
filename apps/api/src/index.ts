@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
@@ -52,7 +55,23 @@ app.use((req, res, next) => {
     crossOriginResourcePolicy: false,
   })(req, res, next);
 });
-app.use(cors({ origin: '*', methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'] }));
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://ride-prestige-sigma.vercel.app',
+  ...(process.env.WEB_ORIGIN ? [process.env.WEB_ORIGIN] : []),
+];
+app.use(cors({
+  origin(origin, callback) {
+    // Allow non-browser clients (mobile apps, curl, server-to-server) which send no Origin header.
+    if (!origin || allowedOrigins.includes(origin) || /^https:\/\/ride-prestige-[a-z0-9-]+\.vercel\.app$/.test(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
+}));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
@@ -61,6 +80,7 @@ app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
 
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500, message: { success: false, message: 'Too many requests, please try again later.' } }));
+app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 60, message: { success: false, message: 'Too many login attempts, please try again later.' } }));
 
 // ─── Swagger / OpenAPI Docs ───────────────────────────────────────────────────
 

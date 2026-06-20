@@ -365,6 +365,9 @@ router.post('/jobs/:id/reject', async (req: Request, res: Response) => {
   try {
     const job = await prisma.job.findUnique({ where: { id: req.params.id } });
     if (!job) { res.status(404).json({ success: false, message: 'Job not found' }); return; }
+    if (job.status !== 'awaiting_affiliate') {
+      res.status(409).json({ success: false, message: `Cannot reject job in status: ${job.status}` }); return;
+    }
     const updated = await prisma.job.update({ where: { id: job.id }, data: { status: 'rejected' } });
     res.json({ success: true, message: 'Job rejected', data: shapeJob(updated) });
   } catch (e) {
