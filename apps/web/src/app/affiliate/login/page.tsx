@@ -1,8 +1,9 @@
 'use client';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
-import BrandLogo from '@/components/common/BrandLogo';
+import { GOLD, PortalLoginShell, PortalSubmitButton, portalInputStyle, portalInputFocusHandlers } from '@/components/auth/PortalLoginShell';
 
 export default function AffiliateLoginPage() {
   const [email, setEmail]       = useState('');
@@ -34,34 +35,28 @@ export default function AffiliateLoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="w-full max-w-sm mx-4">
-        <div className="text-center mb-8">
-          <BrandLogo width={56} className="mx-auto mb-5" />
-          <h1 className="text-2xl font-bold text-slate-800 mb-1" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>Affiliate Portal</h1>
-          <p className="text-slate-500 text-sm">Ride Prestige — Partner Access</p>
-        </div>
-        <div className="bg-white rounded-3xl p-8 shadow-xl border border-slate-100">
-          {error && <div className="mb-4 px-4 py-3 rounded-xl text-sm text-red-600 bg-red-50 border border-red-100">{error}</div>}
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label htmlFor="affiliate-login-email" className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Email address</label>
-              <input id="affiliate-login-email" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="info@yourcompany.co.uk" className="w-full px-4 py-3 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400" />
-            </div>
-            <div>
-              <label htmlFor="affiliate-login-password" className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Password</label>
-              <div className="relative">
-                <input id="affiliate-login-password" type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full px-4 py-3 pr-11 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400" />
-                <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-              </div>
-            </div>
-            <button type="submit" disabled={loading} className="w-full py-3 rounded-xl font-semibold text-sm text-white transition-all mt-2" style={{ background: 'linear-gradient(135deg,#10b981,#059669)', opacity: loading ? 0.7 : 1 }}>
-              {loading ? 'Signing in…' : 'Sign in'}
-            </button>
-          </form>
-          <p className="text-center text-sm text-slate-500 mt-5">Not registered? <Link href="/affiliate/register" className="text-green-600 font-semibold hover:text-green-700">Apply to join</Link></p>
+    <PortalLoginShell
+      title="Affiliate Portal"
+      subtitle="Ride Prestige — Partner Access"
+      badgeLabel="Secure Partner Access"
+      error={error}
+      onSubmit={handleLogin}
+      footer={<>Not registered? <Link href="/affiliate/register" className="font-semibold" style={{ color: GOLD }}>Apply to join</Link></>}
+    >
+      <div>
+        <label htmlFor="affiliate-login-email" className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Email address</label>
+        <input id="affiliate-login-email" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="info@yourcompany.co.uk"
+          className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all" style={portalInputStyle} {...portalInputFocusHandlers} />
+      </div>
+      <div>
+        <label htmlFor="affiliate-login-password" className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Password</label>
+        <div className="relative">
+          <input id="affiliate-login-password" type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
+            className="w-full px-4 py-3 pr-11 rounded-xl text-sm outline-none transition-all" style={portalInputStyle} {...portalInputFocusHandlers} />
+          <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff size={16} /> : <Eye size={16} />}</button>
         </div>
       </div>
-    </div>
+      <PortalSubmitButton loading={loading} label="Sign In" loadingLabel="Signing in…" />
+    </PortalLoginShell>
   );
 }

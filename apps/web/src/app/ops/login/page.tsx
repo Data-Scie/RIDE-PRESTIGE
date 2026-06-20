@@ -1,7 +1,8 @@
 'use client';
+
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import BrandLogo from '@/components/common/BrandLogo';
+import { PortalLoginShell, PortalSubmitButton, portalInputStyle, portalInputFocusHandlers } from '@/components/auth/PortalLoginShell';
 
 export default function OpsLoginPage() {
   const [email, setEmail]       = useState('');
@@ -33,37 +34,28 @@ export default function OpsLoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#0f172a 0%,#1e293b 100%)' }}>
-      <div className="w-full max-w-sm mx-4">
-        <div className="text-center mb-8">
-          <BrandLogo width={56} className="mx-auto mb-5" />
-          <h1 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>Operations Portal</h1>
-          <p className="text-slate-400 text-sm">Ride Prestige — Admin Operations</p>
-        </div>
-
-        <div className="rounded-3xl p-8" style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
-          {error && <div className="mb-4 px-4 py-3 rounded-xl text-sm text-red-300" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>{error}</div>}
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label htmlFor="ops-login-email" className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-400">Email address</label>
-              <input id="ops-login-email" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="ops@rideprestige.co.uk" className="w-full px-4 py-3 rounded-xl text-sm outline-none" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontFamily: 'inherit' }} />
-            </div>
-            <div>
-              <label htmlFor="ops-login-password" className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-400">Password</label>
-              <div className="relative">
-                <input id="ops-login-password" type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••••" className="w-full px-4 py-3 pr-11 rounded-xl text-sm outline-none" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontFamily: 'inherit' }} />
-                <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">{showPw ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-              </div>
-            </div>
-            <button type="submit" disabled={loading} className="w-full py-3 rounded-xl font-semibold text-sm transition-all mt-2" style={{ background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', color: 'white', opacity: loading ? 0.7 : 1 }}>
-              {loading ? 'Signing in…' : 'Sign in to Operations'}
-            </button>
-          </form>
-        </div>
-
-        <p className="text-center text-xs mt-4 text-slate-600">Restricted access — authorised personnel only</p>
-        <p className="text-center text-xs mt-2 text-slate-700">ops@rideprestige.co.uk / Ops@2026!</p>
+    <PortalLoginShell
+      title="Operations Portal"
+      subtitle="Ride Prestige — Operations Access"
+      badgeLabel="Restricted Operations Access"
+      error={error}
+      onSubmit={handleLogin}
+      footer="Authorised personnel only"
+    >
+      <div>
+        <label htmlFor="ops-login-email" className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Email address</label>
+        <input id="ops-login-email" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="ops@rideprestige.co.uk"
+          className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all" style={portalInputStyle} {...portalInputFocusHandlers} />
       </div>
-    </div>
+      <div>
+        <label htmlFor="ops-login-password" className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Password</label>
+        <div className="relative">
+          <input id="ops-login-password" type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••••"
+            className="w-full px-4 py-3 pr-11 rounded-xl text-sm outline-none transition-all" style={portalInputStyle} {...portalInputFocusHandlers} />
+          <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+        </div>
+      </div>
+      <PortalSubmitButton loading={loading} label="Sign in to Operations" loadingLabel="Signing in…" />
+    </PortalLoginShell>
   );
 }

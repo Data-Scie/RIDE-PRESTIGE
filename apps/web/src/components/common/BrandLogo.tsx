@@ -11,7 +11,7 @@ export default function BrandLogo({
   src?: string;
   alt?: string;
 }) {
-  // Source image is 489x512 (~0.955 width:height) — height follows from width directly.
+  // Source image is 565x622 (padded for breathing room around the mark) — height follows from width directly.
   const renderedWidth = Math.round(width);
 
   return (
@@ -20,7 +20,7 @@ export default function BrandLogo({
         src={src}
         alt={alt}
         width={renderedWidth}
-        height={Math.round(renderedWidth * 1.047)}
+        height={Math.round(renderedWidth * 1.101)}
         style={{ width: renderedWidth, height: 'auto', objectFit: 'contain', display: 'block' }}
         priority
       />

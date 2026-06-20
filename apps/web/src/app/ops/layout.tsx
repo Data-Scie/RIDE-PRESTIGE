@@ -79,7 +79,10 @@ function Sidebar({ onNav }: { onNav?: () => void }) {
 }
 
 export default function OpsLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const isAuthPage = pathname === '/ops/login';
+  if (isAuthPage) return <>{children}</>;
   return (
     <div className="flex min-h-screen" style={{ background: '#f1f5f9' }}>
       <div className="hidden lg:flex"><Sidebar /></div>

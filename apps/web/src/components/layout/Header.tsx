@@ -21,8 +21,11 @@ export default function Header({ navigation, settings }: { navigation: Navigatio
         <div className="flex items-center justify-between h-16">
 
           {/* Brand */}
-          <Link href="/" className="shrink-0">
-            <BrandLogo width={56} alt={settings.siteName} />
+          <Link href="/" className="shrink-0 flex items-center gap-2.5" style={{ marginTop: 3 }}>
+            <BrandLogo width={44} alt={settings.siteName} />
+            <span style={{ fontFamily: 'Playfair Display,Georgia,serif', color: '#c9a84c', fontWeight: 700, fontSize: '1.2rem', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
+              Ride Prestige
+            </span>
           </Link>
 
           {/* Desktop nav */}
