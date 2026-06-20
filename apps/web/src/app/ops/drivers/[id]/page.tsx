@@ -34,6 +34,7 @@ interface Driver {
   phone: string;
   status: string;
   applicationStatus: 'pending' | 'approved' | 'rejected' | 'suspended';
+  documentsStatus?: 'missing' | 'pending' | 'approved' | 'rejected' | 'expired';
   driverType: 'affiliateDriver' | 'independentDriver';
   affiliate?: { id: string; companyName: string } | null;
   rating: number;
@@ -74,19 +75,25 @@ export default function DriverDetailPage() {
 
   const updateDocument = async (documentId: string, action: 'approve' | 'reject', reason?: string, override = false) => {
     if (override && !window.confirm('Approve this document without a valid uploaded file? Use this only when you have verified compliance another way.')) return;
-    await opsApi.put(`/api/ops/drivers/${id}/documents/${documentId}/${action}${override ? '?override=true' : ''}`, { reason, override, approveAnyway: override });
-    await load();
+    setError('');
+    try {
+      await opsApi.put(`/api/ops/drivers/${id}/documents/${documentId}/${action}${override ? '?override=true' : ''}`, { reason, override, approveAnyway: override });
+      await load();
+    } catch (e) {
+      setError((e as Error).message || `Could not ${action} document`);
+    }
   };
 
   useEffect(() => {
     load().catch(e => setError(e.message)).finally(() => setLoading(false));
   }, [id]);
 
-  const updateApplication = async (action: 'approve' | 'reject' | 'suspend') => {
+  const updateApplication = async (action: 'approve' | 'reject' | 'suspend', override = false) => {
+    if (override && !window.confirm('Approve this driver and override any missing documents? Use this only after manual verification.')) return;
     setUpdating(true);
     setError('');
     try {
-      const result = await opsApi.put<{ success: boolean; data: Driver }>(`/api/ops/drivers/${id}/${action}`, {});
+      const result = await opsApi.put<{ success: boolean; data: Driver }>(`/api/ops/drivers/${id}/${action}${override ? '?override=true' : ''}`, { override, approveAnyway: override });
       setDriver(result.data);
     } catch (e) {
       setError((e as Error).message || `Could not ${action} driver`);
@@ -133,6 +140,7 @@ export default function DriverDetailPage() {
           </div>
           <div className="flex gap-2">
             {driver.applicationStatus !== 'approved' && <button onClick={() => updateApplication('approve')} disabled={updating} className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>}
+            {driver.applicationStatus !== 'approved' && driver.documentsStatus !== 'approved' && <button onClick={() => updateApplication('approve', true)} disabled={updating} className="px-4 py-2 rounded-xl text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-200 disabled:opacity-50">Approve anyway</button>}
             {driver.applicationStatus === 'pending' && <button onClick={() => updateApplication('reject')} disabled={updating} className="px-4 py-2 rounded-xl text-sm font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>}
             {driver.applicationStatus === 'approved' && <button onClick={() => updateApplication('suspend')} disabled={updating} className="px-4 py-2 rounded-xl text-sm font-semibold text-red-600 bg-red-50 disabled:opacity-50">Suspend</button>}
           </div>

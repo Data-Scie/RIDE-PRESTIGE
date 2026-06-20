@@ -49,11 +49,12 @@ export default function OpsDriversPage() {
     loadDrivers().catch(e => setError(e.message)).finally(() => setLoading(false));
   }, []);
 
-  const updateApplication = async (driver: Driver, action: 'approve' | 'reject' | 'suspend') => {
+  const updateApplication = async (driver: Driver, action: 'approve' | 'reject' | 'suspend', override = false) => {
+    if (override && !window.confirm('Approve this driver and override any missing documents? Use this only after manual verification.')) return;
     setUpdating(driver.id);
     setError('');
     try {
-      await opsApi.put(`/api/ops/drivers/${driver.id}/${action}`, {});
+      await opsApi.put(`/api/ops/drivers/${driver.id}/${action}${override ? '?override=true' : ''}`, { override, approveAnyway: override });
       await loadDrivers();
     } catch (e) {
       setError((e as Error).message || `Could not ${action} driver`);
@@ -111,6 +112,7 @@ export default function OpsDriversPage() {
                 <td className="px-4 py-4 text-sm">{driver.totalJobs}</td>
                 <td className="px-4 py-4"><div className="flex gap-2 items-center">
                   {driver.applicationStatus !== 'approved' && <button disabled={updating === driver.id} onClick={() => updateApplication(driver, 'approve')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>}
+                  {driver.applicationStatus !== 'approved' && driver.documentsStatus !== 'approved' && <button disabled={updating === driver.id} onClick={() => updateApplication(driver, 'approve', true)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 disabled:opacity-50">Approve anyway</button>}
                   {driver.applicationStatus === 'pending' && <button disabled={updating === driver.id} onClick={() => updateApplication(driver, 'reject')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>}
                   {driver.applicationStatus === 'approved' && <button disabled={updating === driver.id} onClick={() => updateApplication(driver, 'suspend')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Suspend</button>}
                   <Link href={`/ops/drivers/${driver.id}`} className="text-blue-500"><ArrowRight size={16} /></Link>
