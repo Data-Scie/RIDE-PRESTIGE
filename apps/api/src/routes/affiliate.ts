@@ -10,8 +10,9 @@ import {
   ensureVehicleDocuments,
   isDocumentUrl as isVehicleDocumentUrl,
   syncVehicleDocumentExpiries,
+  VEHICLE_DOCUMENTS,
 } from '../lib/vehicleDocuments';
-import { ensureDriverDocuments } from '../lib/driverDocuments';
+import { ensureDriverDocuments, DRIVER_DOCUMENTS } from '../lib/driverDocuments';
 import { recordRideFlowEvent } from '../lib/rideFlow';
 import { pushNotification } from '../services/notificationService';
 import { isDriverDocumentEligible, isVehicleEligible } from '../services/dispatchService';
@@ -679,13 +680,12 @@ router.get('/drivers', async (req: Request, res: Response) => {
           && driver.documentsStatus === 'approved'
           && isDriverDocumentEligible(driver.documents)) : [])
       : drivers;
-    await Promise.all(eligibleDrivers.map(driver => ensureDriverDocuments(driver.id)));
-    const refreshedDrivers = await prisma.driver.findMany({
-      where: { id: { in: eligibleDrivers.map(driver => driver.id) } },
-      include: { documents: true },
-      orderBy: { joinedDate: 'desc' },
-    });
-    const list = refreshedDrivers.map(({ passwordHash: _, ...d }) => d);
+    const driversWithDocs = await Promise.all(eligibleDrivers.map(async driver => {
+      const existingTypes = new Set(driver.documents.map(d => d.type));
+      const hasAllDocs = DRIVER_DOCUMENTS.every(doc => existingTypes.has(doc.type));
+      return hasAllDocs ? driver : { ...driver, documents: await ensureDriverDocuments(driver.id) };
+    }));
+    const list = driversWithDocs.map(({ passwordHash: _, ...d }) => d);
     res.json({ success: true, data: list, total: list.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
@@ -952,13 +952,14 @@ router.get('/vehicles', async (req: Request, res: Response) => {
       where,
       include: { documents: true },
     });
-    await Promise.all(vehicles.map(vehicle => syncVehicleDocumentExpiries(vehicle.id)));
-    const refreshedVehicles = await prisma.fleetVehicle.findMany({
-      where,
-      include: { documents: true },
-    });
-    const list = jobId ? (job ? refreshedVehicles.filter(vehicle =>
-      vehicle.id === job.assignedVehicleId || isVehicleEligible(vehicle, job)) : []) : refreshedVehicles;
+    const vehiclesWithDocs = await Promise.all(vehicles.map(async vehicle => {
+      const existingTypes = new Set(vehicle.documents.map(d => d.type));
+      const needsSync = vehicle.documents.some(d => !d.expiryDate)
+        || VEHICLE_DOCUMENTS.some(doc => !existingTypes.has(doc.type));
+      return needsSync ? { ...vehicle, documents: await syncVehicleDocumentExpiries(vehicle.id) } : vehicle;
+    }));
+    const list = jobId ? (job ? vehiclesWithDocs.filter(vehicle =>
+      vehicle.id === job.assignedVehicleId || isVehicleEligible(vehicle, job)) : []) : vehiclesWithDocs;
     res.json({ success: true, data: list, total: list.length });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
