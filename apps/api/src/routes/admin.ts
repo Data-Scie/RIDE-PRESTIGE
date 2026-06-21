@@ -10,10 +10,12 @@ import { DEFAULT_CONTENT_PAGES } from '../data/cmsDefaults';
 import { DEFAULT_WEBSITE_VEHICLES } from '../data/defaultWebsiteFleet';
 import { isCloudinaryConfigured, uploadImageBuffer } from '../lib/cloudinary';
 import {
+  areVehicleDocumentsApproved,
   ensureVehicleDocuments,
   hasCurrentDocumentFile as hasCurrentVehicleDocumentFile,
   syncVehicleDocumentExpiries,
 } from '../lib/vehicleDocuments';
+import { pushNotification } from '../services/notificationService';
 import type { UploadedFile } from '../lib/documentUpload';
 import type { WebsiteVehicle, Promotion, FAQItem, NavigationItem, SupportTicket } from '../types';
 
@@ -1037,6 +1039,62 @@ router.put('/affiliates/:affiliateId/documents/:documentId/reject', async (req: 
       where: { id: document.id },
       data: { status: 'rejected', rejectionReason: reason || 'Document was not approved' },
     });
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/vehicles/{id}/approve:
+ *   put:
+ *     summary: Approve a fleet vehicle, optionally overriding missing/expired documents
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Vehicle approved }
+ */
+router.put('/vehicles/:id/approve', async (req: Request, res: Response) => {
+  try {
+    const vehicle = await prisma.fleetVehicle.findUnique({ where: { id: req.params.id } });
+    if (!vehicle) {
+      res.status(404).json({ success: false, message: 'Vehicle not found' });
+      return;
+    }
+    const override = isOverrideApproval(req);
+    const complianceDates = [vehicle.motExpiry, vehicle.insuranceExpiry, vehicle.phvLicenceExpiry];
+    if (!override && complianceDates.some(value => {
+      const timestamp = new Date(`${value}T23:59:59.999Z`).getTime();
+      return Number.isNaN(timestamp) || timestamp < Date.now();
+    })) {
+      res.status(409).json({ success: false, message: 'Expired vehicle compliance cannot be approved' });
+      return;
+    }
+    const documents = await ensureVehicleDocuments(vehicle.id);
+    if (!override && !areVehicleDocumentsApproved(documents)) {
+      res.status(409).json({ success: false, message: 'Approve all uploaded current vehicle documents before approving this vehicle' });
+      return;
+    }
+    if (override) {
+      await prisma.vehicleDocument.updateMany({
+        where: { vehicleId: vehicle.id, status: { not: 'approved' } },
+        data: { status: 'approved', rejectionReason: null },
+      });
+    }
+    const updated = await prisma.fleetVehicle.update({
+      where: { id: vehicle.id },
+      data: { isApproved: true, approvalStatus: 'approved', rejectionReason: null, status: 'available' },
+    });
+    if (updated.ownerDriverId) {
+      await pushNotification(updated.ownerDriverId, 'driver', 'Vehicle Approved', `${updated.make} ${updated.model} (${updated.registration}) is approved for direct rides.`, 'document');
+    }
     res.json({ success: true, data: updated });
   } catch {
     res.status(500).json({ success: false, message: 'Database error' });

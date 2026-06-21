@@ -60,6 +60,20 @@ export default function AdminAffiliateDetailPage() {
     }
   };
 
+  const updateVehicle = async (vehicleId: string, override = false) => {
+    if (override && !window.confirm('Approve this vehicle without valid uploaded documents? Use this only when you have verified compliance another way.')) return;
+    setUpdatingDocument(vehicleId);
+    setError('');
+    try {
+      await adminApi.put(`/api/admin/vehicles/${vehicleId}/approve${override ? '?override=true' : ''}`, { override, approveAnyway: override });
+      await load();
+    } catch (e) {
+      setError((e as Error).message || 'Could not approve vehicle');
+    } finally {
+      setUpdatingDocument(null);
+    }
+  };
+
   const updateVehicleDocument = async (vehicleId: string, documentId: string, action: 'approve' | 'reject', override = false) => {
     const reason = action === 'reject' ? window.prompt('Reason for rejection?') || 'Vehicle document was not approved' : undefined;
     if (override && !window.confirm('Approve this document without a valid uploaded file? Use this only when you have verified compliance another way.')) return;
@@ -178,7 +192,15 @@ export default function AdminAffiliateDetailPage() {
                 <p className="font-medium text-sm" style={{ color: '#0a0f1e' }}>{vehicle.make} {vehicle.model}</p>
                 <p className="text-xs text-slate-400 font-mono">{vehicle.registration} · {vehicle.vehicleCategory}</p>
               </div>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${vehicle.approvalStatus === 'approved' ? 'bg-green-50 text-green-700' : vehicle.approvalStatus === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>{vehicle.approvalStatus}</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${vehicle.approvalStatus === 'approved' ? 'bg-green-50 text-green-700' : vehicle.approvalStatus === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>{vehicle.approvalStatus}</span>
+                {vehicle.approvalStatus !== 'approved' && (
+                  <>
+                    <button disabled={updatingDocument === vehicle.id} onClick={() => void updateVehicle(vehicle.id)} className="rounded-lg bg-green-600 px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50">Approve vehicle</button>
+                    <button disabled={updatingDocument === vehicle.id} onClick={() => void updateVehicle(vehicle.id, true)} className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1 text-[11px] font-semibold text-amber-700 disabled:opacity-50">Approve anyway</button>
+                  </>
+                )}
+              </div>
             </div>
             {!!vehicle.documents?.length && (
               <div className="mt-3 grid sm:grid-cols-3 gap-2">
