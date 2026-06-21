@@ -100,7 +100,7 @@ export default function AdminDashboard() {
       {/* Stats row 1 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <DashboardCard title="Total bookings"   value={data.totalBookings}   subtitle={`${data.pendingBookings} pending`}     icon={CalendarCheck} accent="blue"  href="/admin/bookings" />
-        <DashboardCard title="Active jobs"      value={data.activeJobs}      subtitle={`${data.completedJobs} completed`}     icon={TrendingUp}    accent="green" href="/admin/bookings?status=accepted" />
+        <DashboardCard title="Active jobs"      value={data.activeJobs}      subtitle={`${data.completedJobs} completed`}     icon={TrendingUp}    accent="green" href="/admin/bookings" />
         <DashboardCard title="Open tickets"     value={data.pendingTickets}  subtitle="awaiting action"                        icon={Headphones}    accent="red"   href="/admin/support" />
         <DashboardCard title="Fleet items"      value={data.fleetVehicles}   subtitle="website vehicles"                       icon={Car}           accent="gold"  href="/admin/fleet" />
       </div>
