@@ -16,6 +16,7 @@
     "test:affiliate-allocation-lifecycle": "node scripts/test-affiliate-allocation-lifecycle.js",
     "test:document-override-approval": "node scripts/test-document-override-approval.js",
     "db:cleanup-mocks": "node scripts/cleanup-mock-data.js",
+    "db:reset-demo": "node scripts/reset-and-seed-demo-data.js",
     "db:rotate-default-passwords": "node scripts/rotate-default-passwords.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

@@ -46,8 +46,15 @@ interface Vehicle {
 export default function AffiliateRidesPage() {
   const [pending, setPending] = useState<Job[]>([]);
   const [active, setActive] = useState<Job[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  // Full roster - used only to look up names for already-assigned drivers/vehicles in the active list.
+  const [allDrivers, setAllDrivers] = useState<Driver[]>([]);
+  const [allVehicles, setAllVehicles] = useState<Vehicle[]>([]);
+  // Eligible-for-this-job lists - populated fresh each time the assignment modal opens. Kept
+  // separate from allDrivers/allVehicles so the modal never shows stale, ineligible candidates
+  // from the unfiltered roster while the real eligibility check is still loading.
+  const [eligibleDrivers, setEligibleDrivers] = useState<Driver[]>([]);
+  const [eligibleVehicles, setEligibleVehicles] = useState<Vehicle[]>([]);
+  const [loadingEligibility, setLoadingEligibility] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [assignModal, setAssignModal] = useState<string | null>(null);
@@ -66,8 +73,8 @@ export default function AffiliateRidesPage() {
     .then(([p, a, d, v]) => {
       setPending(p.data);
       setActive(a.data);
-      setDrivers(d.data);
-      setVehicles(v.data);
+      setAllDrivers(d.data);
+      setAllVehicles(v.data);
     })
     .catch(e => setError(e.message))
     .finally(() => setLoading(false));
@@ -85,15 +92,20 @@ export default function AffiliateRidesPage() {
     setSelectedDriver(ride?.assignedDriverId ?? '');
     setSelectedVehicle(ride?.assignedVehicleId ?? '');
     setAssigningError('');
+    setEligibleDrivers([]);
+    setEligibleVehicles([]);
+    setLoadingEligibility(true);
     try {
       const [d, v] = await Promise.all([
         affiliateApi.get<{ success: boolean; data: Driver[] }>(`/api/affiliate/drivers?status=available&jobId=${encodeURIComponent(id)}`),
         affiliateApi.get<{ success: boolean; data: Vehicle[] }>(`/api/affiliate/vehicles?status=available&jobId=${encodeURIComponent(id)}`),
       ]);
-      setDrivers(d.data);
-      setVehicles(v.data);
+      setEligibleDrivers(d.data);
+      setEligibleVehicles(v.data);
     } catch (e) {
       setAssigningError(e instanceof Error ? e.message : 'Could not load eligible drivers and vehicles');
+    } finally {
+      setLoadingEligibility(false);
     }
   };
 
@@ -108,7 +120,13 @@ export default function AffiliateRidesPage() {
     setAssigningError('');
     try {
       if (assignRide?.status === 'awaiting_affiliate' || pending.some(ride => ride.id === assignModal)) {
-        await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/accept`, {});
+        try {
+          await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/accept`, {});
+        } catch (e) {
+          // A previous attempt may have already accepted this job before a later step failed -
+          // that's not a real failure, carry on to vehicle/driver assignment regardless.
+          if ((e as { status?: number }).status !== 409) throw e;
+        }
       }
       await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/assign-vehicle`, { vehicleId: selectedVehicle });
       await affiliateApi.post(`/api/affiliate/jobs/${assignModal}/assign-driver`, { driverId: selectedDriver });
@@ -193,8 +211,8 @@ export default function AffiliateRidesPage() {
           <h2 className="font-semibold text-slate-700 mb-3 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Active Rides</h2>
           <div className="space-y-3">
             {active.map(ride => {
-              const assignedDriver = drivers.find(driver => driver.id === ride.assignedDriverId);
-              const assignedVehicle = vehicles.find(vehicle => vehicle.id === ride.assignedVehicleId);
+              const assignedDriver = allDrivers.find(driver => driver.id === ride.assignedDriverId);
+              const assignedVehicle = allVehicles.find(vehicle => vehicle.id === ride.assignedVehicleId);
               return (
                 <div key={ride.id} className="bg-white rounded-2xl border border-green-200 shadow-sm p-5">
                   <div className="flex items-center justify-between flex-wrap gap-3">
@@ -243,27 +261,27 @@ export default function AffiliateRidesPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Select Driver *</label>
-                <select value={selectedDriver} onChange={e => setSelectedDriver(e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400">
-                  <option value="">Choose a driver...</option>
-                  {drivers.map(d => (
+                <select value={selectedDriver} onChange={e => setSelectedDriver(e.target.value)} disabled={loadingEligibility} className="w-full px-4 py-3 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400 disabled:opacity-50">
+                  <option value="">{loadingEligibility ? 'Checking eligible drivers...' : 'Choose a driver...'}</option>
+                  {eligibleDrivers.map(d => (
                     <option key={d.id} value={d.id}>{d.fullName}</option>
                   ))}
                 </select>
-                {drivers.length === 0 && <p className="mt-2 text-xs text-amber-600">No available approved drivers with current documents for this ride.</p>}
+                {!loadingEligibility && eligibleDrivers.length === 0 && <p className="mt-2 text-xs text-amber-600">No available approved drivers with current documents for this ride.</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-500">Select Vehicle *</label>
-                <select value={selectedVehicle} onChange={e => setSelectedVehicle(e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400">
-                  <option value="">Choose a vehicle...</option>
-                  {vehicles.map(v => (
+                <select value={selectedVehicle} onChange={e => setSelectedVehicle(e.target.value)} disabled={loadingEligibility} className="w-full px-4 py-3 rounded-xl text-sm outline-none border border-slate-200 focus:border-green-400 disabled:opacity-50">
+                  <option value="">{loadingEligibility ? 'Checking eligible vehicles...' : 'Choose a vehicle...'}</option>
+                  {eligibleVehicles.map(v => (
                     <option key={v.id} value={v.id}>{v.make} {v.model} - {v.registration}</option>
                   ))}
                 </select>
-                {vehicles.length === 0 && <p className="mt-2 text-xs text-amber-600">No approved available vehicles match this ride category, capacity, and compliance requirements.</p>}
+                {!loadingEligibility && eligibleVehicles.length === 0 && <p className="mt-2 text-xs text-amber-600">No approved available vehicles match this ride category, capacity, and compliance requirements.</p>}
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={confirmAssign} disabled={!selectedDriver || !selectedVehicle || submitting} className="flex-1 py-3 rounded-xl font-semibold text-sm text-white disabled:opacity-50" style={{ background: '#10b981' }}>
+              <button onClick={confirmAssign} disabled={!selectedDriver || !selectedVehicle || submitting || loadingEligibility} className="flex-1 py-3 rounded-xl font-semibold text-sm text-white disabled:opacity-50" style={{ background: '#10b981' }}>
                 {submitting ? 'Assigning...' : 'Confirm Assignment'}
               </button>
               <button onClick={() => { setAssignModal(null); setAssignRide(null); }} className="flex-1 py-3 rounded-xl font-semibold text-sm" style={{ background: '#f1f5f9', color: '#64748b' }}>Cancel</button>
