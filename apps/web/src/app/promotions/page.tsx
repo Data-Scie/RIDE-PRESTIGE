@@ -43,7 +43,7 @@ export default async function PromotionsPage() {
                   </div>
                   <div className="text-right">
                     <span className="font-display text-3xl font-bold text-brand-black">
-                      {promo.discountType === 'percentage' ? `${promo.discountValue}%` : `Â£${promo.discountValue}`}
+                      {promo.discountType === 'percentage' ? `${promo.discountValue}%` : `£${promo.discountValue}`}
                     </span>
                     <p className="text-xs text-brand-grey">off</p>
                   </div>

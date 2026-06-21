@@ -9,11 +9,12 @@ interface Affiliate { id: string; companyName: string; contactPerson: string; em
 interface Driver { id: string; fullName: string; email: string; phone: string; driverType: 'affiliateDriver' | 'independentDriver'; applicationStatus: 'pending' | 'approved' | 'rejected' | 'suspended'; affiliate?: { id: string; companyName: string } | null; }
 interface Vehicle { id: string; make: string; model: string; registration: string; approvalStatus: string; ownerDriverId?: string; }
 
-type Tab = 'affiliate' | 'independent' | 'driverVehicle';
+type Tab = 'affiliate' | 'affiliateDriver' | 'independent' | 'driverVehicle';
 type SubFilter = 'received' | 'approved' | 'rejected';
 
 const TABS: { key: Tab; label: string; icon: typeof Building2 }[] = [
   { key: 'affiliate', label: 'Affiliate Applications', icon: Building2 },
+  { key: 'affiliateDriver', label: 'Affiliate Driver Applications', icon: Users },
   { key: 'independent', label: 'Independent Driver Applications', icon: User },
   { key: 'driverVehicle', label: 'Driver + Vehicle Applications', icon: Car },
 ];
@@ -30,14 +31,24 @@ export default function OpsApplicationsPage() {
   const [updating, setUpdating] = useState<string | null>(null);
 
   const load = async () => {
-    const [a, d, v] = await Promise.all([
+    setError('');
+    const [a, d, v] = await Promise.allSettled([
       opsApi.get<{ success: boolean; data: Affiliate[] }>('/api/ops/affiliates'),
       opsApi.get<{ success: boolean; data: Driver[] }>('/api/ops/drivers'),
       opsApi.get<{ success: boolean; data: Vehicle[] }>('/api/ops/vehicles'),
     ]);
-    setAffiliates(a.data);
-    setDrivers(d.data);
-    setVehicles(v.data);
+
+    const failures: string[] = [];
+    if (a.status === 'fulfilled') setAffiliates(a.value.data);
+    else failures.push(`affiliate companies: ${(a.reason as Error).message}`);
+
+    if (d.status === 'fulfilled') setDrivers(d.value.data);
+    else failures.push(`drivers: ${(d.reason as Error).message}`);
+
+    if (v.status === 'fulfilled') setVehicles(v.value.data);
+    else failures.push(`vehicles: ${(v.reason as Error).message}`);
+
+    if (failures.length) setError(`Could not load ${failures.join('; ')}`);
   };
 
   useEffect(() => {
@@ -61,6 +72,7 @@ export default function OpsApplicationsPage() {
 
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-400">Loading applications...</div>;
 
+  const affiliateDrivers = drivers.filter(d => d.driverType === 'affiliateDriver');
   const independentDrivers = drivers.filter(d => d.driverType === 'independentDriver');
   const vehicleOwnerIds = new Set(vehicles.filter(v => v.ownerDriverId).map(v => v.ownerDriverId));
   const driverVehicleDrivers = independentDrivers.filter(d => vehicleOwnerIds.has(d.id));
@@ -76,6 +88,13 @@ export default function OpsApplicationsPage() {
   const visibleIndependent = independentDrivers.filter(d => {
     const matchesSub = sub === 'received' ? d.applicationStatus === 'pending' : sub === 'approved' ? d.applicationStatus === 'approved' : ['rejected', 'suspended'].includes(d.applicationStatus);
     const matchesSearch = !term || [d.fullName, d.email].some(v => v.toLowerCase().includes(term));
+    return matchesSub && matchesSearch;
+  });
+
+  const visibleAffiliateDrivers = affiliateDrivers.filter(d => {
+    const matchesSub = sub === 'received' ? d.applicationStatus === 'pending' : sub === 'approved' ? d.applicationStatus === 'approved' : ['rejected', 'suspended'].includes(d.applicationStatus);
+    const searchable = [d.fullName, d.email, d.affiliate?.companyName ?? ''];
+    const matchesSearch = !term || searchable.some(v => v.toLowerCase().includes(term));
     return matchesSub && matchesSearch;
   });
 
@@ -173,6 +192,38 @@ export default function OpsApplicationsPage() {
             </div>
           ))}
           {!visibleIndependent.length && <div className="bg-white rounded-2xl border border-slate-100 py-12 text-center text-slate-400 text-sm">No independent driver applications in this state.</div>}
+        </div>
+      )}
+
+      {tab === 'affiliateDriver' && (
+        <div className="grid gap-3">
+          {visibleAffiliateDrivers.map(d => (
+            <div key={d.id} className="bg-white rounded-2xl border border-slate-100 p-5 flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center"><Users size={18} className="text-indigo-600" /></div>
+                <div>
+                  <p className="font-semibold text-slate-800">{d.fullName}</p>
+                  <p className="text-xs text-slate-400">{d.email} · {d.phone}</p>
+                  {d.affiliate && <p className="text-xs text-slate-400 mt-0.5">{d.affiliate.companyName}</p>}
+                </div>
+              </div>
+              {d.applicationStatus === 'pending' && (
+                <div className="flex gap-2">
+                  <Link href={`/ops/drivers/${d.id}`} className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-50">Review documents</Link>
+                  <button disabled={updating === `/api/ops/drivers/${d.id}`} onClick={() => act(`/api/ops/drivers/${d.id}`, 'approve')} className="px-3 py-2 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>
+                  <button
+                    disabled={updating === `/api/ops/drivers/${d.id}`}
+                    onClick={() => window.confirm('Approve this driver even if documents are missing? Use this only after manual verification.') && act(`/api/ops/drivers/${d.id}`, 'approve', true, { override: true })}
+                    className="px-3 py-2 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 disabled:opacity-50"
+                  >
+                    Approve anyway
+                  </button>
+                  <button disabled={updating === `/api/ops/drivers/${d.id}`} onClick={() => act(`/api/ops/drivers/${d.id}`, 'reject')} className="px-3 py-2 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>
+                </div>
+              )}
+            </div>
+          ))}
+          {!visibleAffiliateDrivers.length && <div className="bg-white rounded-2xl border border-slate-100 py-12 text-center text-slate-400 text-sm">No affiliate driver applications in this state.</div>}
         </div>
       )}
 

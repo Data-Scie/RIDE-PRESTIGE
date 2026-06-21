@@ -14,7 +14,7 @@ interface DashboardData {
   totalAffiliates: number; approvedAffiliates: number;
   totalRevenue: number; monthRevenue: number;
   totalRpCommission: number; monthRpCommission: number;
-  pendingTickets: number; fleetVehicles: number;
+  pendingTickets: number; fleetVehicles: number; websiteFleetVehicles?: number; operationalFleetVehicles?: number;
 }
 
 interface RecentBooking {
@@ -102,7 +102,7 @@ export default function AdminDashboard() {
         <DashboardCard title="Total bookings"   value={data.totalBookings}   subtitle={`${data.pendingBookings} pending`}     icon={CalendarCheck} accent="blue"  href="/admin/bookings" />
         <DashboardCard title="Active jobs"      value={data.activeJobs}      subtitle={`${data.completedJobs} completed`}     icon={TrendingUp}    accent="green" href="/admin/bookings" />
         <DashboardCard title="Open tickets"     value={data.pendingTickets}  subtitle="awaiting action"                        icon={Headphones}    accent="red"   href="/admin/support" />
-        <DashboardCard title="Fleet items"      value={data.fleetVehicles}   subtitle="website vehicles"                       icon={Car}           accent="gold"  href="/admin/fleet" />
+        <DashboardCard title="Website fleet"   value={data.websiteFleetVehicles ?? data.fleetVehicles}   subtitle={`${data.operationalFleetVehicles ?? 0} operational vehicles`} icon={Car}           accent="gold"  href="/admin/fleet" />
       </div>
 
       {/* Stats row 2 */}

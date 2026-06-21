@@ -138,7 +138,7 @@ router.get('/dashboard', async (_req: Request, res: Response) => {
       totalCustomers, totalDrivers, approvedDrivers,
       totalAffiliates, approvedAffiliates,
       revenueAgg, monthRevenueAgg, commissionAgg, monthCommissionAgg,
-      pendingTickets, websiteVehiclesCount,
+      pendingTickets, websiteVehiclesCount, operationalVehiclesCount,
     ] = await Promise.all([
       prisma.booking.count(),
       prisma.booking.count({ where: { status: 'pending' } }),
@@ -155,6 +155,7 @@ router.get('/dashboard', async (_req: Request, res: Response) => {
       prisma.job.aggregate({ _sum: { commissionAmount: true }, where: { status: 'completed', completedAt: { gte: monthStart } } }),
       prisma.supportTicket.count({ where: { status: 'open' } }),
       prisma.websiteVehicle.count(),
+      prisma.fleetVehicle.count(),
     ]);
     res.json({
       success: true,
@@ -168,7 +169,10 @@ router.get('/dashboard', async (_req: Request, res: Response) => {
         // rpCommission = Ride Prestige's actual earned income (after paying out operators)
         totalRpCommission: parseFloat((commissionAgg._sum.commissionAmount ?? 0).toFixed(2)),
         monthRpCommission: parseFloat((monthCommissionAgg._sum.commissionAmount ?? 0).toFixed(2)),
-        pendingTickets, fleetVehicles: websiteVehiclesCount,
+        pendingTickets,
+        fleetVehicles: websiteVehiclesCount,
+        websiteFleetVehicles: websiteVehiclesCount,
+        operationalFleetVehicles: operationalVehiclesCount,
       },
     });
   } catch (e) {

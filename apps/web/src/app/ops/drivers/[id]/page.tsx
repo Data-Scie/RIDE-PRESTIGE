@@ -118,7 +118,7 @@ export default function DriverDetailPage() {
           onCancel={() => setRejectDocId(null)}
         />
       )}
-      <Link href="/ops/drivers" className="flex items-center gap-1.5 text-slate-500 text-sm"><ArrowLeft size={15} /> Back to Driver Applications</Link>
+      <Link href="/ops/drivers" className="flex items-center gap-1.5 text-slate-500 text-sm"><ArrowLeft size={15} /> Back to Drivers</Link>
       {error && <div className="px-4 py-3 rounded-xl text-sm text-red-600 bg-red-50">{error}</div>}
 
       <div className="bg-white rounded-2xl border border-slate-100 p-6">

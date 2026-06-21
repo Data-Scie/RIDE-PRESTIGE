@@ -12,7 +12,7 @@ import BrandLogo from '@/components/common/BrandLogo';
 const NAV = [
   { label: 'Overview', items: [{ href: '/ops/dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
   { label: 'Live Operations', items: [{ href: '/ops/map', label: 'Live Map', icon: Map }, { href: '/ops/rides', label: 'All Rides', icon: Receipt }] },
-  { label: 'Network', items: [{ href: '/ops/applications', label: 'Applications', icon: ClipboardCheck }, { href: '/ops/affiliates', label: 'Affiliates', icon: Building2 }, { href: '/ops/drivers', label: 'Driver Applications', icon: Car }, { href: '/ops/vehicles', label: 'Vehicle Approvals', icon: Truck }, { href: '/ops/documents', label: 'Documents', icon: FileText }, { href: '/ops/customers', label: 'Customers', icon: Users }] },
+  { label: 'Network', items: [{ href: '/ops/applications', label: 'Applications', icon: ClipboardCheck }, { href: '/ops/affiliates', label: 'Affiliates', icon: Building2 }, { href: '/ops/drivers', label: 'Drivers', icon: Car }, { href: '/ops/vehicles', label: 'Vehicle Approvals', icon: Truck }, { href: '/ops/documents', label: 'Documents', icon: FileText }, { href: '/ops/customers', label: 'Customers', icon: Users }] },
   { label: 'System', items: [{ href: '/ops/settings', label: 'Settings', icon: Settings }] },
 ];
 

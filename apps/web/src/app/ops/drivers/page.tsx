@@ -20,24 +20,24 @@ interface Driver {
 }
 
 const STATUS_DOT: Record<string, string> = { available: '#10b981', busy: '#3b82f6', offline: '#94a3b8' };
-type DriverSection = 'pending' | 'approved' | 'rejected' | 'suspended' | 'independentDriver' | 'affiliateDriver' | 'all';
+type DriverSection = 'all' | 'available' | 'busy' | 'offline' | 'independentDriver' | 'affiliateDriver' | 'approved' | 'suspended';
 
 const SECTIONS: { key: DriverSection; label: string }[] = [
-  { key: 'pending', label: 'Pending Review' },
-  { key: 'approved', label: 'Approved' },
-  { key: 'rejected', label: 'Rejected' },
-  { key: 'suspended', label: 'Suspended' },
+  { key: 'all', label: 'All' },
+  { key: 'available', label: 'Available' },
+  { key: 'busy', label: 'Busy' },
+  { key: 'offline', label: 'Offline' },
   { key: 'independentDriver', label: 'Independent' },
   { key: 'affiliateDriver', label: 'Affiliate Drivers' },
-  { key: 'all', label: 'All' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'suspended', label: 'Suspended' },
 ];
 
 export default function OpsDriversPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [search, setSearch] = useState('');
-  const [section, setSection] = useState<DriverSection>('pending');
+  const [section, setSection] = useState<DriverSection>('all');
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const loadDrivers = async () => {
@@ -49,36 +49,25 @@ export default function OpsDriversPage() {
     loadDrivers().catch(e => setError(e.message)).finally(() => setLoading(false));
   }, []);
 
-  const updateApplication = async (driver: Driver, action: 'approve' | 'reject' | 'suspend', override = false) => {
-    if (override && !window.confirm('Approve this driver and override any missing documents? Use this only after manual verification.')) return;
-    setUpdating(driver.id);
-    setError('');
-    try {
-      await opsApi.put(`/api/ops/drivers/${driver.id}/${action}${override ? '?override=true' : ''}`, { override, approveAnyway: override });
-      await loadDrivers();
-    } catch (e) {
-      setError((e as Error).message || `Could not ${action} driver`);
-    } finally {
-      setUpdating(null);
-    }
-  };
-
   const visible = drivers.filter(driver => {
     const term = search.toLowerCase();
     const matchesSearch = !term || [driver.fullName, driver.email, driver.affiliate?.companyName]
       .some(value => value?.toLowerCase().includes(term));
-    const matchesFilter = section === 'all' || driver.applicationStatus === section || driver.driverType === section;
+    const matchesFilter = section === 'all' || driver.status === section || driver.applicationStatus === section || driver.driverType === section;
     return matchesSearch && matchesFilter;
   });
+
+  const sectionCount = (key: DriverSection) =>
+    drivers.filter(driver => key === 'all' || driver.status === key || driver.applicationStatus === key || driver.driverType === key).length;
 
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-400">Loading drivers...</div>;
 
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Driver Applications</h1>
+        <h1 className="text-2xl font-bold text-slate-800">Drivers</h1>
         <p className="text-slate-500 text-sm">
-          {drivers.filter(driver => driver.applicationStatus === 'pending').length} pending · {drivers.length} total
+          {drivers.filter(driver => driver.status === 'available').length} available - {drivers.length} total
         </p>
       </div>
 
@@ -90,14 +79,16 @@ export default function OpsDriversPage() {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search driver or affiliate" className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm border border-slate-200 outline-none" />
         </div>
         {SECTIONS.map(({ key, label }) => (
-          <button key={key} onClick={() => setSection(key)} className="px-3 py-2 rounded-xl text-xs font-semibold" style={{ background: section === key ? '#3b82f6' : '#f8fafc', color: section === key ? 'white' : '#64748b' }}>{label} <span className="opacity-70">({drivers.filter(driver => key === 'all' || driver.applicationStatus === key || driver.driverType === key).length})</span></button>
+          <button key={key} onClick={() => setSection(key)} className="px-3 py-2 rounded-xl text-xs font-semibold" style={{ background: section === key ? '#3b82f6' : '#f8fafc', color: section === key ? 'white' : '#64748b' }}>
+            {label} <span className="opacity-70">({sectionCount(key)})</span>
+          </button>
         ))}
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 overflow-x-auto">
         <table className="w-full">
           <thead><tr className="bg-slate-50">
-            {['Driver', 'Type / Affiliate', 'Contact', 'Application', 'Documents', 'Work Status', 'Rating', 'Rides', 'Actions'].map(header => <th key={header} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{header}</th>)}
+            {['Driver', 'Type / Affiliate', 'Contact', 'Application', 'Documents', 'Work Status', 'Rating', 'Rides', 'Details'].map(header => <th key={header} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{header}</th>)}
           </tr></thead>
           <tbody className="divide-y divide-slate-100">
             {visible.map(driver => (
@@ -110,18 +101,12 @@ export default function OpsDriversPage() {
                 <td className="px-4 py-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ background: STATUS_DOT[driver.status] ?? '#94a3b8' }} /><span className="text-xs capitalize">{driver.status}</span></div></td>
                 <td className="px-4 py-4"><span className="flex items-center gap-1 text-sm"><Star size={12} className="text-amber-400" />{driver.rating || '-'}</span></td>
                 <td className="px-4 py-4 text-sm">{driver.totalJobs}</td>
-                <td className="px-4 py-4"><div className="flex gap-2 items-center">
-                  {driver.applicationStatus !== 'approved' && <button disabled={updating === driver.id} onClick={() => updateApplication(driver, 'approve')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-green-600 disabled:opacity-50">Approve</button>}
-                  {driver.applicationStatus !== 'approved' && driver.documentsStatus !== 'approved' && <button disabled={updating === driver.id} onClick={() => updateApplication(driver, 'approve', true)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 disabled:opacity-50">Approve anyway</button>}
-                  {driver.applicationStatus === 'pending' && <button disabled={updating === driver.id} onClick={() => updateApplication(driver, 'reject')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Reject</button>}
-                  {driver.applicationStatus === 'approved' && <button disabled={updating === driver.id} onClick={() => updateApplication(driver, 'suspend')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 disabled:opacity-50">Suspend</button>}
-                  <Link href={`/ops/drivers/${driver.id}`} className="text-blue-500"><ArrowRight size={16} /></Link>
-                </div></td>
+                <td className="px-4 py-4"><Link href={`/ops/drivers/${driver.id}`} className="text-blue-500"><ArrowRight size={16} /></Link></td>
               </tr>
             ))}
           </tbody>
         </table>
-        {!visible.length && <div className="py-16 text-center text-slate-400">No driver applications match this filter.</div>}
+        {!visible.length && <div className="py-16 text-center text-slate-400">No drivers match this filter.</div>}
       </div>
     </div>
   );

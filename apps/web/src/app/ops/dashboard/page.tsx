@@ -160,7 +160,7 @@ export default function OpsDashboard() {
 
       <div className="grid sm:grid-cols-3 gap-4">
         {[
-          { label: 'Pending Approvals', desc: `${stats.pendingApprovals} require review`, href: '/ops/affiliates', color: '#f59e0b', icon: AlertCircle },
+          { label: 'Pending Approvals', desc: `${stats.pendingApprovals} require review`, href: '/ops/applications', color: '#f59e0b', icon: AlertCircle },
           { label: 'Affiliate Network', desc: `${stats.totalAffiliates} affiliates`, href: '/ops/affiliates', color: '#3b82f6', icon: Building2 },
           { label: 'Live Tracking',     desc: 'View all drivers on map', href: '/ops/map', color: '#10b981', icon: MapPin },
         ].map(({ label, desc, href, color, icon: Icon }) => (
