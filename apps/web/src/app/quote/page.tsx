@@ -2,6 +2,8 @@ import { Suspense } from 'react';
 import QuoteClient from './QuoteClient';
 import PublicLayout from '@/components/layout/PublicLayout';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'Your Quote',
   description: 'Review your Ride Prestige fare estimate before confirming your journey.',

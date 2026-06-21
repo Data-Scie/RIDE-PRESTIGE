@@ -79,8 +79,35 @@ app.use(cors({
 app.use('/api/public/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(morgan('dev'));
+if (process.env.NODE_ENV === 'production') {
+  app.use(morgan('combined', { skip: req => req.path === '/health' }));
+} else {
+  app.use(morgan('dev'));
+}
 app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+
+const cacheablePublicGetPaths = [
+  '/api/public/site-settings',
+  '/api/public/navigation',
+  '/api/public/fleet',
+  '/api/public/fleet/categories',
+  '/api/public/pricing',
+  '/api/public/cancellation-policy',
+  '/api/public/promotions',
+  '/api/public/faqs',
+];
+
+app.use((req, res, next) => {
+  const isCacheablePublicGet =
+    req.method === 'GET' &&
+    (cacheablePublicGetPaths.includes(req.path) || req.path.startsWith('/api/public/pages/'));
+
+  if (isCacheablePublicGet) {
+    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+  }
+
+  next();
+});
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
 

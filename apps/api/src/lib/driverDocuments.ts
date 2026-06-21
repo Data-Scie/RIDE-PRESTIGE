@@ -8,6 +8,11 @@ export const DRIVER_DOCUMENTS = [
   { type: 'insurance', label: 'Insurance Certificate' },
 ] as const;
 
+export function hasAllDriverDocuments(documents: { type: string }[] = []) {
+  const existingTypes = new Set(documents.map(document => document.type));
+  return DRIVER_DOCUMENTS.every(document => existingTypes.has(document.type));
+}
+
 export async function ensureDriverDocuments(driverId: string) {
   const existing = await prisma.driverDocument.findMany({ where: { driverId } });
   const existingTypes = new Set(existing.map(document => document.type));

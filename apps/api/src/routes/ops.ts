@@ -12,7 +12,7 @@ import {
 import { applyCommission, getPricingConfig } from '../services/fareService';
 import { pushNotification } from '../services/notificationService';
 import { recordRideFlowEvent, shapeRideFlowEvent } from '../lib/rideFlow';
-import { ensureDriverDocuments } from '../lib/driverDocuments';
+import { ensureDriverDocuments, hasAllDriverDocuments } from '../lib/driverDocuments';
 import type { Job, JobStatus, Stop } from '../types';
 
 const router = Router();
@@ -150,13 +150,13 @@ router.get('/documents', async (_req: Request, res: Response) => {
   try {
     const [affiliates, drivers, vehicles] = await Promise.all([
       prisma.affiliate.findMany(),
-      prisma.driver.findMany({ include: { affiliate: { select: { id: true, companyName: true } } } }),
+      prisma.driver.findMany({ include: { documents: true, affiliate: { select: { id: true, companyName: true } } } }),
       prisma.fleetVehicle.findMany(),
     ]);
 
     await Promise.all([
       ...affiliates.map(a => ensureAffiliateDocuments(a.id)),
-      ...drivers.map(d => ensureDriverDocuments(d.id)),
+      ...drivers.filter(d => !hasAllDriverDocuments(d.documents)).map(d => ensureDriverDocuments(d.id)),
       ...vehicles.map(v => ensureVehicleDocuments(v.id)),
     ]);
 
@@ -985,7 +985,13 @@ router.get('/drivers', async (_req: Request, res: Response) => {
       },
       orderBy: { joinedDate: 'desc' },
     });
-    await Promise.all(drivers.map(driver => ensureDriverDocuments(driver.id)));
+    const driversMissingDocuments = drivers.filter(driver => !hasAllDriverDocuments(driver.documents));
+    if (driversMissingDocuments.length === 0) {
+      const list = drivers.map(({ passwordHash: _, ...d }) => d);
+      res.json({ success: true, data: list, total: list.length });
+      return;
+    }
+    await Promise.all(driversMissingDocuments.map(driver => ensureDriverDocuments(driver.id)));
     const refreshed = await prisma.driver.findMany({
       include: {
         documents: true,
@@ -1026,16 +1032,20 @@ router.get('/drivers/:id', async (req: Request, res: Response) => {
       },
     });
     if (!d) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
-    await ensureDriverDocuments(d.id);
-    const refreshed = await prisma.driver.findUnique({
-      where: { id: req.params.id },
-      include: {
-        documents: true,
-        affiliate: { select: { id: true, companyName: true } },
-      },
-    });
-    if (!refreshed) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
-    const { passwordHash: _, ...safe } = refreshed;
+    let driverWithDocuments = d;
+    if (!hasAllDriverDocuments(d.documents)) {
+      await ensureDriverDocuments(d.id);
+      const refreshed = await prisma.driver.findUnique({
+        where: { id: req.params.id },
+        include: {
+          documents: true,
+          affiliate: { select: { id: true, companyName: true } },
+        },
+      });
+      if (!refreshed) { res.status(404).json({ success: false, message: 'Driver not found' }); return; }
+      driverWithDocuments = refreshed;
+    }
+    const { passwordHash: _, ...safe } = driverWithDocuments;
     const [driverJobs, driverEarnings] = await Promise.all([
       prisma.job.findMany({ where: { assignedDriverId: d.id } }),
       prisma.earningEntry.findMany({ where: { entityId: d.id } }),

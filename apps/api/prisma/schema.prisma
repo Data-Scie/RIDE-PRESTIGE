@@ -63,6 +63,9 @@ model Affiliate {
   drivers       Driver[]
   fleetVehicles FleetVehicle[]
   documents     AffiliateDocument[]
+
+  @@index([isApproved])
+  @@index([createdAt])
 }
 
 // ─── Drivers ─────────────────────────────────────────────────────────────────
@@ -102,6 +105,12 @@ model Driver {
   documents DriverDocument[]
   vehicles  FleetVehicle[] @relation("IndependentDriverVehicles")
   rideOffers RideOffer[]
+
+  @@index([affiliateId])
+  @@index([driverType])
+  @@index([status, isApproved])
+  @@index([applicationStatus])
+  @@index([joinedDate])
 }
 
 // ─── Driver Documents ─────────────────────────────────────────────────────────
@@ -117,6 +126,9 @@ model DriverDocument {
   fileUrl          String?
   uploadedAt       DateTime?
   rejectionReason  String?
+
+  @@index([driverId, status])
+  @@index([status])
 }
 
 // Affiliate Documents
@@ -133,6 +145,7 @@ model AffiliateDocument {
   rejectionReason  String?
 
   @@unique([affiliateId, type])
+  @@index([affiliateId, status])
 }
 
 // ─── Operational Fleet Vehicles ───────────────────────────────────────────────
@@ -164,6 +177,12 @@ model FleetVehicle {
   updatedAt         DateTime    @default(now()) @updatedAt
 
   documents         VehicleDocument[]
+
+  @@index([affiliateId])
+  @@index([ownerDriverId])
+  @@index([vehicleCategory, isApproved, approvalStatus, status])
+  @@index([approvalStatus])
+  @@index([status])
 }
 
 model VehicleDocument {
@@ -179,6 +198,8 @@ model VehicleDocument {
   rejectionReason  String?
 
   @@unique([vehicleId, type])
+  @@index([vehicleId, status])
+  @@index([status])
 }
 
 // ─── Website Fleet (CMS) ─────────────────────────────────────────────────────
@@ -195,6 +216,9 @@ model WebsiteVehicle {
   available    Boolean  @default(true)
   priceNote    String?
   badge        String?
+
+  @@index([categorySlug, available])
+  @@index([available])
 }
 
 model WebsiteFleetCategory {
@@ -206,6 +230,8 @@ model WebsiteFleetCategory {
   icon        String
   available   Boolean @default(true)
   order       Int
+
+  @@index([available, order])
 }
 
 // ─── Jobs (operational rides) ─────────────────────────────────────────────────
@@ -249,6 +275,15 @@ model Job {
   updatedAt             DateTime  @updatedAt
 
   rideOffers RideOffer[]
+
+  @@index([status, dateTime])
+  @@index([status, completedAt])
+  @@index([affiliateId, status])
+  @@index([assignedDriverId, status])
+  @@index([assignedVehicleId])
+  @@index([bookingId])
+  @@index([vehicleCategory, status])
+  @@index([createdAt])
 }
 
 model RideOffer {
@@ -288,6 +323,11 @@ model Booking {
   jobId           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+  @@index([jobId])
+  @@index([vehicleCategory])
 }
 
 // ─── Earnings ─────────────────────────────────────────────────────────────────
@@ -307,6 +347,10 @@ model EarningEntry {
   payoutReference    String?
   paidAt             DateTime?
   createdAt          DateTime  @default(now())
+
+  @@index([entityId, entityType, date])
+  @@index([jobId])
+  @@index([status, date])
 }
 
 // ─── Payments (customer-side) ──────────────────────────────────────────────────
@@ -328,6 +372,11 @@ model Payment {
   refundReason   String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  @@index([bookingId])
+  @@index([jobId])
+  @@index([status, createdAt])
+  @@index([transactionRef])
 }
 
 // ─── Invoices ───────────────────────────────────────────────────────────────────
@@ -356,6 +405,8 @@ model Notification {
   type          String   // job | system | earnings | document | booking
   isRead        Boolean  @default(false)
   createdAt     DateTime @default(now())
+
+  @@index([recipientId, recipientRole, isRead, createdAt])
 }
 
 // ─── Support Tickets ─────────────────────────────────────────────────────────
@@ -373,6 +424,9 @@ model SupportTicket {
   reply            String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([bookingReference])
 }
 
 // ─── Pricing Config ───────────────────────────────────────────────────────────
@@ -422,6 +476,8 @@ model NavigationItem {
   href    String
   visible Boolean @default(true)
   order   Int
+
+  @@index([visible, order])
 }
 
 // ─── Promotions ───────────────────────────────────────────────────────────────
@@ -439,6 +495,8 @@ model Promotion {
   imageUrl      String?
   terms         String
   category      String? // prestige | minibus | coaches | taxi | all
+
+  @@index([active, startDate, endDate])
 }
 
 // ─── FAQ Items ────────────────────────────────────────────────────────────────
@@ -450,6 +508,8 @@ model FAQItem {
   category String
   order    Int
   active   Boolean @default(true)
+
+  @@index([active, category, order])
 }
 
 // ─── Cancellation Policy ──────────────────────────────────────────────────────
@@ -487,6 +547,8 @@ model Vacancy {
   salary       String?
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
+
+  @@index([active, createdAt])
 }
 
 // ─── Courses ─────────────────────────────────────────────────────────────────
@@ -500,6 +562,8 @@ model Course {
   imageUrl    String?
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
+
+  @@index([active, createdAt])
 }
 
 // ─── Attributes ───────────────────────────────────────────────────────────────
@@ -512,6 +576,8 @@ model Attribute {
   options  String[]
   category String   @default("vehicle") // vehicle | booking | driver
   active   Boolean  @default(true)
+
+  @@index([category, active])
 }
 
 // ─── Ride Status History ──────────────────────────────────────────────────────
@@ -525,6 +591,8 @@ model RideStatusHistory {
   changedByRole String?
   notes         String?
   createdAt     DateTime @default(now())
+
+  @@index([jobId, createdAt])
 }
 model RideFlowEvent {
   id             String   @id @default(uuid())
@@ -563,4 +631,7 @@ model DriverLocationHistory {
   heading    Float?
   accuracy   Float?
   recordedAt DateTime @default(now())
+
+  @@index([driverId, recordedAt])
+  @@index([jobId, recordedAt])
 }

@@ -2,6 +2,8 @@ import { Suspense } from 'react';
 import ThankYouClient from './ThankYouClient';
 import PublicLayout from '@/components/layout/PublicLayout';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = { title: 'Booking Confirmed', description: 'Your Ride Prestige booking is confirmed.' };
 
 export default function ThankYouPage() {
