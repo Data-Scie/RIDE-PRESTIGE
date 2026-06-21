@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { Users, Receipt, TrendingUp, ArrowRight, CheckCircle } from 'lucide-react';
 import { affiliateApi } from '@/lib/api-client';
 
+const GOLD = '#c9a84c';
+const BRAND_BLACK = '#0a0f1e';
+
 interface DashboardData {
   companyName: string; contactPerson: string;
   activeRides: number; availableDrivers: number; totalJobs: number; rating?: number;
@@ -40,7 +43,7 @@ export default function AffiliateDashboard() {
   if (error)   return <div className="p-6 text-red-500">Error: {error}. Is the backend running?</div>;
   if (!data)   return null;
 
-  const STATUS_DOT: Record<string, string> = { available: '#10b981', busy: '#3b82f6', offline: '#94a3b8' };
+  const STATUS_DOT: Record<string, string> = { available: GOLD, busy: BRAND_BLACK, offline: '#94a3b8' };
 
   return (
     <div className="space-y-6">
@@ -66,9 +69,9 @@ export default function AffiliateDashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Active Rides',       value: data.activeRides,      icon: Receipt,   color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-          { label: 'Available Drivers',  value: data.availableDrivers, icon: Users,     color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
-          { label: 'Total Rides',        value: data.totalJobs,        icon: CheckCircle,color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
+          { label: 'Active Rides',       value: data.activeRides,      icon: Receipt,   color: GOLD, bg: 'rgba(201,168,76,0.1)' },
+          { label: 'Available Drivers',  value: data.availableDrivers, icon: Users,     color: BRAND_BLACK, bg: 'rgba(10,15,30,0.06)' },
+          { label: 'Total Rides',        value: data.totalJobs,        icon: CheckCircle,color: GOLD, bg: 'rgba(201,168,76,0.1)' },
           { label: 'Rating',             value: data.rating ?? '—',    icon: TrendingUp, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
@@ -85,7 +88,7 @@ export default function AffiliateDashboard() {
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between p-5 border-b border-slate-100">
             <h2 className="font-semibold text-slate-800">My Drivers</h2>
-            <Link href="/affiliate/drivers" className="text-xs text-green-500 font-medium flex items-center gap-1">Manage <ArrowRight size={11} /></Link>
+            <Link href="/affiliate/drivers" className="text-xs font-medium flex items-center gap-1" style={{ color: GOLD }}>Manage <ArrowRight size={11} /></Link>
           </div>
           <div className="divide-y divide-slate-50">
             {drivers.length === 0 && <p className="px-5 py-8 text-center text-slate-400 text-sm">No drivers yet</p>}
@@ -102,7 +105,7 @@ export default function AffiliateDashboard() {
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between p-5 border-b border-slate-100">
             <h2 className="font-semibold text-slate-800">Recent Rides</h2>
-            <Link href="/affiliate/history" className="text-xs text-green-500 font-medium flex items-center gap-1">All history <ArrowRight size={11} /></Link>
+            <Link href="/affiliate/history" className="text-xs font-medium flex items-center gap-1" style={{ color: GOLD }}>All history <ArrowRight size={11} /></Link>
           </div>
           <div className="divide-y divide-slate-50">
             {rides.length === 0 && <p className="px-5 py-8 text-center text-slate-400 text-sm">No rides yet</p>}

@@ -9,6 +9,10 @@ import {
 } from 'lucide-react';
 import BrandLogo from '@/components/common/BrandLogo';
 
+const GOLD = '#c9a84c';
+const BRAND_BLACK = '#0a0f1e';
+const BRAND_GREY = '#8b8fa8';
+
 const NAV = [
   { label: 'Overview', items: [{ href: '/ops/dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
   { label: 'Live Operations', items: [{ href: '/ops/map', label: 'Live Map', icon: Map }, { href: '/ops/rides', label: 'All Rides', icon: Receipt }] },
@@ -23,15 +27,15 @@ function OpsNavLinks() {
     <nav className="flex-1 p-3 space-y-5 overflow-y-auto">
       {NAV.map(group => (
         <div key={group.label}>
-          <p className="px-3 mb-1 text-xs font-semibold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.2)', fontSize: '9px' }}>{group.label}</p>
+          <p className="px-3 mb-2 uppercase tracking-widest" style={{ color: 'rgba(0,0,0,0.28)', fontSize: '8px', fontWeight: 600, letterSpacing: '0.15em' }}>{group.label}</p>
           <div className="space-y-0.5">
             {group.items.map(({ href, label, icon: Icon }) => {
               const active = isActive(href);
               return (
-                <Link key={href} href={href} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-all" style={{ color: active ? '#60a5fa' : 'rgba(255,255,255,0.45)', background: active ? 'rgba(59,130,246,0.12)' : 'transparent', fontWeight: active ? 600 : 400 }}>
-                  <Icon size={15} style={{ color: active ? '#3b82f6' : 'rgba(255,255,255,0.25)' }} />
+                <Link key={href} href={href} className="admin-sidebar-item" style={{ color: active ? GOLD : '#4b5563', background: active ? 'rgba(201,168,76,0.07)' : 'transparent', border: active ? '1px solid rgba(201,168,76,0.18)' : '1px solid transparent' }}>
+                  <Icon size={14} style={{ color: active ? GOLD : '#9ca3af' }} />
                   <span>{label}</span>
-                  {active && <ChevronRight size={11} className="ml-auto" style={{ color: 'rgba(59,130,246,0.5)' }} />}
+                  {active && <ChevronRight size={11} className="ml-auto" style={{ color: 'rgba(201,168,76,0.5)' }} />}
                 </Link>
               );
             })}
@@ -45,14 +49,14 @@ function OpsNavLinks() {
 function OpsLogout() {
   const logout = async () => { await fetch('/api/ops/logout', { method: 'POST' }); window.location.href = '/ops/login'; };
   return (
-    <div className="p-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+    <div className="p-4" style={{ borderTop: '1px solid #f0f0f0' }}>
       <div className="flex items-center gap-2.5 px-3 py-2 mb-1">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(59,130,246,0.15)' }}>
-          <span className="text-xs font-bold text-blue-400">OP</span>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(201,168,76,0.1)' }}>
+          <span className="text-xs font-bold" style={{ color: GOLD }}>OP</span>
         </div>
-        <div><p className="text-xs font-medium text-white">Operations Admin</p><p className="text-xs" style={{ color: 'rgba(255,255,255,0.25)', fontSize: '10px' }}>ops@rideprestige.co.uk</p></div>
+        <div><p className="text-xs font-semibold" style={{ color: BRAND_BLACK }}>Operations Admin</p><p className="text-xs" style={{ color: '#9ca3af', fontSize: '10px' }}>ops@rideprestige.co.uk</p></div>
       </div>
-      <Link href="/" className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs transition-all hover:bg-white/5" style={{ color: 'rgba(255,255,255,0.3)' }}><LogOut size={13} /> View public site</Link>
+      <Link href="/" className="admin-sidebar-item mb-1" style={{ color: '#6b7280', border: '1px solid transparent' }}><LogOut size={13} /> <span style={{ fontSize: '0.75rem' }}>View public site</span></Link>
       <button onClick={logout} className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs transition-all hover:bg-red-500/10" style={{ color: 'rgba(239,68,68,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}><LogOut size={13} /> Sign out</button>
     </div>
   );
@@ -60,15 +64,13 @@ function OpsLogout() {
 
 function Sidebar({ onNav }: { onNav?: () => void }) {
   return (
-    <aside className="w-64 min-h-screen flex flex-col shrink-0" style={{ background: '#0f172a', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
-      <div className="p-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+    <aside className="w-64 min-h-screen flex flex-col shrink-0" style={{ background: 'white', borderRight: '1px solid #e5e7eb' }}>
+      <div className="p-6" style={{ borderBottom: '1px solid #f0f0f0' }}>
         <Link href="/ops/dashboard" onClick={onNav} className="flex items-center gap-2.5">
-          <span className="inline-flex rounded-lg bg-white p-1.5 shrink-0">
-            <BrandLogo width={24} />
-          </span>
+          <BrandLogo width={32} />
           <div className="flex flex-col leading-none">
-            <span className="font-semibold text-sm text-white">Ride Prestige</span>
-            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#3b82f6', fontSize: '7px' }}>Operations Portal</p>
+            <span className="font-semibold text-sm" style={{ color: BRAND_BLACK, fontFamily: 'Playfair Display,Georgia,serif' }}>Ride Prestige</span>
+            <p className="font-semibold uppercase" style={{ color: GOLD, fontSize: '7px', letterSpacing: '0.15em' }}>Operations Portal</p>
           </div>
         </Link>
       </div>
@@ -84,7 +86,7 @@ export default function OpsLayout({ children }: { children: React.ReactNode }) {
   const isAuthPage = pathname === '/ops/login';
   if (isAuthPage) return <>{children}</>;
   return (
-    <div className="flex min-h-screen" style={{ background: '#f1f5f9' }}>
+    <div className="portal-brand flex min-h-screen font-sans" style={{ background: '#f9fafb' }}>
       <div className="hidden lg:flex"><Sidebar /></div>
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -93,12 +95,12 @@ export default function OpsLayout({ children }: { children: React.ReactNode }) {
         </div>
       )}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="lg:hidden flex items-center justify-between px-4 py-3" style={{ background: '#0f172a', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-          <div className="flex items-center gap-2"><span className="inline-flex rounded-lg bg-white p-1"><BrandLogo width={20} /></span><span className="text-white font-bold text-sm">Operations</span></div>
-          <button onClick={() => setMobileOpen(!mobileOpen)} className="text-white">{mobileOpen ? <X size={20} /> : <Menu size={20} />}</button>
+        <header className="lg:hidden flex items-center justify-between px-4 py-3" style={{ background: 'white', borderBottom: '1px solid #f0f0f0' }}>
+          <div className="flex items-center gap-2"><BrandLogo width={24} /><span className="font-bold text-sm" style={{ color: BRAND_BLACK }}>Operations</span></div>
+          <button onClick={() => setMobileOpen(!mobileOpen)} style={{ color: BRAND_GREY }}>{mobileOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </header>
         <main className="flex-1 p-4 lg:p-6 overflow-auto">
-          <Suspense fallback={<div className="flex items-center justify-center h-32"><div className="w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" /></div>}>
+          <Suspense fallback={<div className="flex items-center justify-center h-32"><div className="w-8 h-8 border-4 border-amber-100 border-t-brand-gold rounded-full animate-spin" /></div>}>
             {children}
           </Suspense>
         </main>

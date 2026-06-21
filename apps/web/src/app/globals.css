@@ -341,6 +341,61 @@ h1, h2, h3 { font-family: var(--font-display); }
   text-decoration: none;
 }
 
+.portal-brand h1,
+.portal-brand h2,
+.portal-brand h3 {
+  color: var(--color-brand-black);
+}
+
+.portal-brand a.text-blue-500,
+.portal-brand a.text-blue-600,
+.portal-brand a.text-green-500,
+.portal-brand a.text-green-600,
+.portal-brand .text-blue-500,
+.portal-brand .text-blue-600,
+.portal-brand .text-violet-600 {
+  color: var(--color-brand-gold) !important;
+}
+
+.portal-brand button.bg-blue-600,
+.portal-brand button.bg-green-600,
+.portal-brand a.bg-blue-600,
+.portal-brand a.bg-green-600,
+.portal-brand .bg-blue-600:not(.status-badge),
+.portal-brand .bg-violet-600:not(.status-badge) {
+  background-color: var(--color-brand-gold) !important;
+  color: var(--color-brand-black) !important;
+}
+
+.portal-brand button.bg-blue-700 {
+  background-color: var(--color-brand-charcoal) !important;
+}
+
+.portal-brand .bg-blue-50,
+.portal-brand .bg-violet-50 {
+  background-color: rgba(201, 168, 76, 0.1) !important;
+}
+
+.portal-brand .text-blue-700,
+.portal-brand .text-violet-700 {
+  color: var(--color-brand-gold-dark) !important;
+}
+
+.portal-brand .border-blue-200,
+.portal-brand .border-green-200 {
+  border-color: rgba(201, 168, 76, 0.28) !important;
+}
+
+.portal-brand .focus\:border-blue-400:focus,
+.portal-brand .focus\:border-green-400:focus {
+  border-color: var(--color-brand-gold) !important;
+}
+
+.portal-brand .focus\:ring-blue-50:focus,
+.portal-brand .focus\:ring-green-50:focus {
+  --tw-ring-color: rgba(201, 168, 76, 0.15) !important;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;

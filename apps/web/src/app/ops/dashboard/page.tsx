@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { Car, Building2, MapPin, Clock, CheckCircle, AlertCircle, ArrowRight, Navigation } from 'lucide-react';
 import { opsApi } from '@/lib/api-client';
 
+const GOLD = '#c9a84c';
+const BRAND_BLACK = '#0a0f1e';
+
 interface DashboardData {
   activeRides: number; awaitingAffiliate: number; needsAllocation: number;
   completedToday: number; totalDrivers: number; availableDrivers: number;
@@ -57,10 +60,10 @@ export default function OpsDashboard() {
     { label: 'Active Rides',       value: stats.activeRides,      icon: Navigation, color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
     { label: 'Awaiting Affiliate', value: stats.awaitingAffiliate, icon: Clock,      color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
     { label: 'Needs Allocation',   value: stats.needsAllocation,   icon: AlertCircle,color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
-    { label: 'Completed Today',    value: stats.completedToday,    icon: CheckCircle,color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+    { label: 'Completed Today',    value: stats.completedToday,    icon: CheckCircle,color: GOLD, bg: 'rgba(201,168,76,0.1)' },
     { label: 'Total Drivers',      value: stats.totalDrivers,      icon: Car,        color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-    { label: 'Available Drivers',  value: stats.availableDrivers,  icon: Car,        color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
-    { label: 'Total Affiliates',   value: stats.totalAffiliates,   icon: Building2,  color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
+    { label: 'Available Drivers',  value: stats.availableDrivers,  icon: Car,        color: GOLD, bg: 'rgba(201,168,76,0.1)' },
+    { label: 'Total Affiliates',   value: stats.totalAffiliates,   icon: Building2,  color: BRAND_BLACK, bg: 'rgba(10,15,30,0.06)' },
     { label: 'Pending Approvals',  value: stats.pendingApprovals,  icon: AlertCircle,color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
   ];
 
@@ -71,14 +74,14 @@ export default function OpsDashboard() {
           <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Playfair Display,Georgia,serif' }}>Operations Dashboard</h1>
           <p className="text-slate-500 text-sm mt-0.5">Live overview — Ride Prestige network</p>
         </div>
-        <Link href="/ops/map" className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)' }}>
+        <Link href="/ops/map" className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold" style={{ background: GOLD, color: BRAND_BLACK }}>
           <MapPin size={15} /> Open Live Map
         </Link>
       </div>
 
       {/* Today's revenue strip */}
       <div className="rounded-2xl p-5 grid grid-cols-2 gap-4"
-        style={{ background: 'linear-gradient(135deg,#0d1424 0%,#111827 100%)', border: '1px solid rgba(59,130,246,0.2)' }}>
+        style={{ background: 'linear-gradient(135deg,#0d1424 0%,#111827 100%)', border: '1px solid rgba(201,168,76,0.15)' }}>
         <div className="flex flex-col gap-0.5">
           <p className="text-xs uppercase tracking-widest" style={{ color: 'rgba(201,168,76,0.7)' }}>RP Commission — Today</p>
           <p className="text-3xl font-bold text-white">£{(stats.todayRpCommission ?? 0).toLocaleString()}</p>
@@ -107,7 +110,7 @@ export default function OpsDashboard() {
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between p-5 border-b border-slate-100">
             <h2 className="font-semibold text-slate-800">Live &amp; Recent Rides</h2>
-            <Link href="/ops/rides" className="text-xs text-blue-500 font-medium flex items-center gap-1">View all <ArrowRight size={11} /></Link>
+            <Link href="/ops/rides" className="text-xs font-medium flex items-center gap-1" style={{ color: GOLD }}>View all <ArrowRight size={11} /></Link>
           </div>
           <div className="divide-y divide-slate-50">
             {rides.map(ride => (
@@ -133,12 +136,12 @@ export default function OpsDashboard() {
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between p-5 border-b border-slate-100">
             <h2 className="font-semibold text-slate-800">Drivers</h2>
-            <Link href="/ops/drivers" className="text-xs text-blue-500 font-medium flex items-center gap-1">All <ArrowRight size={11} /></Link>
+            <Link href="/ops/drivers" className="text-xs font-medium flex items-center gap-1" style={{ color: GOLD }}>All <ArrowRight size={11} /></Link>
           </div>
           <div className="divide-y divide-slate-50">
             {drivers.map(d => (
               <Link key={d.id} href={`/ops/drivers/${d.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: d.status === 'busy' ? '#10b981' : d.status === 'available' ? '#3b82f6' : '#94a3b8' }}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0" style={{ background: d.status === 'busy' ? '#10b981' : d.status === 'available' ? 'rgba(201,168,76,0.14)' : '#f1f5f9', color: d.status === 'available' ? GOLD : d.status === 'busy' ? 'white' : '#94a3b8' }}>
                   {d.fullName.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -147,8 +150,8 @@ export default function OpsDashboard() {
                 </div>
                 <div className="text-right">
                   <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full" style={{ background: d.status === 'busy' ? '#10b981' : d.status === 'available' ? '#3b82f6' : '#94a3b8' }} />
-                    <span className="text-xs capitalize" style={{ color: d.status === 'busy' ? '#10b981' : d.status === 'available' ? '#3b82f6' : '#94a3b8' }}>{d.status}</span>
+                    <div className="w-2 h-2 rounded-full" style={{ background: d.status === 'busy' ? '#10b981' : d.status === 'available' ? GOLD : '#94a3b8' }} />
+                    <span className="text-xs capitalize" style={{ color: d.status === 'busy' ? '#10b981' : d.status === 'available' ? GOLD : '#94a3b8' }}>{d.status}</span>
                   </div>
                   {!d.isApproved && <span className="text-xs text-amber-500">Pending</span>}
                 </div>
@@ -161,8 +164,8 @@ export default function OpsDashboard() {
       <div className="grid sm:grid-cols-3 gap-4">
         {[
           { label: 'Pending Approvals', desc: `${stats.pendingApprovals} require review`, href: '/ops/applications', color: '#f59e0b', icon: AlertCircle },
-          { label: 'Affiliate Network', desc: `${stats.totalAffiliates} affiliates`, href: '/ops/affiliates', color: '#3b82f6', icon: Building2 },
-          { label: 'Live Tracking',     desc: 'View all drivers on map', href: '/ops/map', color: '#10b981', icon: MapPin },
+          { label: 'Affiliate Network', desc: `${stats.totalAffiliates} affiliates`, href: '/ops/affiliates', color: GOLD, icon: Building2 },
+          { label: 'Live Tracking',     desc: 'View all drivers on map', href: '/ops/map', color: BRAND_BLACK, icon: MapPin },
         ].map(({ label, desc, href, color, icon: Icon }) => (
           <Link key={label} href={href} className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm hover:shadow-md transition-all">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: color + '15' }}>

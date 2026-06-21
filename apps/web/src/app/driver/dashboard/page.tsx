@@ -9,6 +9,9 @@ import {
 import { driverApi } from '@/lib/api-client';
 import { getDriverSocket } from '@/lib/realtime';
 
+const GOLD = '#c9a84c';
+const BRAND_BLACK = '#0a0f1e';
+
 interface DriverProfile {
   id: string;
   fullName: string;
@@ -147,13 +150,13 @@ export default function DriverDashboard() {
     <div className="space-y-6 max-w-7xl">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm text-blue-600 font-semibold">Welcome back</p>
+          <p className="text-sm font-semibold" style={{ color: GOLD }}>Welcome back</p>
           <h1 className="text-2xl font-bold text-slate-800">{profile.fullName}</h1>
           <p className="text-sm text-slate-500">{fleetName} · {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
         </div>
         <div className="bg-white border border-slate-100 rounded-2xl p-3 flex items-center gap-3 shadow-sm">
           <div><p className="text-xs font-semibold text-slate-700">{online ? 'Available for rides' : 'Currently offline'}</p><p className="text-[11px] text-slate-400">Control your dispatch availability</p></div>
-          <button onClick={toggleOnline} className={`relative w-12 h-7 rounded-full transition-colors ${online ? 'bg-green-500' : 'bg-slate-300'}`}><span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${online ? 'left-6' : 'left-1'}`} /></button>
+          <button onClick={toggleOnline} className={`relative w-12 h-7 rounded-full transition-colors ${online ? 'bg-brand-gold' : 'bg-slate-300'}`}><span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${online ? 'left-6' : 'left-1'}`} /></button>
         </div>
         {statusError && (
           <div className="w-full bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl px-4 py-2.5">{statusError}</div>
@@ -161,16 +164,16 @@ export default function DriverDashboard() {
       </div>
 
       {rideRequest && (
-        <div className="bg-blue-600 text-white rounded-2xl p-5 shadow-lg">
+        <div className="text-white rounded-2xl p-5 shadow-lg" style={{ background: 'linear-gradient(135deg,#0a0f1e 0%,#1a1f2e 100%)', border: '1px solid rgba(201,168,76,0.15)' }}>
           <div className="flex flex-wrap items-center gap-4">
             <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center"><Navigation size={21} /></div>
-            <div className="flex-1 min-w-60"><p className="font-bold">New ride assignment · {rideRequest.bookingRef}</p><p className="text-sm text-blue-100">{rideRequest.pickupAddress} → {rideRequest.dropoffAddress}</p><p className="text-xs text-blue-200 mt-1">{rideRequest.distance || 'Distance pending'} · {rideRequest.passengerCount} passengers</p></div>
+            <div className="flex-1 min-w-60"><p className="font-bold">New ride assignment · {rideRequest.bookingRef}</p><p className="text-sm text-white/70">{rideRequest.pickupAddress} → {rideRequest.dropoffAddress}</p><p className="text-xs text-white/45 mt-1">{rideRequest.distance || 'Distance pending'} · {rideRequest.passengerCount} passengers</p></div>
             {profile.driverType === 'independentDriver' && (
-              <div className="text-right"><p className="font-bold text-xl">£{rideRequest.yourEarnings ?? 0}</p><p className="text-xs text-blue-200">Your payout</p></div>
+              <div className="text-right"><p className="font-bold text-xl">£{rideRequest.yourEarnings ?? 0}</p><p className="text-xs text-white/45">Your payout</p></div>
             )}
-            {rideRequest.expiresAt && <p className="text-xs text-blue-100">Expires {new Date(rideRequest.expiresAt).toLocaleTimeString('en-GB')}</p>}
-            <button onClick={declineRide} className="px-4 py-2.5 rounded-xl bg-blue-700 text-white font-semibold text-sm">Decline</button>
-            <button onClick={acceptRide} className="px-5 py-2.5 rounded-xl bg-white text-blue-700 font-semibold text-sm">Accept Ride</button>
+            {rideRequest.expiresAt && <p className="text-xs text-white/60">Expires {new Date(rideRequest.expiresAt).toLocaleTimeString('en-GB')}</p>}
+            <button onClick={declineRide} className="px-4 py-2.5 rounded-xl text-white font-semibold text-sm" style={{ background: 'rgba(255,255,255,0.12)' }}>Decline</button>
+            <button onClick={acceptRide} className="px-5 py-2.5 rounded-xl font-semibold text-sm" style={{ background: GOLD, color: BRAND_BLACK }}>Accept Ride</button>
           </div>
         </div>
       )}
@@ -178,10 +181,10 @@ export default function DriverDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           ...(profile.driverType === 'independentDriver'
-            ? [{ label: "Today's Earnings", value: `£${stats?.todayEarnings ?? 0}`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' }]
+            ? [{ label: "Today's Earnings", value: `£${stats?.todayEarnings ?? 0}`, icon: TrendingUp, color: 'text-brand-gold', bg: 'bg-brand-gold/10' }]
             : []),
-          { label: "Today's Jobs", value: stats?.todayJobs ?? 0, icon: Navigation, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Completed Rides', value: stats?.completedJobs ?? profile.totalJobs, icon: CheckCircle, color: 'text-violet-600', bg: 'bg-violet-50' },
+          { label: "Today's Jobs", value: stats?.todayJobs ?? 0, icon: Navigation, color: 'text-brand-gold', bg: 'bg-brand-gold/10' },
+          { label: 'Completed Rides', value: stats?.completedJobs ?? profile.totalJobs, icon: CheckCircle, color: 'text-brand-black', bg: 'bg-brand-black/5' },
           { label: 'Driver Rating', value: profile.rating ? profile.rating.toFixed(1) : 'New', icon: Star, color: 'text-amber-600', bg: 'bg-amber-50' },
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
@@ -195,7 +198,7 @@ export default function DriverDashboard() {
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
           <div className="flex items-start justify-between gap-3 mb-6">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-bold">{profile.fullName.split(' ').map(part => part[0]).join('').slice(0, 2)}</div>
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold" style={{ background: 'rgba(201,168,76,0.12)', color: GOLD }}>{profile.fullName.split(' ').map(part => part[0]).join('').slice(0, 2)}</div>
               <div><h2 className="text-xl font-bold text-slate-800">{profile.fullName}</h2><p className="text-sm text-slate-500 capitalize">{profile.driverType === 'affiliateDriver' ? 'Affiliate Driver' : 'Independent Driver'}</p></div>
             </div>
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-xs font-semibold capitalize"><BadgeCheck size={14} /> {profile.applicationStatus}</span>
@@ -219,14 +222,14 @@ export default function DriverDashboard() {
             <StatusRow label="Availability" value={online ? 'available' : 'offline'} good={online} />
           </div>
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-            <div className="flex items-center gap-2 mb-3"><Car size={17} className="text-blue-600" /><h2 className="font-semibold text-slate-800">{stats?.currentVehicle ? 'Vehicle For This Ride' : 'Assigned Vehicle'}</h2></div>
+            <div className="flex items-center gap-2 mb-3"><Car size={17} style={{ color: GOLD }} /><h2 className="font-semibold text-slate-800">{stats?.currentVehicle ? 'Vehicle For This Ride' : 'Assigned Vehicle'}</h2></div>
             {stats?.currentVehicle
               ? <><p className="font-bold text-slate-800">{stats.currentVehicle.make} {stats.currentVehicle.model}</p><p className="text-sm text-slate-500">{stats.currentVehicle.registration} · {stats.currentVehicle.colour}</p></>
               : profile.assignedVehicle
                 ? <><p className="font-bold text-slate-800">{profile.assignedVehicle.make} {profile.assignedVehicle.model}</p><p className="text-sm text-slate-500">{profile.assignedVehicle.registration} · {profile.assignedVehicle.colour}</p></>
                 : <p className="text-sm text-slate-400">No permanent vehicle assigned. Your affiliate allocates a vehicle with each ride.</p>}
           </div>
-          <Link href="/driver/ride" className="flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm"><Navigation size={16} /> Open Active Ride</Link>
+          <Link href="/driver/ride" className="flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm" style={{ background: GOLD, color: BRAND_BLACK }}><Navigation size={16} /> Open Active Ride</Link>
         </div>
       </div>
     </div>
