@@ -119,7 +119,8 @@ async function wipeOperationalData() {
 }
 
 async function seedAffiliateWithFleet() {
-  const password = 'Affiliate@123';
+  const affiliatePassword = 'Affiliate@123';
+  const driverPassword = 'Driver@123';
   const affiliateId = `aff-${uuid()}`;
   await prisma.affiliate.create({
     data: {
@@ -129,7 +130,7 @@ async function seedAffiliateWithFleet() {
       contactPerson: 'Lisa Whitfield',
       email: 'lisa@ypc-cabs.co.uk',
       phone: '+44 7700 900400',
-      passwordHash: hash(password),
+      passwordHash: hash(affiliatePassword),
       address: '12 Tudor Square',
       city: 'Sheffield',
       postcode: 'S1 2LA',
@@ -169,7 +170,7 @@ async function seedAffiliateWithFleet() {
         fullName: driverNames[i],
         email: driverEmails[i],
         phone: `+44 7700 90041${i}`,
-        passwordHash: hash(password),
+        passwordHash: hash(driverPassword),
         address: `${10 + i} Tudor Square`,
         city: 'Sheffield',
         postcode: 'S1 2LA',
@@ -192,7 +193,7 @@ async function seedAffiliateWithFleet() {
     await createVehicle(CATEGORY_SPECS[i], { affiliateId }, `YPC${i + 1}`);
   }
 
-  console.log(`Seeded affiliate "Yorkshire Premier Cars" (${'lisa@ypc-cabs.co.uk'} / ${password}) with 2 drivers and 4 vehicles (one per category).`);
+  console.log(`Seeded affiliate "Yorkshire Premier Cars" (${'lisa@ypc-cabs.co.uk'} / ${affiliatePassword}) with 2 drivers (${driverPassword}) and 4 vehicles (one per category).`);
 }
 
 async function seedIndependentDriver() {
