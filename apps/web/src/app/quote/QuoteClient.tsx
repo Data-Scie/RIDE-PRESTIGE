@@ -58,10 +58,16 @@ export default function QuoteClient() {
       if (!res.ok) throw new Error(data.message || 'Booking failed');
 
       const ref = data.data?.booking?.reference || quote.bookingRef;
+      const paymentUrl: string | undefined = data.data?.payment?.url;
 
       // Clear session storage
       sessionStorage.removeItem('rp_quote');
       sessionStorage.removeItem('rp_booking_form');
+
+      if (paymentUrl) {
+        window.location.href = paymentUrl;
+        return;
+      }
 
       setAccepted(true);
       setTimeout(() => router.push(`/thank-you?status=accepted&ref=${encodeURIComponent(ref)}`), 1200);

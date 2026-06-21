@@ -75,6 +75,8 @@ app.use(cors({
   methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization'],
 }));
+// Stripe needs the raw request body to verify webhook signatures - must run before express.json().
+app.use('/api/public/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));

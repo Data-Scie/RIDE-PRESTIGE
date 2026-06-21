@@ -6,8 +6,17 @@ import { pushNotification } from '../services/notificationService';
 import { DEFAULT_HOME_SECTIONS, DEFAULT_WEBSITE_PAGES } from '../data/cmsDefaults';
 import { createIndependentRideOffers } from '../services/dispatchService';
 import { bookingConfirmationEmail, sendTransactionalEmail } from '../services/emailService';
+import { bookingConfirmationSms, sendSms } from '../services/smsService';
 import { recordRideFlowEvent } from '../lib/rideFlow';
+import {
+  constructWebhookEvent,
+  createCheckoutSession,
+  handleCheckoutSessionCompleted,
+  handleCheckoutSessionExpired,
+  isStripeConfigured,
+} from '../services/paymentService';
 import type { VehicleCategory, BookingType } from '../types';
+import type Stripe from 'stripe';
 
 const router = Router();
 
@@ -467,6 +476,7 @@ router.post('/booking', async (req: Request, res: Response) => {
     });
     await Promise.all([
       sendTransactionalEmail({ to: email, ...confirmation }),
+      sendSms(phone, bookingConfirmationSms({ reference: ref, pickup: pickupPostcode, dropoff: dropoffPostcode, fare: calc.total })),
       process.env.OPERATIONS_EMAIL
         ? sendTransactionalEmail({
           to: process.env.OPERATIONS_EMAIL,
@@ -506,7 +516,23 @@ router.post('/booking', async (req: Request, res: Response) => {
       jobId: jobRow.id,
     };
 
-    res.status(201).json({ success: true, data: { booking, quote: { calculation: calc, commission, partnerPayout: affiliatePayout } } });
+    // Only present once a real Stripe account is configured - absent entirely otherwise, so
+    // existing clients/tests that don't expect a payment step see no change in behaviour.
+    const payment = isStripeConfigured()
+      ? await createCheckoutSession({
+        bookingId: bookingRow.id,
+        jobId: jobRow.id,
+        bookingRef: ref,
+        amount: calc.total,
+        customerEmail: email,
+        customerName: fullName,
+      }).catch(error => {
+        console.error('Stripe checkout session creation failed:', error);
+        return null;
+      })
+      : null;
+
+    res.status(201).json({ success: true, data: { booking, quote: { calculation: calc, commission, partnerPayout: affiliatePayout }, payment } });
   } catch (e) {
     console.error('Booking creation error:', e);
     res.status(500).json({ success: false, message: 'Database error' });
@@ -662,6 +688,41 @@ router.post('/contact', async (req: Request, res: Response) => {
     res.status(201).json({ success: true, message: `Ticket submitted. Reference: ${ref}`, data: { reference: ref } });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/public/stripe/webhook:
+ *   post:
+ *     summary: Stripe webhook - confirms or expires booking payments
+ *     tags: [Public]
+ *     responses:
+ *       200: { description: Event processed }
+ *       400: { description: Invalid signature or payload }
+ */
+router.post('/stripe/webhook', async (req: Request, res: Response) => {
+  const signature = req.headers['stripe-signature'];
+  if (!signature || typeof signature !== 'string') {
+    res.status(400).json({ success: false, message: 'Missing Stripe signature' });
+    return;
+  }
+  try {
+    const event = constructWebhookEvent(req.body as Buffer, signature);
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+      case 'checkout.session.expired':
+        await handleCheckoutSessionExpired(event.data.object as Stripe.Checkout.Session);
+        break;
+      default:
+        break;
+    }
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Stripe webhook error:', error);
+    res.status(400).json({ success: false, message: 'Webhook signature verification failed' });
   }
 });
 

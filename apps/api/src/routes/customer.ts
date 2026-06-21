@@ -6,6 +6,8 @@ import { estimateDistance, estimateHours, calculateFare, applyCommission, getPri
 import { createIndependentRideOffers } from '../services/dispatchService';
 import { pushNotification } from '../services/notificationService';
 import { bookingConfirmationEmail, sendTransactionalEmail } from '../services/emailService';
+import { bookingConfirmationSms, sendSms } from '../services/smsService';
+import { createCheckoutSession, isStripeConfigured } from '../services/paymentService';
 import type { VehicleCategory, VehicleType, BookingType, Stop } from '../types';
 
 const router = Router();
@@ -388,6 +390,7 @@ router.post('/bookings', async (req: Request, res: Response) => {
           dateTime: jobDateTime,
         }),
       }),
+      sendSms(c.phone, bookingConfirmationSms({ reference: ref, pickup: pickupPostcode, dropoff: dropoffPostcode, fare: calc.total })),
       process.env.OPERATIONS_EMAIL
         ? sendTransactionalEmail({
           to: process.env.OPERATIONS_EMAIL,
@@ -399,7 +402,22 @@ router.post('/bookings', async (req: Request, res: Response) => {
 
     const booking = shapeBooking({ ...bookingRow, jobId: jobRow.id });
     const job = shapeJob(jobRow);
-    res.status(201).json({ success: true, data: booking, job, calculation: calc });
+
+    const payment = isStripeConfigured()
+      ? await createCheckoutSession({
+        bookingId: bookingRow.id,
+        jobId: jobRow.id,
+        bookingRef: ref,
+        amount: calc.total,
+        customerEmail: c.email,
+        customerName: c.fullName,
+      }).catch(error => {
+        console.error('Stripe checkout session creation failed:', error);
+        return null;
+      })
+      : null;
+
+    res.status(201).json({ success: true, data: booking, job, calculation: calc, payment });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }
