@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle, Clock, Route, X } from 'lucide-react';
 import { driverApi } from '@/lib/api-client';
+import { getPortalSocket } from '@/lib/realtime';
 
 interface RideItem {
   id: string;
@@ -63,6 +64,20 @@ export default function DriverRequestsPage() {
     load();
     const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const socket = getPortalSocket('driver');
+    if (!socket) return;
+    const onUnavailable = (payload: { jobId: string; bookingRef: string }) => {
+      setIncoming(prev => {
+        const wasShowing = prev.some(item => (item.jobId ?? item.id) === payload.jobId);
+        if (wasShowing) window.alert(`Ride ${payload.bookingRef} was just taken by another driver or affiliate.`);
+        return prev.filter(item => (item.jobId ?? item.id) !== payload.jobId);
+      });
+    };
+    socket.on('ride:unavailable', onUnavailable);
+    return () => { socket.off('ride:unavailable', onUnavailable); };
   }, []);
 
   const acceptRide = async (item: RideItem) => {

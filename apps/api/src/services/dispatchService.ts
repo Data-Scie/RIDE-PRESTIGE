@@ -178,6 +178,7 @@ function driverIsEligible(driver: EligibleDriver): boolean {
 export async function claimIndependentRide(driverId: string, offerId: string) {
   const now = new Date();
   let result: Job | null = null;
+  let withdrawnDriverIds: string[] = [];
   for (let attempt = 0; attempt < 3 && !result; attempt += 1) {
     try {
       result = await prisma.$transaction(async tx => {
@@ -231,6 +232,11 @@ export async function claimIndependentRide(driverId: string, offerId: string) {
       where: { id: offer.id },
       data: { status: 'accepted', respondedAt: now },
     });
+    const competingOffers = await tx.rideOffer.findMany({
+      where: { jobId: offer.jobId, id: { not: offer.id }, status: 'pending' },
+      select: { driverId: true },
+    });
+    withdrawnDriverIds = competingOffers.map(o => o.driverId);
     await tx.rideOffer.updateMany({
       where: { jobId: offer.jobId, id: { not: offer.id }, status: 'pending' },
       data: { status: 'withdrawn', respondedAt: now },
@@ -279,6 +285,9 @@ export async function claimIndependentRide(driverId: string, offerId: string) {
 
   emitToRoom(`job:${result.id}`, 'ride:claimed', { jobId: result.id, driverId });
   emitToRoom('ops', 'ride:claimed', { jobId: result.id, driverId });
+  const unavailablePayload = { jobId: result.id, bookingRef: result.bookingRef };
+  emitToRoom('affiliate', 'ride:unavailable', unavailablePayload);
+  withdrawnDriverIds.forEach(id => emitToRoom(`driver:${id}`, 'ride:unavailable', unavailablePayload));
   return result;
 }
 

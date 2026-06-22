@@ -28,6 +28,7 @@ export function initIO(server: import('http').Server): Server {
     socket.join(`${user.role}:${user.id}`);
     if (user.role === 'ops') socket.join('ops');
     if (user.role === 'admin') socket.join('admin');
+    if (user.role === 'affiliate') socket.join('affiliate');
 
     socket.on('driver:location', (payload: { jobId?: string; lat: number; lng: number; speed?: number; heading?: number }) => {
       if (user.role !== 'driver') return;

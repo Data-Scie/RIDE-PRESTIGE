@@ -104,8 +104,16 @@ export default function DriverDashboard() {
         new Notification('New Ride Prestige offer', { body: 'Open the driver portal to review it.' });
       }
     };
+    const onUnavailable = (payload: { jobId: string; bookingRef: string }) => {
+      setRideRequest(current => {
+        if (!current || (current.jobId ?? current.id) !== payload.jobId) return current;
+        setRideActionError(`Ride ${payload.bookingRef} was just taken by another driver or affiliate.`);
+        return null;
+      });
+    };
     socket?.on('ride:offer', refresh);
     socket?.on('notification:new', pollForRide);
+    socket?.on('ride:unavailable', onUnavailable);
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
     }
@@ -113,6 +121,7 @@ export default function DriverDashboard() {
       clearInterval(interval);
       socket?.off('ride:offer', refresh);
       socket?.off('notification:new', pollForRide);
+      socket?.off('ride:unavailable', onUnavailable);
     };
   }, [pollForRide]);
 

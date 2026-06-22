@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle, Clock, Route, X } from 'lucide-react';
 import { affiliateApi } from '@/lib/api-client';
+import { getPortalSocket } from '@/lib/realtime';
 
 interface Job {
   id: string;
@@ -84,6 +85,22 @@ export default function AffiliateRidesPage() {
     const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const socket = getPortalSocket('affiliate');
+    if (!socket) return;
+    const onUnavailable = (payload: { jobId: string; bookingRef: string }) => {
+      setPending(prev => prev.filter(job => job.id !== payload.jobId));
+      if (assignModal === payload.jobId) {
+        setAssignModal(null);
+        setAssignRide(null);
+        window.alert(`Ride ${payload.bookingRef} was just taken by another driver or affiliate.`);
+      }
+      load();
+    };
+    socket.on('ride:unavailable', onUnavailable);
+    return () => { socket.off('ride:unavailable', onUnavailable); };
+  }, [assignModal]);
 
   const acceptRide = async (id: string) => {
     const ride = [...pending, ...active].find(item => item.id === id) ?? null;

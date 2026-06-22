@@ -16,6 +16,7 @@ import { ensureDriverDocuments, DRIVER_DOCUMENTS } from '../lib/driverDocuments'
 import { recordRideFlowEvent } from '../lib/rideFlow';
 import { pushNotification } from '../services/notificationService';
 import { isDriverDocumentEligible, isVehicleEligible } from '../services/dispatchService';
+import { emitToRoom } from '../lib/socket';
 import type { Stop } from '../types';
 
 const router = Router();
@@ -318,6 +319,7 @@ router.post('/jobs/:id/accept', async (req: Request, res: Response) => {
     if (job.status !== 'awaiting_affiliate') {
       res.status(409).json({ success: false, message: `Cannot accept job in status: ${job.status}` }); return;
     }
+    let withdrawnDriverIds: string[] = [];
     const updated = await prisma.$transaction(async tx => {
       const claimed = await tx.job.updateMany({
         where: { id: job.id, status: 'awaiting_affiliate', affiliateId: null, assignedDriverId: null },
@@ -325,6 +327,11 @@ router.post('/jobs/:id/accept', async (req: Request, res: Response) => {
       });
       if (claimed.count !== 1) throw new Error('RIDE_ALREADY_CLAIMED');
       const updatedJob = await tx.job.findUniqueOrThrow({ where: { id: job.id } });
+      const pendingOffers = await tx.rideOffer.findMany({
+        where: { jobId: job.id, status: 'pending' },
+        select: { driverId: true },
+      });
+      withdrawnDriverIds = pendingOffers.map(offer => offer.driverId);
       await tx.rideOffer.updateMany({
         where: { jobId: job.id, status: 'pending' },
         data: { status: 'withdrawn', respondedAt: new Date() },
@@ -349,6 +356,9 @@ router.post('/jobs/:id/accept', async (req: Request, res: Response) => {
       }, tx);
       return updatedJob;
     });
+    const unavailablePayload = { jobId: job.id, bookingRef: job.bookingRef };
+    emitToRoom('affiliate', 'ride:unavailable', unavailablePayload);
+    withdrawnDriverIds.forEach(driverId => emitToRoom(`driver:${driverId}`, 'ride:unavailable', unavailablePayload));
     res.json({ success: true, message: 'Job accepted', data: shapeJob(updated) });
   } catch (e) {
     if (e instanceof Error && e.message === 'RIDE_ALREADY_CLAIMED') {
