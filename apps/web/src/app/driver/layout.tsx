@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  ChevronRight, History, LayoutDashboard, LogOut,
+  Bell, ChevronRight, History, LayoutDashboard, LogOut,
   Menu, Navigation, TrendingUp, X,
   ShieldCheck,
 } from 'lucide-react';
@@ -25,7 +25,7 @@ interface DriverIdentity {
 
 const NAV = [
   { label: 'Overview', items: [{ href: '/driver/dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
-  { label: 'Work', items: [{ href: '/driver/ride', label: 'Active Ride', icon: Navigation }, { href: '/driver/history', label: 'Ride History', icon: History }, { href: '/driver/compliance', label: 'Compliance & Vehicle', icon: ShieldCheck }] },
+  { label: 'Work', items: [{ href: '/driver/requests', label: 'Ride Requests', icon: Bell }, { href: '/driver/ride', label: 'Active Ride', icon: Navigation }, { href: '/driver/history', label: 'Ride History', icon: History }, { href: '/driver/compliance', label: 'Compliance & Vehicle', icon: ShieldCheck }] },
   { label: 'Finance', items: [{ href: '/driver/earnings', label: 'Earnings', icon: TrendingUp }] },
 ];
 
