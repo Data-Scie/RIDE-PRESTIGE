@@ -12,16 +12,22 @@
       "backgroundColor": "#030303"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rideprestige.driver"
     },
     "android": {
+      "package": "com.rideprestige.driver",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/brand/ride-prestige-mark.png",
         "backgroundColor": "#030303",
         "monochromeImage": "./assets/images/brand/ride-prestige-mark.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "output": "static",
@@ -48,6 +54,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "50bd3566-c29b-4119-8391-991fadc2e1f0"
+      }
+    },
+    "owner": "sparc476"
   }
 }
