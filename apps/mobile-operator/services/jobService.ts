@@ -38,7 +38,8 @@ export const jobService = {
       const r = await api.get<{ success: boolean; data: Job }>(`/api/driver/jobs/${id}`);
       return r.data;
     } catch {
-      return undefined;
+      const openJobs = await this.getOpenJobs().catch(() => [] as Job[]);
+      return openJobs.find((job) => job.id === id);
     }
   },
 
@@ -70,6 +71,10 @@ export const jobService = {
   async claimJob(jobId: string): Promise<Job> {
     const r = await api.post<{ success: boolean; data: Job }>(`/api/driver/jobs/${jobId}/claim`, {});
     return r.data;
+  },
+
+  async declineOffer(offerId: string): Promise<void> {
+    await api.post<{ success: boolean }>(`/api/driver/jobs/${offerId}/decline`, {});
   },
 
   async updateRideStatus(jobId: string, status: JobStatus): Promise<Job> {

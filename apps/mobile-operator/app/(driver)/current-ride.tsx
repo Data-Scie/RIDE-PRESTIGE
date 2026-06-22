@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, StatusBar, ActivityIndicator, Alert,
 } from 'react-native';
-import { useAuth } from '@/context/AuthContext';
 import { jobService } from '@/services/jobService';
 import type { Job, JobStatus } from '@/types';
-import { BLACK, ROSE_GOLD, ROSE_GOLD_2, TEXT, MUTED, CARD, LINE, FONT_MEDIUM, FONT_REGULAR } from '@/constants/theme';
+import { BLACK, ROSE_GOLD, TEXT, MUTED, CARD, LINE, FONT_MEDIUM, FONT_REGULAR } from '@/constants/theme';
 import { formatDateTime, formatCurrency } from '@/utils/helpers';
 
 type RideStep = {
@@ -26,18 +25,14 @@ const RIDE_TIMELINE: RideStep[] = [
 ];
 
 export default function CurrentRideScreen() {
-  const { driver } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
 
   const loadActiveJob = async () => {
     setLoading(true);
-    const driverJobs = await jobService.getDriverJobs(driver?.id ?? 'drv_001');
-    const active = driverJobs.find((j) =>
-      ['driver_accepted', 'on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress'].includes(j.status),
-    );
-    setJob(active ?? null);
+    const active = await jobService.getCurrentJob();
+    setJob(active);
     setLoading(false);
   };
 

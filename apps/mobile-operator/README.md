@@ -111,9 +111,9 @@ affilate and driver app/
 │   └── theme.ts                 Colours, fonts, spacing
 ├── context/
 │   └── AuthContext.tsx          Role-based auth state
-├── data/                        Mock data (jobs, drivers, vehicles, earnings)
+├── data/                        Static seed/reference data
 ├── hooks/                       use-color-scheme, use-theme-color
-├── services/                    API service layer (mock + ready for backend)
+├── services/                    API service layer connected to backend
 ├── types/
 │   └── index.ts                 All TypeScript interfaces
 └── utils/
@@ -124,7 +124,7 @@ affilate and driver app/
 
 ## Service Layer (Backend Integration)
 
-All services are in `services/`. They currently use mock data but are structured for real API integration:
+All services are in `services/`. They call the Ride Prestige backend configured by `EXPO_PUBLIC_API_URL`:
 
 | Service | File |
 |---------|------|
@@ -137,7 +137,7 @@ All services are in `services/`. They currently use mock data but are structured
 | Earnings | `services/earningsService.ts` |
 | Notifications | `services/notificationService.ts` |
 
-To connect a real backend, replace the mock `delay()` functions with `fetch()` or `axios` calls.
+For local testing, set `EXPO_PUBLIC_API_URL` in `.env`. Production builds should point at the Render API.
 
 ---
 
@@ -156,9 +156,9 @@ Matches the Customer-End app:
 
 ---
 
-## Status Logic (Mock)
+## Status Logic
 
-The app implements local mock state for the full job lifecycle:
+The app follows the backend job lifecycle:
 
 1. `awaiting_affiliate` → Affiliate accepts → `needs_allocation`
 2. `needs_allocation` → Assign driver → `driver_assigned`
@@ -173,7 +173,7 @@ The app implements local mock state for the full job lifecycle:
 
 ## Notes
 
-- All mock data uses UK-based Ride Prestige locations (Manchester Airport, Heathrow, Sheffield, Leeds, etc.)
-- No changes were made to the Customer-End app
+- Seed/reference data uses UK-based Ride Prestige locations (Manchester Airport, Heathrow, Sheffield, Leeds, etc.)
+- The customer app and operator app both call the backend API
 - This app runs independently with its own package.json
 - The `@/` import alias resolves to the project root

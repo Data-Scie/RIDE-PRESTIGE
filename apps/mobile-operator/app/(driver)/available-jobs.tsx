@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, StatusBar, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { jobService } from '@/services/jobService';
@@ -40,6 +40,21 @@ export default function AvailableJobsScreen() {
     load();
   };
 
+  const handleDecline = async (jobId: string) => {
+    if (!isIndependent) return;
+    Alert.alert('Decline ride', 'Decline this open ride offer?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Decline',
+        style: 'destructive',
+        onPress: async () => {
+          await jobService.declineOffer(jobId);
+          load();
+        },
+      },
+    ]);
+  };
+
   const screenTitle = isAffiliate ? 'Assigned Jobs' : 'Available Jobs';
   const emptyMessage = isAffiliate
     ? 'No jobs have been assigned to you by your affiliate yet.'
@@ -53,21 +68,18 @@ export default function AvailableJobsScreen() {
         <View>
           <Text style={styles.title}>{screenTitle}</Text>
           <Text style={styles.sub}>
-            {isAffiliate
-              ? 'Jobs assigned to you by your affiliate'
-              : 'Open jobs from Ride Prestige — accept or decline'}
+            {isAffiliate ? 'Jobs assigned to you by your affiliate' : 'Open jobs from Ride Prestige - accept or decline'}
           </Text>
         </View>
         <TouchableOpacity style={styles.refreshBtn} onPress={load}>
-          <Text style={styles.refreshIcon}>↻</Text>
+          <Text style={styles.refreshIcon}>Refresh</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Driver type badge */}
       <View style={styles.typeBadgeBar}>
         <View style={styles.typeBadge}>
           <Text style={styles.typeBadgeText}>
-            {isAffiliate ? '🏢 Affiliate Driver — Assigned Jobs Only' : '🚗 Independent Driver — Open Jobs'}
+            {isAffiliate ? 'Affiliate Driver - Assigned Jobs Only' : 'Independent Driver - Open Jobs'}
           </Text>
         </View>
       </View>
@@ -76,7 +88,7 @@ export default function AvailableJobsScreen() {
         <View style={styles.center}><ActivityIndicator color={ROSE_GOLD} size="large" /></View>
       ) : jobs.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyIcon}>📋</Text>
+          <Text style={styles.emptyIcon}>Jobs</Text>
           <Text style={styles.emptyTitle}>No Jobs Available</Text>
           <Text style={styles.emptyText}>{emptyMessage}</Text>
         </View>
@@ -92,7 +104,7 @@ export default function AvailableJobsScreen() {
               showActions={isIndependent || item.status === 'driver_assigned' || item.status === 'vehicle_assigned'}
               onPress={() => router.push({ pathname: '/job-details', params: { jobId: item.id, context: 'driver' } })}
               onAccept={() => handleAccept(item.id)}
-              onReject={() => { /* driver declines — not implemented in mock */ }}
+              onReject={() => handleDecline(item.id)}
             />
           )}
         />
@@ -110,15 +122,15 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 22, fontWeight: '700', color: TEXT, fontFamily: FONT_MEDIUM ?? undefined },
   sub: { fontSize: 13, color: MUTED, marginTop: 2, fontFamily: FONT_REGULAR ?? undefined },
-  refreshBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  refreshIcon: { fontSize: 24, color: ROSE_GOLD },
+  refreshBtn: { minWidth: 64, height: 40, alignItems: 'center', justifyContent: 'center' },
+  refreshIcon: { fontSize: 12, color: ROSE_GOLD, fontWeight: '700', fontFamily: FONT_MEDIUM ?? undefined },
   typeBadgeBar: { paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: LINE },
   typeBadge: { backgroundColor: 'rgba(215,180,106,0.08)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start' },
   typeBadgeText: { color: ROSE_GOLD, fontSize: 12, fontWeight: '600', fontFamily: FONT_MEDIUM ?? undefined },
   list: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  emptyIcon: { fontSize: 56, marginBottom: 16 },
+  emptyIcon: { fontSize: 18, color: ROSE_GOLD, marginBottom: 16, fontWeight: '700', fontFamily: FONT_MEDIUM ?? undefined },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: TEXT, marginBottom: 10, fontFamily: FONT_MEDIUM ?? undefined },
   emptyText: { color: MUTED, fontSize: 14, textAlign: 'center', lineHeight: 22, fontFamily: FONT_REGULAR ?? undefined },
 });

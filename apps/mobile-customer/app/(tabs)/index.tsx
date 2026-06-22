@@ -113,7 +113,7 @@ export default function RidePrestigeApp() {
 
   const addStop = () => {
     if (stops.length >= 3) {
-      Alert.alert("Maximum stops", "You can add up to 3 stops in this demo.");
+      Alert.alert("Maximum stops", "You can add up to 3 stops.");
       return;
     }
     setStops([...stops, ""]);
@@ -141,6 +141,7 @@ export default function RidePrestigeApp() {
       const booking = await createBooking({
         pickupAddress,
         dropoffAddress,
+        stops: stops.filter((stop) => stop.trim().length > 0),
         passengers: 1,
         vehicleCategory: selectedVehicle,
         bookingType: isScheduledBooking ? "scheduled" : "current",
@@ -149,10 +150,11 @@ export default function RidePrestigeApp() {
         notes: notes !== "Any special instructions" ? notes : undefined,
       });
       setActiveBookingId(booking.id);
-    } catch {
-      // Keep the demo flow usable while the local API is unavailable
+    } catch (error) {
+      setScreen("home");
+      Alert.alert("Booking failed", error instanceof Error ? error.message : "Could not create the booking.");
     }
-  }, [pickupAddress, dropoffAddress, selectedVehicle, isScheduledBooking, pickupDate, pickupTime, notes]);
+  }, [pickupAddress, dropoffAddress, stops, selectedVehicle, isScheduledBooking, pickupDate, pickupTime, notes]);
 
   if (screen === "splash") return <SplashScreen />;
 
@@ -577,11 +579,7 @@ function BookingModals({
 
 function SearchingScreen({ bookingId, onFound }: { bookingId: string | null; onFound: () => void }) {
   useEffect(() => {
-    if (!bookingId) {
-      // No real booking yet (demo mode) — auto-advance after 2.6s
-      const t = setTimeout(onFound, 2600);
-      return () => clearTimeout(t);
-    }
+    if (!bookingId) return;
     // Poll until a driver is assigned
     const interval = setInterval(async () => {
       try {
@@ -639,6 +637,8 @@ function TrackingScreen({ bookingId, go }: { bookingId: string | null; go: (s: S
           status: data.status,
           driverName: data.driverName,
           driverPhone: data.driverPhone,
+          driverLat: data.driverLatitude,
+          driverLng: data.driverLongitude,
         });
       } catch {
         // Keep last known state
@@ -650,7 +650,9 @@ function TrackingScreen({ bookingId, go }: { bookingId: string | null; go: (s: S
   }, [bookingId]);
 
   const currentStepIndex = STATUS_STEPS.findIndex(s => s.key === tracking.status);
-  const driverCoordinate = null; // Real coords come once Google Maps is wired
+  const driverCoordinate = typeof tracking.driverLat === "number" && typeof tracking.driverLng === "number"
+    ? { latitude: tracking.driverLat, longitude: tracking.driverLng }
+    : null;
 
   const statusLabel = STATUS_STEPS.find(s => s.key === tracking.status)?.label ?? tracking.status.replace(/_/g, " ");
 

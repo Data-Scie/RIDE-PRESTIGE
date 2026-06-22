@@ -63,7 +63,7 @@ export async function login(email: string, password: string): Promise<{ id: stri
 
 export async function createBooking(params: {
   pickupAddress: string; dropoffAddress: string; passengers: number;
-  vehicleCategory: string; bookingType: string; date?: string; time?: string; notes?: string;
+  vehicleCategory: string; bookingType: string; date?: string; time?: string; notes?: string; stops?: string[];
 }): Promise<{ id: string; bookingRef: string }> {
   const r = await req<{ success: boolean; data: { id: string; reference: string } }>(
     'POST', '/api/customer/bookings', {
@@ -75,6 +75,7 @@ export async function createBooking(params: {
       date:            params.date,
       time:            params.time,
       notes:           params.notes,
+      stops:           params.stops ?? [],
     }
   );
   return { id: r.data.id, bookingRef: r.data.reference };

@@ -61,7 +61,7 @@ export default function JobDetailsScreen() {
     if (!job) return;
     setActing(true);
     await jobService.updateRideStatus(job.id, status);
-    const updated = await jobService.getJobById(job.id);
+    const updated = context === 'driver' ? await jobService.getDriverJobById(job.id) : await jobService.getJobById(job.id);
     setJob(updated ?? null);
     setActing(false);
   };

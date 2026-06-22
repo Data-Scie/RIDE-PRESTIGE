@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
+import { Prisma } from '@prisma/client';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
 import { estimateDistance, estimateHours, calculateFare, applyCommission, getPricingConfig } from '../services/fareService';
@@ -14,6 +15,23 @@ const router = Router();
 router.use(authenticate, requireRole('customer', 'admin', 'ops'));
 
 const getCustId = (req: Request): string => req.user!.id;
+
+function normalizeStops(stops: unknown): Stop[] {
+  if (!Array.isArray(stops)) return [];
+  return stops
+    .map((stop, index) => {
+      if (typeof stop === 'string') {
+        const address = stop.trim();
+        return address ? { id: `stop-${index + 1}`, address, order: index + 1 } : null;
+      }
+      if (stop && typeof stop === 'object' && 'address' in stop) {
+        const address = String((stop as { address?: unknown }).address ?? '').trim();
+        return address ? { id: `stop-${index + 1}`, address, order: index + 1 } : null;
+      }
+      return null;
+    })
+    .filter((stop): stop is Stop => Boolean(stop));
+}
 
 // Helper to reshape a Prisma Booking row into the API shape the frontend expects
 function shapeBooking(b: {
@@ -283,11 +301,11 @@ router.post('/bookings', async (req: Request, res: Response) => {
     const c = await prisma.customer.findUnique({ where: { id: custId } });
     if (!c) { res.status(404).json({ success: false, message: 'Customer not found' }); return; }
 
-    const { pickupPostcode, dropoffPostcode, vehicleCategory, passengers, bookingType, date, time, notes, couponCode } =
+    const { pickupPostcode, dropoffPostcode, vehicleCategory, passengers, bookingType, date, time, notes, couponCode, stops } =
       req.body as {
         pickupPostcode: string; dropoffPostcode: string; vehicleCategory: VehicleCategory;
         passengers: number; bookingType: BookingType; date?: string; time?: string;
-        notes?: string; couponCode?: string;
+        notes?: string; couponCode?: string; stops?: unknown;
       };
 
     if (!pickupPostcode || !dropoffPostcode || !vehicleCategory || !passengers || !bookingType) {
@@ -298,6 +316,8 @@ router.post('/bookings', async (req: Request, res: Response) => {
     const miles   = await estimateDistance(pickupPostcode, dropoffPostcode);
     const hours   = estimateHours(miles);
     const calc    = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
+    const normalizedStops = normalizeStops(stops);
+    const stopsJson = normalizedStops as unknown as Prisma.InputJsonValue;
 
     const ref = `RP-${new Date().getFullYear()}-${uuid().split('-')[0].toUpperCase()}`;
 
@@ -309,7 +329,7 @@ router.post('/bookings', async (req: Request, res: Response) => {
         status: 'pending',
         customerId: custId,
         customerData: { fullName: c.fullName, phone: c.phone, email: c.email },
-        journeyData: { pickupPostcode, dropoffPostcode, bookingType, date, time, passengers, notes },
+        journeyData: { pickupPostcode, dropoffPostcode, bookingType, date, time, passengers, notes, stops: normalizedStops } as unknown as Prisma.InputJsonValue,
         vehicleCategory,
         estimatedMiles: miles,
         estimatedFare: calc.total,
@@ -342,7 +362,7 @@ router.post('/bookings', async (req: Request, res: Response) => {
         customerEmail: c.email,
         pickupAddress: pickupPostcode,
         dropoffAddress: dropoffPostcode,
-        stops: [],
+        stops: stopsJson,
         dateTime: jobDateTime,
         passengerCount: passengers,
         luggageCount: 0,
