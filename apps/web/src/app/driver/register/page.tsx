@@ -89,6 +89,9 @@ export default function DriverRegisterPage() {
         {driverType === 'affiliateDriver' && (
           <p className="text-xs text-amber-600 mb-5">Once approved, you will appear in your affiliate company&apos;s driver roster.</p>
         )}
+        {driverType === 'independentDriver' && (
+          <p className="text-xs text-amber-600 mb-5">Once approved, log in to the driver portal to register your vehicle and submit vehicle documents for Operations approval.</p>
+        )}
         <Link href="/driver/login" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-black" style={{ background: '#f59e0b' }}>
           Go to Login
         </Link>
@@ -119,7 +122,7 @@ export default function DriverRegisterPage() {
             <p style={{ ...lbl, marginBottom: '12px' }}>I am applying as *</p>
             <div className="grid grid-cols-2 gap-3">
               {([
-                { value: 'independentDriver' as const, label: 'Independent Driver', sub: 'Receive direct bookings', Icon: User },
+                { value: 'independentDriver' as const, label: 'Independent Driver', sub: 'Apply first, add car after approval', Icon: User },
                 { value: 'affiliateDriver'   as const, label: 'Affiliate Driver',   sub: 'Under a company',        Icon: Building2 },
               ] as const).map(({ value, label, sub, Icon }) => {
                 const active = driverType === value;

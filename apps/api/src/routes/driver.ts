@@ -86,6 +86,12 @@ function pickCurrentJob<T extends { status: string; dateTime: Date; updatedAt: D
   })[0];
 }
 
+function canManageIndependentVehicle(driver: { driverType: string; isApproved: boolean; applicationStatus: string }): boolean {
+  return driver.driverType === 'independentDriver'
+    && driver.isApproved
+    && driver.applicationStatus === 'approved';
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 /**
@@ -647,6 +653,10 @@ router.post('/vehicles', async (req: Request, res: Response) => {
       res.status(403).json({ success: false, message: 'Only independent drivers can register vehicles' });
       return;
     }
+    if (!canManageIndependentVehicle(driver)) {
+      res.status(403).json({ success: false, message: 'Your independent driver application must be approved before registering a vehicle' });
+      return;
+    }
     const {
       make, model, year, registration, vehicleType, vehicleCategory, colour,
       passengerCapacity, luggageCapacity, motExpiry, insuranceExpiry, phvLicenceExpiry,
@@ -704,6 +714,11 @@ router.put('/vehicles/:vehicleId/documents/:documentId', async (req: Request, re
       res.status(404).json({ success: false, message: 'Vehicle not found' });
       return;
     }
+    const driver = await prisma.driver.findUnique({ where: { id: drvId } });
+    if (!driver || !canManageIndependentVehicle(driver)) {
+      res.status(403).json({ success: false, message: 'Your independent driver application must be approved before updating vehicle documents' });
+      return;
+    }
     await ensureVehicleDocuments(vehicle.id);
     const document = await prisma.vehicleDocument.findFirst({
       where: { id: req.params.documentId, vehicleId: vehicle.id },
@@ -747,6 +762,11 @@ router.post('/vehicles/:vehicleId/documents/:documentId/upload', uploadSingleDoc
     const vehicle = await prisma.fleetVehicle.findFirst({ where: { id: req.params.vehicleId, ownerDriverId: drvId } });
     if (!vehicle) {
       res.status(404).json({ success: false, message: 'Vehicle not found' });
+      return;
+    }
+    const driver = await prisma.driver.findUnique({ where: { id: drvId } });
+    if (!driver || !canManageIndependentVehicle(driver)) {
+      res.status(403).json({ success: false, message: 'Your independent driver application must be approved before updating vehicle documents' });
       return;
     }
     await ensureVehicleDocuments(vehicle.id);

@@ -25,6 +25,12 @@ type Vehicle = {
   documents?: DocumentRecord[];
 };
 
+type DriverProfile = {
+  driverType: 'affiliateDriver' | 'independentDriver';
+  isApproved: boolean;
+  applicationStatus: string;
+};
+
 const emptyVehicle = {
   make: '', model: '', year: new Date().getFullYear(), registration: '',
   vehicleType: 'Executive', vehicleCategory: 'prestige', colour: '',
@@ -35,15 +41,18 @@ const emptyVehicle = {
 export default function DriverCompliancePage() {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [vehicle, setVehicle] = useState(emptyVehicle);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
   const load = async () => {
-    const [docs, fleet] = await Promise.all([
+    const [profileResult, docs, fleet] = await Promise.all([
+      driverApi.get<{ data: DriverProfile }>('/api/driver/profile'),
       driverApi.get<{ data: DocumentRecord[] }>('/api/driver/documents'),
       driverApi.get<{ data: Vehicle[] }>('/api/driver/vehicles').catch(() => ({ data: [] })),
     ]);
+    setProfile(profileResult.data);
     setDocuments(docs.data);
     setVehicles(fleet.data);
   };
@@ -107,9 +116,12 @@ export default function DriverCompliancePage() {
     }
   };
 
+  const isIndependent = profile?.driverType === 'independentDriver';
+  const canRegisterVehicle = Boolean(isIndependent && profile?.isApproved && profile?.applicationStatus === 'approved');
+
   return (
     <div className="max-w-5xl space-y-6">
-      <div><h1 className="text-2xl font-bold text-slate-800">Compliance & Vehicle</h1><p className="text-sm text-slate-500">Independent drivers need an approved account, current documents, and an approved vehicle before receiving direct rides.</p></div>
+      <div><h1 className="text-2xl font-bold text-slate-800">Compliance & Vehicle</h1><p className="text-sm text-slate-500">Submit driver documents first. Approved independent drivers can then register a vehicle for Operations approval.</p></div>
       {message && <div className="p-3 rounded-xl bg-green-50 text-green-700 text-sm">{message}</div>}
       {error && <div className="p-3 rounded-xl bg-red-50 text-red-600 text-sm">{error}</div>}
 
@@ -120,6 +132,25 @@ export default function DriverCompliancePage() {
         </div>
       </section>
 
+      {isIndependent && !canRegisterVehicle && (
+        <section className="bg-white rounded-2xl border border-amber-100 p-5">
+          <h2 className="font-semibold text-slate-800 flex items-center gap-2 mb-2"><Car size={17} /> Vehicle registration unlocks after approval</h2>
+          <p className="text-sm text-slate-500">
+            Your independent driver application must be approved before you can register your car. Once approved, return here to add vehicle details, upload MOT/insurance/PHV documents, and send it to Operations for approval.
+          </p>
+        </section>
+      )}
+
+      {!isIndependent && profile && (
+        <section className="bg-white rounded-2xl border border-slate-100 p-5">
+          <h2 className="font-semibold text-slate-800 flex items-center gap-2 mb-2"><Car size={17} /> Vehicle allocation</h2>
+          <p className="text-sm text-slate-500">
+            Affiliate drivers do not register personal vehicles here. Your affiliate assigns an approved fleet vehicle when allocating rides.
+          </p>
+        </section>
+      )}
+
+      {canRegisterVehicle && (
       <section className="bg-white rounded-2xl border border-slate-100 p-5">
         <h2 className="font-semibold text-slate-800 flex items-center gap-2 mb-4"><Car size={17} /> Registered Vehicles</h2>
         <div className="grid md:grid-cols-2 gap-3 mb-6">
@@ -170,6 +201,7 @@ export default function DriverCompliancePage() {
           <button className="self-end py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-sm flex items-center justify-center gap-2"><Plus size={15} /> Submit vehicle</button>
         </form>
       </section>
+      )}
     </div>
   );
 }
