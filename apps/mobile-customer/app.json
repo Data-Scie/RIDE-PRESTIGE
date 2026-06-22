@@ -51,6 +51,13 @@
         {
           "locationWhenInUsePermission": "Ride Prestige uses your location to set your pickup point accurately and match you with nearby drivers."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#0a0f1e"
+        }
       ]
     ],
     "experiments": {

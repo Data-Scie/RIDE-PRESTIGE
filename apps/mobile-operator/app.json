@@ -49,6 +49,13 @@
         {
           "locationWhenInUsePermission": "Ride Prestige uses your location while you're on an active ride so customers and dispatch can see your live position."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/brand/ride-prestige-mark.png",
+          "color": "#D7B46A"
+        }
       ]
     ],
     "experiments": {

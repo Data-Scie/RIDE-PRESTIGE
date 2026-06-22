@@ -4,15 +4,20 @@ import { Platform } from 'react-native';
 import { api } from './apiClient';
 import type { UserRole } from '@/types';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+} catch {
+  // If the native notifications module isn't available for any reason, don't take the whole
+  // app down over it - this runs at import time, before any screen has a chance to render.
+}
 
 export async function registerPushToken(role: UserRole): Promise<void> {
   if (!Device.isDevice) return; // push tokens only work on physical devices
