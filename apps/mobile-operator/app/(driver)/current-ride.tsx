@@ -6,6 +6,7 @@ import { jobService } from '@/services/jobService';
 import type { Job, JobStatus } from '@/types';
 import { BLACK, ROSE_GOLD, TEXT, MUTED, CARD, LINE, FONT_MEDIUM, FONT_REGULAR } from '@/constants/theme';
 import { formatDateTime, formatCurrency } from '@/utils/helpers';
+import { useLocationTracking } from '@/hooks/use-location-tracking';
 
 type RideStep = {
   status: JobStatus;
@@ -37,6 +38,8 @@ export default function CurrentRideScreen() {
   };
 
   useEffect(() => { loadActiveJob(); }, []);
+
+  useLocationTracking(Boolean(job && job.status !== 'completed'), job?.id);
 
   const handleStatusUpdate = async (nextStatus: JobStatus) => {
     if (!job) return;

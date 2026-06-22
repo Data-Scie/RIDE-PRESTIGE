@@ -571,6 +571,55 @@ router.get('/booking/:reference', async (req: Request, res: Response) => {
   }
 });
 
+const TRACKABLE_JOB_STATUSES = [
+  'driver_assigned', 'vehicle_assigned', 'driver_accepted',
+  'on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress',
+];
+
+router.get('/booking/:reference/track', async (req: Request, res: Response) => {
+  try {
+    const booking = await prisma.booking.findUnique({ where: { reference: req.params.reference } });
+    if (!booking) { res.status(404).json({ success: false, message: 'Booking not found' }); return; }
+    const job = booking.jobId ? await prisma.job.findUnique({ where: { id: booking.jobId } }) : null;
+    if (!job) {
+      res.json({ success: true, data: { jobId: null, status: booking.status, driver: null, vehicle: null } });
+      return;
+    }
+    const isTrackable = TRACKABLE_JOB_STATUSES.includes(job.status);
+    const driver = job.assignedDriverId && isTrackable
+      ? await prisma.driver.findUnique({
+          where: { id: job.assignedDriverId },
+          select: { fullName: true, latitude: true, longitude: true, lastLocationUpdate: true },
+        })
+      : null;
+    const vehicle = job.assignedVehicleId
+      ? await prisma.fleetVehicle.findUnique({
+          where: { id: job.assignedVehicleId },
+          select: { make: true, model: true, registration: true, colour: true },
+        })
+      : null;
+    res.json({
+      success: true,
+      data: {
+        jobId: job.id,
+        status: job.status,
+        pickupAddress: job.pickupAddress,
+        dropoffAddress: job.dropoffAddress,
+        isTrackable,
+        driver: driver ? {
+          fullName: driver.fullName,
+          latitude: driver.latitude,
+          longitude: driver.longitude,
+          lastLocationUpdate: driver.lastLocationUpdate?.toISOString() ?? null,
+        } : null,
+        vehicle,
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
 router.post('/booking/:reference/rate', async (req: Request, res: Response) => {
   try {
     const { email, rating, feedback } = req.body as { email?: string; rating?: number; feedback?: string };

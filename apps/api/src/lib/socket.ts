@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import { verifyToken } from '../middleware/auth';
+import { prisma } from './db';
 
 let _io: Server | null = null;
 
@@ -32,9 +33,24 @@ export function initIO(server: import('http').Server): Server {
       if (user.role !== 'driver') return;
       const securedPayload = { ...payload, driverId: user.id };
       _io?.to('ops').emit('driver:location', securedPayload);
+      _io?.to('admin').emit('driver:location', securedPayload);
       if (payload.jobId) {
         _io?.to(`job:${payload.jobId}`).emit('driver:location', securedPayload);
       }
+    });
+
+    socket.on('job:subscribe', async (jobId: string) => {
+      if (typeof jobId !== 'string' || !jobId) return;
+      if (user.role === 'customer') {
+        const job = await prisma.job.findFirst({ where: { id: jobId, customerId: user.id } });
+        if (!job) return;
+      } else if (user.role === 'driver') {
+        const job = await prisma.job.findFirst({ where: { id: jobId, assignedDriverId: user.id } });
+        if (!job) return;
+      } else if (user.role !== 'ops' && user.role !== 'admin') {
+        return;
+      }
+      socket.join(`job:${jobId}`);
     });
 
     socket.on('disconnect', () => {

@@ -7,7 +7,7 @@ import {
   LayoutDashboard, FileText, Navigation2, Car, Tag, HelpCircle,
   CalendarCheck, FileBarChart, Headphones, Settings, LogOut,
   ChevronRight, DollarSign, RotateCcw, Phone, Truck,
-  Briefcase, BookOpen, Layers, Globe,
+  Briefcase, BookOpen, Layers, Globe, Map,
   Building2, Users, Banknote,
 } from 'lucide-react';
 
@@ -34,6 +34,7 @@ const navGroups = [
   {
     label: 'Operations',
     items: [
+      { href: '/admin/map',      label: 'Live Map',        icon: Map },
       { href: '/admin/bookings', label: 'Bookings',        icon: CalendarCheck },
       { href: '/admin/customers', label: 'Customers',      icon: Users },
       { href: '/admin/drivers', label: 'Drivers',          icon: Car },

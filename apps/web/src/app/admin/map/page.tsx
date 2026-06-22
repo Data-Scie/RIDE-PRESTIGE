@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Car, MapPin, RefreshCw, Route, Users } from 'lucide-react';
-import { opsApi } from '@/lib/api-client';
+import { adminApi } from '@/lib/api-client';
 import { getPortalSocket } from '@/lib/realtime';
 import { loadGoogleMaps } from '@/lib/googleMaps';
 
@@ -34,7 +34,7 @@ const ACTIVE_STATUSES = new Set([
   'driver_accepted', 'on_route', 'arrived_pickup', 'passenger_onboard', 'in_progress',
 ]);
 
-export default function OpsMapPage() {
+export default function AdminMapPage() {
   const mapRef = useRef<HTMLDivElement>(null);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [rides, setRides] = useState<Ride[]>([]);
@@ -47,8 +47,8 @@ export default function OpsMapPage() {
     setError('');
     try {
       const [driverResult, rideResult] = await Promise.all([
-        opsApi.get<{ data: Driver[] }>('/api/ops/drivers'),
-        opsApi.get<{ data: Ride[] }>('/api/ops/rides'),
+        adminApi.get<{ data: Driver[] }>('/api/admin/drivers'),
+        adminApi.get<{ data: Ride[] }>('/api/admin/rides'),
       ]);
       setDrivers(driverResult.data);
       setRides(rideResult.data);
@@ -66,7 +66,7 @@ export default function OpsMapPage() {
   }, []);
 
   useEffect(() => {
-    const socket = getPortalSocket('ops');
+    const socket = getPortalSocket('admin');
     if (!socket) return;
     const onLocation = (payload: { driverId: string; lat: number; lng: number }) => {
       setDrivers(prev => prev.map(driver => driver.id === payload.driverId
@@ -122,10 +122,10 @@ export default function OpsMapPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Live Operations Map</h1>
-          <p className="text-sm text-slate-500">Live driver positions and active rides from the operations API</p>
+          <h1 className="text-2xl font-bold" style={{ fontFamily: 'Playfair Display,Georgia,serif', color: '#0a0f1e' }}>Live Operations Map</h1>
+          <p className="text-sm text-slate-500">Live driver positions and active rides across the platform</p>
         </div>
-        <button onClick={load} disabled={loading} className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+        <button onClick={load} disabled={loading} className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: '#0a0f1e' }}>
           <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
       </div>
@@ -141,7 +141,8 @@ export default function OpsMapPage() {
       <div className="flex gap-2">
         {(['all', 'independent', 'affiliate'] as const).map(option => (
           <button key={option} onClick={() => setFilter(option)}
-            className={`rounded-xl px-4 py-2 text-xs font-semibold capitalize ${filter === option ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>
+            className={`rounded-xl px-4 py-2 text-xs font-semibold capitalize ${filter === option ? 'text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
+            style={filter === option ? { background: '#0a0f1e' } : undefined}>
             {option === 'all' ? 'All drivers' : option}
           </button>
         ))}

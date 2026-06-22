@@ -12,6 +12,7 @@ import {
 } from '../lib/vehicleDocuments';
 import { ensureDriverDocuments } from '../lib/driverDocuments';
 import { pushNotification } from '../services/notificationService';
+import { emitToRoom } from '../lib/socket';
 import {
   claimIndependentRide,
   createIndependentRideOffers,
@@ -1093,7 +1094,9 @@ router.put('/notifications/read-all', async (req: Request, res: Response) => {
 router.put('/location', async (req: Request, res: Response) => {
   try {
     const drvId = getDrvId(req);
-    const { latitude, longitude } = req.body as { latitude: number; longitude: number };
+    const { latitude, longitude, speed, heading, accuracy, jobId } = req.body as {
+      latitude: number; longitude: number; speed?: number; heading?: number; accuracy?: number; jobId?: string;
+    };
     if (latitude === undefined || longitude === undefined) {
       res.status(400).json({ success: false, message: 'latitude and longitude are required' }); return;
     }
@@ -1102,6 +1105,13 @@ router.put('/location', async (req: Request, res: Response) => {
       where: { id: drvId },
       data: { latitude, longitude, lastLocationUpdate: now },
     });
+    await prisma.driverLocationHistory.create({
+      data: { driverId: drvId, jobId: jobId ?? null, latitude, longitude, speed, heading, accuracy, recordedAt: now },
+    });
+    const payload = { driverId: drvId, jobId: jobId ?? null, lat: latitude, lng: longitude, speed, heading, updatedAt: now.toISOString() };
+    emitToRoom('ops', 'driver:location', payload);
+    emitToRoom('admin', 'driver:location', payload);
+    if (jobId) emitToRoom(`job:${jobId}`, 'driver:location', payload);
     res.json({ success: true, data: { latitude, longitude, updatedAt: now.toISOString() } });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });

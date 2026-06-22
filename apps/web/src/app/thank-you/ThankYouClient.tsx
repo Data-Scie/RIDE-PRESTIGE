@@ -2,7 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { CheckCircle, Clock, Phone, ArrowRight, MessageSquare } from 'lucide-react';
+import { CheckCircle, Clock, Phone, ArrowRight, MessageSquare, Navigation } from 'lucide-react';
 import { siteSettings } from '@/lib/data';
 
 export default function ThankYouClient() {
@@ -55,8 +55,11 @@ export default function ThankYouClient() {
             <a href={`tel:${siteSettings.phoneNumber}`} className="font-semibold" style={{color:'#c9a84c'}}>{siteSettings.phoneNumber}</a>
           </div>
 
+          {ref && status === 'accepted' && (
+            <Link href={`/track/${ref}`} className="btn-gold w-full flex items-center justify-center gap-2 py-3 mb-3"><Navigation size={15} /> Track your ride</Link>
+          )}
           <div className="flex flex-col sm:flex-row gap-3">
-            <Link href="/" className="btn-gold flex-1 flex items-center justify-center gap-2 py-3">Back to home</Link>
+            <Link href="/" className={`flex-1 flex items-center justify-center gap-2 py-3 ${ref && status === 'accepted' ? 'btn-outline-gold' : 'btn-gold'}`}>Back to home</Link>
             <Link href="/book" className="btn-outline-gold flex-1 flex items-center justify-center gap-2 py-3">Book another <ArrowRight size={15} /></Link>
           </div>
         </div>

@@ -600,6 +600,49 @@ router.put('/categories/:id', async (req: Request, res: Response) => {
 
 /**
  * @swagger
+ * /api/admin/rides:
+ *   get:
+ *     summary: List rides for the live operations map
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Rides list }
+ */
+router.get('/rides', async (req: Request, res: Response) => {
+  try {
+    const { status } = req.query as Record<string, string>;
+    const where: Record<string, unknown> = status ? { status } : {};
+    const jobs = await prisma.job.findMany({ where, orderBy: { dateTime: 'desc' }, take: 200 });
+    const driverIds = [...new Set(jobs.map(job => job.assignedDriverId).filter((id): id is string => Boolean(id)))];
+    const drivers = await prisma.driver.findMany({ where: { id: { in: driverIds } }, select: { id: true, fullName: true, driverType: true } });
+    const driverById = new Map(drivers.map(driver => [driver.id, driver]));
+    const list = jobs.map(job => {
+      const driver = job.assignedDriverId ? driverById.get(job.assignedDriverId) : null;
+      return {
+        id: job.id,
+        bookingRef: job.bookingRef,
+        customerName: job.customerName,
+        pickupAddress: job.pickupAddress,
+        dropoffAddress: job.dropoffAddress,
+        status: job.status,
+        assignedDriverId: job.assignedDriverId,
+        driverName: driver?.fullName ?? null,
+        driverType: driver?.driverType ?? null,
+      };
+    });
+    res.json({ success: true, data: list, total: list.length });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
  * /api/admin/drivers:
  *   get:
  *     summary: List all drivers

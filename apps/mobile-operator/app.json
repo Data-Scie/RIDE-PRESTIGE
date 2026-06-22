@@ -37,6 +37,12 @@
           "backgroundColor": "#030303",
           "resizeMode": "contain"
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Ride Prestige uses your location while you're on an active ride so customers and dispatch can see your live position."
+        }
       ]
     ],
     "experiments": {
