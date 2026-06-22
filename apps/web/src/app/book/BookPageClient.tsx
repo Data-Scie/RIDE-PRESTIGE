@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { ArrowRight, Bus, Car, MapPin, Star, Van } from 'lucide-react';
 import type { BookingFormData, VehicleCategory, BookingType } from '@/types';
 import { generateQuote } from '@/lib/fare';
@@ -24,6 +25,7 @@ interface BookPageClientProps {
 export default function BookPageClient({ intro }: BookPageClientProps) {
   const router = useRouter();
   const params = useSearchParams();
+  const { status: sessionStatus } = useSession();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [minDate, setMinDate] = useState('');
@@ -44,7 +46,7 @@ export default function BookPageClient({ intro }: BookPageClientProps) {
   });
 
   useEffect(() => {
-    if (!getPortalToken('customer')) return;
+    if (sessionStatus !== 'authenticated' || !getPortalToken('customer')) return;
     customerApi.get<{ success: boolean; data: { fullName: string; email: string; phone: string | null } }>('/api/customer/profile')
       .then(result => {
         setForm(prev => ({
@@ -55,7 +57,7 @@ export default function BookPageClient({ intro }: BookPageClientProps) {
         }));
       })
       .catch(() => {});
-  }, []);
+  }, [sessionStatus]);
 
   const set = (k: keyof BookingFormData, v: unknown) => {
     setForm(p => ({ ...p, [k]: v }));

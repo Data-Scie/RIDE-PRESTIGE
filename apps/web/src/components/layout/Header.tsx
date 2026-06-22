@@ -62,7 +62,7 @@ export default function Header({ navigation, settings }: { navigation: Navigatio
                 <button onClick={() => { deleteCookie('rp_customer_jwt'); signOut({ callbackUrl: '/' }); }} className="text-sm" style={{ color: '#9ca3af' }}>Sign out</button>
               </>
             ) : (
-              <Link href="/login" className="text-sm font-medium" style={{ color: '#6b7280' }}>Sign in</Link>
+              <Link href="/login?redirect=/account/dashboard" className="text-sm font-medium" style={{ color: '#6b7280' }}>Sign in</Link>
             )}
             <Link
               href="/book"

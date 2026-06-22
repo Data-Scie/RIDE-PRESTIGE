@@ -1,66 +1,47 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
-import { Phone, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
+import { signIn, useSession } from 'next-auth/react';
+import { ArrowLeft, CheckCircle } from 'lucide-react';
 import BrandLogo from '@/components/common/BrandLogo';
+import { getPortalToken } from '@/lib/api-client';
 
-const GOLD = '#c9a84c';
 const BLACK = '#0a0f1e';
 const CHARCOAL = '#1a1f2e';
-
-type Step = 'options' | 'phone' | 'otp';
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const redirect = params.get('redirect') || '/book';
+  const { status: sessionStatus } = useSession();
+  const [bridging, setBridging] = useState(false);
 
-  const [step, setStep] = useState<Step>('options');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [phoneError, setPhoneError] = useState('');
-  const [otpError, setOtpError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [verified, setVerified] = useState(false);
+  // After a real OAuth round-trip, NextAuth lands back on this exact page (not the final
+  // protected destination) so CustomerSessionBridge - mounted globally - has a chance to set
+  // the rp_customer_jwt cookie client-side before we navigate into a middleware-gated route
+  // like /account. Navigating straight there from the OAuth callback would otherwise race the
+  // cookie write and bounce back to login.
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated') return;
+    setBridging(true);
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts += 1;
+      if (getPortalToken('customer') || attempts > 20) {
+        clearInterval(interval);
+        router.push(redirect);
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, [sessionStatus, redirect, router]);
 
   const handleContinueAsGuest = () => {
-    router.push(redirect);
+    router.push(redirect.startsWith('/account') ? '/book' : redirect);
   };
 
   const handleGoogleLogin = () => {
-    signIn('google', { callbackUrl: redirect });
-  };
-
-  const handleSendCode = () => {
-    const cleaned = phone.replace(/\s/g, '');
-    if (cleaned.length < 10) {
-      setPhoneError('Please enter a valid phone number');
-      return;
-    }
-    setPhoneError('');
-    setLoading(true);
-    // Mock: simulate sending OTP
-    setTimeout(() => {
-      setLoading(false);
-      setStep('otp');
-    }, 1200);
-  };
-
-  const handleVerifyOtp = () => {
-    if (otp.length < 4) {
-      setOtpError('Enter the code we sent you');
-      return;
-    }
-    setOtpError('');
-    setLoading(true);
-    // Mock: accept any code
-    setTimeout(() => {
-      setLoading(false);
-      setVerified(true);
-      setTimeout(() => router.push(redirect), 800);
-    }, 1000);
+    signIn('google', { callbackUrl: `/login?redirect=${encodeURIComponent(redirect)}` });
   };
 
   return (
@@ -106,14 +87,10 @@ function LoginForm() {
               lineHeight: 1.2,
             }}
           >
-            {step === 'otp' ? 'Enter your code' : step === 'phone' ? 'Your phone number' : 'Sign in to continue'}
+            Sign in to continue
           </h1>
           <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.825rem', marginTop: '6px' }}>
-            {step === 'otp'
-              ? `We sent a code to ${phone}`
-              : step === 'phone'
-              ? 'Enter your mobile number to receive a code'
-              : 'Fast, secure access to your booking'}
+            Fast, secure access to your booking
           </p>
         </div>
 
@@ -129,8 +106,7 @@ function LoginForm() {
           <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-3xl"
             style={{ background: 'linear-gradient(90deg,#c9a84c,#e8c96d,#a07c30)' }} />
 
-          {/* SUCCESS STATE */}
-          {verified && (
+          {bridging ? (
             <div className="flex flex-col items-center py-6 gap-4">
               <div className="w-16 h-16 rounded-full flex items-center justify-center"
                 style={{ background: 'rgba(34,197,94,0.15)' }}>
@@ -138,10 +114,7 @@ function LoginForm() {
               </div>
               <p className="text-white font-semibold">Verified! Redirecting&hellip;</p>
             </div>
-          )}
-
-          {/* OPTIONS STEP */}
-          {!verified && step === 'options' && (
+          ) : (
             <div className="space-y-3">
               {/* Google */}
               <button
@@ -171,22 +144,6 @@ function LoginForm() {
                 <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
               </div>
 
-              {/* Phone */}
-              <button
-                onClick={() => setStep('phone')}
-                className="w-full flex items-center gap-3 py-3.5 px-4 rounded-2xl font-medium text-sm transition-all"
-                style={{
-                  background: 'rgba(255,255,255,0.07)',
-                  color: 'white',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.1)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.07)'; }}
-              >
-                <Phone size={16} style={{ color: 'rgba(255,255,255,0.5)' }} />
-                Continue with Phone Number
-              </button>
-
               {/* Guest */}
               <button
                 onClick={handleContinueAsGuest}
@@ -195,128 +152,6 @@ function LoginForm() {
               >
                 Continue as guest &rarr;
               </button>
-            </div>
-          )}
-
-          {/* PHONE STEP */}
-          {!verified && step === 'phone' && (
-            <div className="space-y-4">
-              <button
-                onClick={() => setStep('options')}
-                className="flex items-center gap-1.5 text-xs transition-opacity hover:opacity-60 mb-2"
-                style={{ color: 'rgba(255,255,255,0.35)' }}
-              >
-                <ArrowLeft size={12} /> Back
-              </button>
-
-              <div>
-                <label className="block mb-2" style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.7rem', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                  Mobile number
-                </label>
-                <input
-                  type="tel"
-                  placeholder="+44 7700 900 100"
-                  value={phone}
-                  onChange={e => { setPhone(e.target.value); setPhoneError(''); }}
-                  autoFocus
-                  className="w-full px-4 py-3.5 rounded-xl text-sm outline-none transition-all"
-                  style={{
-                    background: 'rgba(255,255,255,0.06)',
-                    border: `1px solid ${phoneError ? '#f87171' : 'rgba(255,255,255,0.1)'}`,
-                    color: 'white',
-                    fontFamily: 'inherit',
-                  }}
-                  onFocus={e => { if (!phoneError) e.target.style.borderColor = GOLD; }}
-                  onBlur={e => { if (!phoneError) e.target.style.borderColor = 'rgba(255,255,255,0.1)'; }}
-                />
-                {phoneError && <p className="text-red-400 text-xs mt-1.5">{phoneError}</p>}
-              </div>
-
-              <button
-                onClick={handleSendCode}
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all"
-                style={{
-                  background: 'linear-gradient(135deg,#c9a84c,#e8c96d,#a07c30)',
-                  color: BLACK,
-                  opacity: loading ? 0.7 : 1,
-                }}
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-black/20 border-t-black/60 rounded-full animate-spin" />
-                    Sending code…
-                  </span>
-                ) : (
-                  <>Send Code <ArrowRight size={15} /></>
-                )}
-              </button>
-            </div>
-          )}
-
-          {/* OTP STEP */}
-          {!verified && step === 'otp' && (
-            <div className="space-y-4">
-              <button
-                onClick={() => setStep('phone')}
-                className="flex items-center gap-1.5 text-xs transition-opacity hover:opacity-60 mb-2"
-                style={{ color: 'rgba(255,255,255,0.35)' }}
-              >
-                <ArrowLeft size={12} /> Change number
-              </button>
-
-              <div>
-                <label className="block mb-2" style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.7rem', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                  Verification code
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="000000"
-                  value={otp}
-                  onChange={e => { setOtp(e.target.value.replace(/\D/g, '')); setOtpError(''); }}
-                  autoFocus
-                  className="w-full px-4 py-3.5 rounded-xl text-sm outline-none transition-all tracking-widest text-center"
-                  style={{
-                    background: 'rgba(255,255,255,0.06)',
-                    border: `1px solid ${otpError ? '#f87171' : 'rgba(255,255,255,0.1)'}`,
-                    color: 'white',
-                    fontFamily: 'inherit',
-                    fontSize: '1.2rem',
-                  }}
-                  onFocus={e => { if (!otpError) e.target.style.borderColor = GOLD; }}
-                  onBlur={e => { if (!otpError) e.target.style.borderColor = 'rgba(255,255,255,0.1)'; }}
-                />
-                {otpError && <p className="text-red-400 text-xs mt-1.5">{otpError}</p>}
-              </div>
-
-              <button
-                onClick={handleVerifyOtp}
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all"
-                style={{
-                  background: 'linear-gradient(135deg,#c9a84c,#e8c96d,#a07c30)',
-                  color: BLACK,
-                  opacity: loading ? 0.7 : 1,
-                }}
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-black/20 border-t-black/60 rounded-full animate-spin" />
-                    Verifying…
-                  </span>
-                ) : (
-                  <>Verify &amp; Continue <ArrowRight size={15} /></>
-                )}
-              </button>
-
-              <p className="text-center text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                Didn&apos;t receive it?{' '}
-                <button onClick={() => setStep('phone')} className="underline" style={{ color: GOLD }}>
-                  Resend
-                </button>
-              </p>
             </div>
           )}
         </div>
