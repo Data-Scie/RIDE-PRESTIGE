@@ -3,11 +3,16 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'rea
 import * as Location from 'expo-location';
 import { BLACK, ROSE_GOLD, TEXT, MUTED, CARD, FONT_MEDIUM, FONT_REGULAR } from '@/constants/theme';
 
-type GateState = 'checking' | 'granted' | 'denied';
+type GateState = 'checking' | 'granted' | 'denied' | 'skipped';
 
 // This app serves drivers and affiliates, who must share location to be matched and tracked -
 // not optional like it might be for a generic app. Blocks all screens (including login) until
 // granted, matching the same mandatory policy enforced on the web driver/affiliate portals.
+//
+// Location isn't actually wired into matching/tracking yet (no Google Maps key configured),
+// so enforcement is off for now - flip this to true once that's live to make it mandatory again.
+const MANDATORY = false;
+
 export default function LocationPermissionGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<GateState>('checking');
 
@@ -31,7 +36,7 @@ export default function LocationPermissionGate({ children }: { children: React.R
     );
   }
 
-  if (state === 'granted') return <>{children}</>;
+  if (state === 'granted' || state === 'skipped') return <>{children}</>;
 
   return (
     <View style={styles.screen}>
@@ -45,6 +50,11 @@ export default function LocationPermissionGate({ children }: { children: React.R
         <TouchableOpacity style={styles.button} onPress={requestAccess} activeOpacity={0.85}>
           <Text style={styles.buttonText}>Enable Location</Text>
         </TouchableOpacity>
+        {!MANDATORY && (
+          <TouchableOpacity onPress={() => setState('skipped')} style={styles.skipButton} activeOpacity={0.7}>
+            <Text style={styles.skipText}>Skip for now</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -59,4 +69,6 @@ const styles = StyleSheet.create({
   text: { fontSize: 14, color: MUTED, textAlign: 'center', lineHeight: 21, marginBottom: 24, fontFamily: FONT_REGULAR ?? undefined },
   button: { backgroundColor: ROSE_GOLD, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 32, width: '100%', alignItems: 'center' },
   buttonText: { color: BLACK, fontWeight: '700', fontSize: 15, fontFamily: FONT_MEDIUM ?? undefined },
+  skipButton: { marginTop: 14, paddingVertical: 8, alignItems: 'center' },
+  skipText: { color: MUTED, fontSize: 13, fontFamily: FONT_REGULAR ?? undefined },
 });

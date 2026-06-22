@@ -3,10 +3,14 @@
 import { useEffect, useState } from 'react';
 import { MapPin } from 'lucide-react';
 
-type PermissionState = 'checking' | 'granted' | 'prompt' | 'denied' | 'unsupported';
+type PermissionState = 'checking' | 'granted' | 'prompt' | 'denied' | 'unsupported' | 'skipped';
 
 const GOLD = '#c9a84c';
 const BLACK = '#0a0f1e';
+
+// Location isn't actually wired into matching/tracking yet (no Google Maps key configured),
+// so enforcement is off for now - flip this to true once that's live to make it mandatory again.
+const MANDATORY = false;
 
 export default function LocationPermissionGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<PermissionState>('checking');
@@ -40,7 +44,7 @@ export default function LocationPermissionGate({ children }: { children: React.R
   };
 
   if (state === 'checking') return null;
-  if (state === 'granted' || state === 'unsupported') return <>{children}</>;
+  if (state === 'granted' || state === 'unsupported' || state === 'skipped') return <>{children}</>;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4" style={{ background: BLACK }}>
@@ -61,6 +65,11 @@ export default function LocationPermissionGate({ children }: { children: React.R
         >
           {state === 'denied' ? 'Try Again' : 'Enable Location'}
         </button>
+        {!MANDATORY && (
+          <button onClick={() => setState('skipped')} className="w-full mt-3 text-sm" style={{ color: 'rgba(255,255,255,0.35)' }}>
+            Skip for now
+          </button>
+        )}
       </div>
     </div>
   );
