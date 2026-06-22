@@ -47,9 +47,16 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // Customer account portal (JWT cookie, bridged from NextAuth Google sign-in or password login)
+  if (pathname.startsWith('/account')) {
+    if (!hasJwt(request, 'rp_customer_jwt')) {
+      return NextResponse.redirect(new URL(`/login?redirect=${encodeURIComponent(pathname)}`, request.url));
+    }
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/ops/:path*', '/affiliate/:path*', '/driver/:path*'],
+  matcher: ['/admin/:path*', '/ops/:path*', '/affiliate/:path*', '/driver/:path*', '/account/:path*'],
 };

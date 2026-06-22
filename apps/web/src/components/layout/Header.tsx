@@ -56,8 +56,8 @@ export default function Header({ navigation, settings }: { navigation: Navigatio
           <div className="hidden md:flex items-center gap-3">
             {session ? (
               <>
-                <Link href="/my-bookings" className="flex items-center gap-1.5 text-sm font-medium" style={{ color: '#6b7280' }}>
-                  <User size={15} /> My Bookings
+                <Link href="/account/dashboard" className="flex items-center gap-1.5 text-sm font-medium" style={{ color: '#6b7280' }}>
+                  <User size={15} /> My Account
                 </Link>
                 <button onClick={() => { deleteCookie('rp_customer_jwt'); signOut({ callbackUrl: '/' }); }} className="text-sm" style={{ color: '#9ca3af' }}>Sign out</button>
               </>
