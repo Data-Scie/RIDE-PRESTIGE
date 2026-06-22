@@ -106,13 +106,18 @@ router.get('/payments', async (req: Request, res: Response) => {
       ...(customerId ? { customerId } : {}),
       ...(dateFrom || dateTo ? { createdAt: dateFilter(dateFrom, dateTo) } : {}),
     };
-    const rows = await prisma.payment.findMany({ where, orderBy: { createdAt: 'desc' } });
-    if (format && respondExport(req, res, 'Booking Payments', rows.map(r => ({
-      reference: r.bookingRef, customer: r.customerName, amount: r.amount, method: r.method, status: r.status, paidAt: r.paidAt?.toISOString() ?? '',
-    })))) return;
+    if (format) {
+      const rows = await prisma.payment.findMany({ where, orderBy: { createdAt: 'desc' } });
+      if (respondExport(req, res, 'Booking Payments', rows.map(r => ({
+        reference: r.bookingRef, customer: r.customerName, amount: r.amount, method: r.method, status: r.status, paidAt: r.paidAt?.toISOString() ?? '',
+      })))) return;
+    }
     const p = parseInt(page); const l = parseInt(limit);
-    const total = rows.length;
-    res.json({ success: true, data: rows.slice((p - 1) * l, p * l), total, page: p, pages: Math.ceil(total / l) });
+    const [rows, total] = await Promise.all([
+      prisma.payment.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (p - 1) * l, take: l }),
+      prisma.payment.count({ where }),
+    ]);
+    res.json({ success: true, data: rows, total, page: p, pages: Math.ceil(total / l) });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }
@@ -129,6 +134,8 @@ router.get('/earnings', async (req: Request, res: Response) => {
         ...(dateFrom || dateTo ? { completedAt: dateFilter(dateFrom, dateTo) } : {}),
       },
       orderBy: { completedAt: 'desc' },
+      // Capped when no date range is given, to bound worst case as completed-ride volume grows.
+      take: dateFrom || dateTo ? undefined : 2000,
     });
 
     const jobIds = jobs.map(job => job.id);

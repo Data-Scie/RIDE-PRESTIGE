@@ -263,6 +263,7 @@ router.get('/jobs/history', async (req: Request, res: Response) => {
     const jobs = await prisma.job.findMany({
       where: { assignedDriverId: drvId, status: { in: ['completed', 'cancelled'] } },
       orderBy: { updatedAt: 'desc' },
+      take: 500,
     });
     const list = jobs.map(shapeJob);
     res.json({ success: true, data: list, total: list.length });

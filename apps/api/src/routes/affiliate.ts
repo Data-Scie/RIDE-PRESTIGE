@@ -261,6 +261,7 @@ router.get('/jobs/history', async (req: Request, res: Response) => {
         status: { in: ['completed', 'cancelled', 'rejected'] },
       },
       orderBy: { dateTime: 'desc' },
+      take: 500,
     });
     const list = jobs.map(shapeJob);
     res.json({ success: true, data: list, total: list.length });

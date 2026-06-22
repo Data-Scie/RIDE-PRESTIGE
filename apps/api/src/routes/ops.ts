@@ -235,7 +235,7 @@ router.get('/rides', async (req: Request, res: Response) => {
     const where: Record<string, unknown> = {};
     if (status) where.status = status;
     if (affiliateId) where.affiliateId = affiliateId;
-    const jobs = await prisma.job.findMany({ where, orderBy: { dateTime: 'desc' } });
+    const jobs = await prisma.job.findMany({ where, orderBy: { dateTime: 'desc' }, take: 500 });
     const affiliateIds = [...new Set(jobs.map(job => job.affiliateId).filter((id): id is string => Boolean(id)))];
     const driverIds = [...new Set(jobs.map(job => job.assignedDriverId).filter((id): id is string => Boolean(id)))];
     const vehicleIds = [...new Set(jobs.map(job => job.assignedVehicleId).filter((id): id is string => Boolean(id)))];
@@ -1192,7 +1192,10 @@ router.get('/customers', async (_req: Request, res: Response) => {
   try {
     const [customers, jobs] = await Promise.all([
       prisma.customer.findMany(),
-      prisma.job.findMany({ orderBy: { createdAt: 'desc' } }),
+      // Capped, not a true full-history scan - bounds worst case as job volume grows. Aggregates
+      // (totalJobs/totalSpend/rating) for very long-tenured customers may undercount once total
+      // job volume exceeds this window; a real fix would aggregate this in SQL instead.
+      prisma.job.findMany({ orderBy: { createdAt: 'desc' }, take: 5000 }),
     ]);
     const customerByEmail = new Map(customers.map(customer => [customer.email.toLowerCase(), customer]));
     const jobGroups = new Map<string, typeof jobs>();
@@ -1262,11 +1265,18 @@ router.get('/customers', async (_req: Request, res: Response) => {
  */
 router.get('/earnings', async (_req: Request, res: Response) => {
   try {
-    const earnings = await prisma.earningEntry.findMany({ orderBy: { date: 'desc' } });
+    // Summary totals are computed in SQL so they stay correct regardless of table size; only the
+    // detailed list handed to the frontend is capped to a recent window.
+    const [earnings, paidAgg, pendingAgg, count] = await Promise.all([
+      prisma.earningEntry.findMany({ orderBy: { date: 'desc' }, take: 1000 }),
+      prisma.earningEntry.aggregate({ where: { status: 'paid' }, _sum: { netAmount: true } }),
+      prisma.earningEntry.aggregate({ where: { status: 'pending' }, _sum: { netAmount: true } }),
+      prisma.earningEntry.count(),
+    ]);
     const shaped = earnings.map(e => ({ ...e, date: e.date.toISOString(), createdAt: e.createdAt.toISOString() }));
-    const totalPaid    = shaped.filter(e => e.status === 'paid').reduce((s, e) => s + e.netAmount, 0);
-    const totalPending = shaped.filter(e => e.status === 'pending').reduce((s, e) => s + e.netAmount, 0);
-    res.json({ success: true, data: shaped, summary: { totalPaid, totalPending, count: shaped.length } });
+    const totalPaid    = paidAgg._sum.netAmount ?? 0;
+    const totalPending = pendingAgg._sum.netAmount ?? 0;
+    res.json({ success: true, data: shaped, summary: { totalPaid, totalPending, count } });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }

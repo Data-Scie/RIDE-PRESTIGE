@@ -217,6 +217,7 @@ router.get('/bookings', async (req: Request, res: Response) => {
     const rows = await prisma.booking.findMany({
       where: { customerId: getCustId(req) },
       orderBy: { createdAt: 'desc' },
+      take: 200,
     });
     const list = rows.map(shapeBooking);
     res.json({ success: true, data: list, total: list.length });

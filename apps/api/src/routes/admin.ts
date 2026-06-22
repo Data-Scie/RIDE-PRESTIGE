@@ -213,7 +213,13 @@ router.get('/bookings', async (req: Request, res: Response) => {
   try {
     const { status, page = '1', limit = '20' } = req.query as Record<string, string>;
     const p = parseInt(page); const l = parseInt(limit);
-    const rows = await prisma.booking.findMany({ orderBy: { createdAt: 'desc' } });
+    // The requested status can refer to a derived value (job progress overriding the booking's
+    // own status - see bookingStatusFromJob below), which can't be expressed as a plain SQL
+    // filter without joining Job. The common case (no status filter - most dashboard loads) gets
+    // real DB-level pagination; a status-filtered search falls back to filtering in memory.
+    const rows = status
+      ? await prisma.booking.findMany({ orderBy: { createdAt: 'desc' } })
+      : await prisma.booking.findMany({ orderBy: { createdAt: 'desc' }, skip: (p - 1) * l, take: l });
     const jobIds = rows.map(row => row.jobId).filter((id): id is string => Boolean(id));
     const jobs = jobIds.length
       ? await prisma.job.findMany({
@@ -259,7 +265,12 @@ router.get('/bookings', async (req: Request, res: Response) => {
         vehicleLabel: assignedVehicle ? `${assignedVehicle.registration} - ${assignedVehicle.make} ${assignedVehicle.model}` : null,
       };
     });
-    const filtered = status ? shaped.filter(row => row.status === status || row.operationalStatus === status) : shaped;
+    if (!status) {
+      const total = await prisma.booking.count();
+      res.json({ success: true, data: shaped, total, page: p, limit: l, pages: Math.ceil(total / l) });
+      return;
+    }
+    const filtered = shaped.filter(row => row.status === status || row.operationalStatus === status);
     const total = filtered.length;
     const data = filtered.slice((p - 1) * l, p * l);
     res.json({ success: true, data, total, page: p, limit: l, pages: Math.ceil(total / l) });
@@ -1218,7 +1229,10 @@ router.get('/customers', async (_req: Request, res: Response) => {
   try {
     const [customers, jobs] = await Promise.all([
       prisma.customer.findMany(),
-      prisma.job.findMany({ orderBy: { createdAt: 'desc' } }),
+      // Capped, not a true full-history scan - bounds worst case as job volume grows. Aggregates
+      // (totalJobs/totalSpend/rating) for very long-tenured customers may undercount once total
+      // job volume exceeds this window; a real fix would aggregate this in SQL instead.
+      prisma.job.findMany({ orderBy: { createdAt: 'desc' }, take: 5000 }),
     ]);
     const affiliateIds = [...new Set(jobs.map(job => job.affiliateId).filter((id): id is string => Boolean(id)))];
     const driverIds = [...new Set(jobs.map(job => job.assignedDriverId).filter((id): id is string => Boolean(id)))];
