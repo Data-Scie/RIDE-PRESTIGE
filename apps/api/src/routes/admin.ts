@@ -2,6 +2,8 @@ import { Router, Request, Response, RequestHandler } from 'express';
 import { v4 as uuid } from 'uuid';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
+import path from 'path';
+import { promises as fs } from 'fs';
 import { authenticate, requireRole } from '../middleware/auth';
 import { prisma } from '../lib/db';
 import { shapeRideFlowEvent } from '../lib/rideFlow';
@@ -27,6 +29,10 @@ const uploadSingleImage = upload.single('image') as unknown as RequestHandler;
 
 const router = Router();
 router.use(authenticate, requireRole('admin', 'ops'));
+
+function safeUploadName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'vehicle';
+}
 
 const AFFILIATE_DOCUMENTS = [
   { type: 'operator_licence', label: 'Operator Licence' },
@@ -386,29 +392,35 @@ router.delete('/bookings/:id', async (req: Request, res: Response) => {
  * @swagger
  * /api/admin/uploads/vehicle-image:
  *   post:
- *     summary: Upload a vehicle image to Cloudinary
+ *     summary: Upload a vehicle image
  *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200: { description: Uploaded image URL }
- *       503: { description: Cloudinary not configured }
  */
 router.post('/uploads/vehicle-image', uploadSingleImage, async (req: Request, res: Response) => {
   try {
-    if (!isCloudinaryConfigured()) {
-      res.status(503).json({ success: false, message: 'Image upload is not configured. Paste an image URL instead, or ask an admin to set CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET.' });
-      return;
-    }
     const file = (req as Request & { file?: UploadedFile }).file;
     if (!file) { res.status(400).json({ success: false, message: 'No image file provided' }); return; }
     if (!file.mimetype.startsWith('image/')) { res.status(400).json({ success: false, message: 'File must be an image' }); return; }
-    const url = await uploadImageBuffer(file.buffer, 'ride-prestige/vehicles');
+    const url = isCloudinaryConfigured()
+      ? await uploadImageBuffer(file.buffer, 'ride-prestige/vehicles')
+      : await storeVehicleImageLocally(req, file);
     res.json({ success: true, url });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Image upload failed' });
   }
 });
+
+async function storeVehicleImageLocally(req: Request, file: UploadedFile): Promise<string> {
+  const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+  const filename = `${Date.now()}-${safeUploadName(path.basename(file.originalname, ext))}${ext}`;
+  const uploadRoot = path.resolve(process.cwd(), 'uploads', 'vehicles');
+  await fs.mkdir(uploadRoot, { recursive: true });
+  await fs.writeFile(path.join(uploadRoot, filename), file.buffer);
+  return `${req.protocol}://${req.get('host')}/uploads/vehicles/${encodeURIComponent(filename)}`;
+}
 
 // ─── Website Fleet (CMS) ──────────────────────────────────────────────────────
 
