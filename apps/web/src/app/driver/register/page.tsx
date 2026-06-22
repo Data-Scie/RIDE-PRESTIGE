@@ -1,9 +1,16 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Car, CheckCircle, User, Building2 } from 'lucide-react';
+import { Car, CheckCircle, User, Building2, FileText } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+const DRIVER_DOCUMENTS = [
+  { type: 'driving_licence', label: 'Driving Licence', expiry: true },
+  { type: 'phv_badge', label: 'PHV Badge', expiry: true },
+  { type: 'dbs_check', label: 'DBS Check', expiry: false },
+  { type: 'insurance', label: 'Insurance Certificate', expiry: true },
+] as const;
 
 interface Affiliate { id: string; companyName: string; tradingName: string; city: string; }
 
@@ -23,6 +30,8 @@ export default function DriverRegisterPage() {
   const [error, setError]     = useState('');
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
   const [driverType, setDriverType] = useState<'independentDriver' | 'affiliateDriver'>('independentDriver');
+  const [documents, setDocuments] = useState<Record<string, File | null>>({});
+  const [documentExpiries, setDocumentExpiries] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     fullName: '', email: '', phone: '',
     address: '', city: '', postcode: '', dateOfBirth: '',
@@ -46,7 +55,8 @@ export default function DriverRegisterPage() {
     }
     setLoading(true); setError('');
     try {
-      const body = {
+      const body = new FormData();
+      Object.entries({
         fullName: form.fullName,
         email: form.email,
         phone: form.phone,
@@ -58,12 +68,17 @@ export default function DriverRegisterPage() {
         privateHireBadgeNumber: form.privateHireBadgeNumber,
         password: form.password,
         driverType,
-        ...(driverType === 'affiliateDriver' && form.affiliateId ? { affiliateId: form.affiliateId } : {}),
-      };
+      }).forEach(([key, value]) => body.append(key, value));
+      if (driverType === 'affiliateDriver' && form.affiliateId) body.append('affiliateId', form.affiliateId);
+      DRIVER_DOCUMENTS.forEach(document => {
+        const file = documents[document.type];
+        if (file) body.append(`document_${document.type}`, file);
+        if (documentExpiries[document.type]) body.append(`expiry_${document.type}`, documentExpiries[document.type]);
+      });
+
       const res = await fetch(`${API_URL}/api/auth/register/driver`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body,
       });
       const data = await res.json();
       if (!res.ok) { setError(data.message || 'Registration failed.'); return; }
@@ -232,6 +247,39 @@ export default function DriverRegisterPage() {
               <div>
                 <label style={lbl}>Password *</label>
                 <input required type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="Minimum 8 characters" minLength={8} style={inp} />
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-3 flex items-center gap-2">
+                <FileText size={14} /> Compliance Documents
+              </p>
+              <p className="text-xs mb-3" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                Upload your current documents with the application. Missing files can still be added later from the driver portal.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {DRIVER_DOCUMENTS.map(document => (
+                  <div key={document.type} className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <label style={lbl}>{document.label}</label>
+                    <input
+                      type="file"
+                      accept=".pdf,image/jpeg,image/png,image/webp"
+                      onChange={e => setDocuments(prev => ({ ...prev, [document.type]: e.target.files?.[0] ?? null }))}
+                      className="block w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-zinc-200"
+                    />
+                    {document.expiry && (
+                      <div className="mt-3">
+                        <label style={lbl}>Expiry date</label>
+                        <input
+                          type="date"
+                          value={documentExpiries[document.type] ?? ''}
+                          onChange={e => setDocumentExpiries(prev => ({ ...prev, [document.type]: e.target.value }))}
+                          style={{ ...inp, colorScheme: 'dark' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 

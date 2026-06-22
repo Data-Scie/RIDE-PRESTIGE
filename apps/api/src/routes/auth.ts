@@ -1,11 +1,96 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, RequestHandler } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
+import multer from 'multer';
 import { prisma } from '../lib/db';
 import { signToken, authenticate } from '../middleware/auth';
+import { DRIVER_DOCUMENTS } from '../lib/driverDocuments';
+import { storeDocumentFile, validateDocumentFile, type UploadedFile } from '../lib/documentUpload';
 import type { PortalRole } from '../types';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 8 } });
+const uploadRegistrationDocuments = upload.any() as unknown as RequestHandler;
+
+const AFFILIATE_DOCUMENTS = [
+  { type: 'operator_licence', label: 'Operator Licence' },
+  { type: 'insurance', label: 'Insurance Document' },
+  { type: 'company_cert', label: 'Company Certificate' },
+  { type: 'proof_of_address', label: 'Proof of Address' },
+] as const;
+
+type RegistrationFile = UploadedFile & { fieldname: string };
+
+function registrationFiles(req: Request): RegistrationFile[] {
+  return ((req as Request & { files?: RegistrationFile[] }).files ?? []) as RegistrationFile[];
+}
+
+function firstFile(req: Request, fieldname: string): RegistrationFile | undefined {
+  return registrationFiles(req).find(file => file.fieldname === fieldname);
+}
+
+function stringArrayField(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+    } catch {
+      return value.split(',').map(item => item.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
+async function buildDriverDocumentCreates(req: Request, driverId: string) {
+  return Promise.all(DRIVER_DOCUMENTS.map(async document => {
+    const file = firstFile(req, `document_${document.type}`);
+    const expiryDate = typeof req.body[`expiry_${document.type}`] === 'string'
+      ? req.body[`expiry_${document.type}`]
+      : undefined;
+    if (!file) {
+      return { id: `doc-${uuid()}`, type: document.type, label: document.label, status: 'missing' };
+    }
+
+    const validationError = validateDocumentFile(file);
+    if (validationError) throw new Error(`${document.label}: ${validationError}`);
+
+    return {
+      id: `doc-${uuid()}`,
+      type: document.type,
+      label: document.label,
+      status: 'pending',
+      expiryDate,
+      fileUrl: await storeDocumentFile(req, file, driverId, document.type),
+      uploadedAt: new Date(),
+    };
+  }));
+}
+
+async function buildAffiliateDocumentCreates(req: Request, affiliateId: string) {
+  return Promise.all(AFFILIATE_DOCUMENTS.map(async document => {
+    const file = firstFile(req, `document_${document.type}`);
+    const expiryDate = typeof req.body[`expiry_${document.type}`] === 'string'
+      ? req.body[`expiry_${document.type}`]
+      : undefined;
+    if (!file) {
+      return { id: `adoc-${uuid()}`, type: document.type, label: document.label, status: 'missing' };
+    }
+
+    const validationError = validateDocumentFile(file);
+    if (validationError) throw new Error(`${document.label}: ${validationError}`);
+
+    return {
+      id: `adoc-${uuid()}`,
+      type: document.type,
+      label: document.label,
+      status: 'pending',
+      expiryDate,
+      fileUrl: await storeDocumentFile(req, file, affiliateId, document.type),
+      uploadedAt: new Date(),
+    };
+  }));
+}
 
 /**
  * @swagger
@@ -179,7 +264,7 @@ router.post('/register/customer', async (req: Request, res: Response): Promise<v
  *       201: { description: Driver registered, pending approval }
  *       409: { description: Email already exists }
  */
-router.post('/register/driver', async (req: Request, res: Response): Promise<void> => {
+router.post('/register/driver', uploadRegistrationDocuments, async (req: Request, res: Response): Promise<void> => {
   const b = req.body as {
     fullName: string; email: string; phone: string; password: string;
     address?: string; city?: string; postcode?: string; dateOfBirth?: string;
@@ -214,6 +299,8 @@ router.post('/register/driver', async (req: Request, res: Response): Promise<voi
       }
     }
     const drvId = `drv-${uuid()}`;
+    const documentCreates = await buildDriverDocumentCreates(req, drvId);
+    const hasUploadedDocuments = documentCreates.some(document => document.status === 'pending');
     const newDriver = await prisma.driver.create({
       data: {
         id: drvId,
@@ -229,16 +316,11 @@ router.post('/register/driver', async (req: Request, res: Response): Promise<voi
           : [],
         status: 'offline',
         rating: 0, totalJobs: 0, totalEarnings: 0,
-        documentsStatus: 'missing',
+        documentsStatus: hasUploadedDocuments ? 'pending' : 'missing',
         isApproved: false,
         applicationStatus: 'pending',
         documents: {
-          create: [
-            { id: uuid(), type: 'driving_licence',  label: 'Driving Licence',       status: 'missing' },
-            { id: uuid(), type: 'phv_badge',        label: 'PHV Badge',             status: 'missing' },
-            { id: uuid(), type: 'dbs_check',        label: 'DBS Check',             status: 'missing' },
-            { id: uuid(), type: 'insurance',        label: 'Insurance Certificate', status: 'missing' },
-          ],
+          create: documentCreates,
         },
       },
       include: { documents: true },
@@ -246,7 +328,10 @@ router.post('/register/driver', async (req: Request, res: Response): Promise<voi
     const { passwordHash: _, ...safe } = newDriver;
     res.status(201).json({ success: true, message: 'Driver registered. Pending admin approval.', user: safe });
   } catch (e) {
-    res.status(500).json({ success: false, message: 'Database error' });
+    const message = e instanceof Error && e.message.includes(': Document must')
+      ? e.message
+      : 'Database error';
+    res.status(message === 'Database error' ? 500 : 400).json({ success: false, message });
   }
 });
 
@@ -284,7 +369,7 @@ router.post('/register/driver', async (req: Request, res: Response): Promise<voi
  *       201: { description: Affiliate registered, pending approval }
  *       409: { description: Email already exists }
  */
-router.post('/register/affiliate', async (req: Request, res: Response): Promise<void> => {
+router.post('/register/affiliate', uploadRegistrationDocuments, async (req: Request, res: Response): Promise<void> => {
   const b = req.body as {
     companyName: string; tradingName?: string; contactPerson?: string;
     email: string; phone: string; password: string;
@@ -303,25 +388,34 @@ router.post('/register/affiliate', async (req: Request, res: Response): Promise<
       res.status(409).json({ success: false, message: 'Email already registered' });
       return;
     }
+    const affId = `aff-${uuid()}`;
+    const documentCreates = await buildAffiliateDocumentCreates(req, affId);
     const newAff = await prisma.affiliate.create({
       data: {
-        id: `aff-${uuid()}`,
+        id: affId,
         companyName: b.companyName, tradingName: b.tradingName ?? b.companyName,
         contactPerson: b.contactPerson ?? '', email: b.email, phone: b.phone,
         passwordHash: bcrypt.hashSync(b.password, 10),
         address: b.address ?? '', city: b.city ?? '', postcode: b.postcode ?? '',
         operatorLicenceNumber: b.operatorLicenceNumber, companyRegNumber: b.companyRegNumber,
         vatNumber: b.vatNumber,
-        serviceAreas: b.serviceAreas ?? [],
+        serviceAreas: stringArrayField(b.serviceAreas),
         bankAccountName: b.bankAccountName ?? '', sortCode: b.sortCode ?? '', accountNumber: b.accountNumber ?? '',
         isApproved: false,
         rating: 0, totalJobs: 0, totalEarnings: 0,
+        documents: {
+          create: documentCreates,
+        },
       },
+      include: { documents: true },
     });
     const { passwordHash: _, ...safe } = newAff;
     res.status(201).json({ success: true, message: 'Affiliate registered. Pending admin approval.', affiliate: safe });
   } catch (e) {
-    res.status(500).json({ success: false, message: 'Database error' });
+    const message = e instanceof Error && e.message.includes(': Document must')
+      ? e.message
+      : 'Database error';
+    res.status(message === 'Database error' ? 500 : 400).json({ success: false, message });
   }
 });
 

@@ -1,12 +1,21 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { Building2, CheckCircle } from 'lucide-react';
+import { Building2, CheckCircle, FileText } from 'lucide-react';
+
+const AFFILIATE_DOCUMENTS = [
+  { type: 'operator_licence', label: 'Operator Licence', expiry: true },
+  { type: 'insurance', label: 'Insurance Document', expiry: true },
+  { type: 'company_cert', label: 'Company Certificate', expiry: false },
+  { type: 'proof_of_address', label: 'Proof of Address', expiry: false },
+] as const;
 
 export default function AffiliateRegisterPage() {
   const [step, setStep] = useState<'form' | 'submitted'>('form');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [documents, setDocuments] = useState<Record<string, File | null>>({});
+  const [documentExpiries, setDocumentExpiries] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     companyName: '', contactName: '', email: '', phone: '', address: '',
     city: '', postcode: '', regNumber: '', operatorLicenceNumber: '',
@@ -19,23 +28,30 @@ export default function AffiliateRegisterPage() {
     setLoading(true);
     setError('');
     try {
+      const body = new FormData();
+      Object.entries({
+        companyName: form.companyName,
+        tradingName: form.companyName,
+        contactPerson: form.contactName,
+        email: form.email,
+        phone: form.phone,
+        password: form.password,
+        address: form.address,
+        city: form.city,
+        postcode: form.postcode,
+        operatorLicenceNumber: form.operatorLicenceNumber,
+        companyRegNumber: form.regNumber,
+        serviceAreas: JSON.stringify(form.city ? [form.city] : []),
+      }).forEach(([key, value]) => body.append(key, value));
+      AFFILIATE_DOCUMENTS.forEach(document => {
+        const file = documents[document.type];
+        if (file) body.append(`document_${document.type}`, file);
+        if (documentExpiries[document.type]) body.append(`expiry_${document.type}`, documentExpiries[document.type]);
+      });
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/auth/register/affiliate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          companyName: form.companyName,
-          tradingName: form.companyName,
-          contactPerson: form.contactName,
-          email: form.email,
-          phone: form.phone,
-          password: form.password,
-          address: form.address,
-          city: form.city,
-          postcode: form.postcode,
-          operatorLicenceNumber: form.operatorLicenceNumber,
-          companyRegNumber: form.regNumber,
-          serviceAreas: form.city ? [form.city] : [],
-        }),
+        body,
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Application could not be submitted');
@@ -128,6 +144,34 @@ export default function AffiliateRegisterPage() {
                 <label className="label">Password *</label>
                 <input required type="password" value={form.password} onChange={e => set('password', e.target.value)} className="input-field" placeholder="Min 8 characters" minLength={8} />
               </div>
+            </div>
+            <div className="pt-3 pb-2 border-t border-slate-100">
+              <h2 className="font-semibold text-slate-800 flex items-center gap-2"><FileText size={16} className="text-emerald-600" /> Compliance Documents</h2>
+              <p className="text-xs text-slate-400 mt-1">Upload what you have now. Operations can review these with your application.</p>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {AFFILIATE_DOCUMENTS.map(document => (
+                <div key={document.type} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <label className="label">{document.label}</label>
+                  <input
+                    type="file"
+                    accept=".pdf,image/jpeg,image/png,image/webp"
+                    onChange={e => setDocuments(prev => ({ ...prev, [document.type]: e.target.files?.[0] ?? null }))}
+                    className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-700"
+                  />
+                  {document.expiry && (
+                    <div className="mt-3">
+                      <label className="label">Expiry date</label>
+                      <input
+                        type="date"
+                        value={documentExpiries[document.type] ?? ''}
+                        onChange={e => setDocumentExpiries(prev => ({ ...prev, [document.type]: e.target.value }))}
+                        className="input-field"
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
             <div className="pt-4 border-t border-slate-100">
               <button type="submit" disabled={loading} className="w-full py-3.5 rounded-xl font-semibold text-sm text-white transition-all" style={{ background: 'linear-gradient(135deg,#10b981,#059669)', opacity: loading ? 0.7 : 1 }}>
