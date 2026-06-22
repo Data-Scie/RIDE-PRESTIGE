@@ -4,7 +4,7 @@ import { recordRideFlowEvent } from '../lib/rideFlow';
 import { emitToRoom } from '../lib/socket';
 import { pushNotification } from './notificationService';
 
-const OFFER_TTL_MS = 2 * 60 * 1000;
+const OFFER_TTL_MS = 15 * 60 * 1000;
 const LOCATION_MAX_AGE_MS = 15 * 60 * 1000;
 
 type EligibleDriver = Driver & {
@@ -65,6 +65,9 @@ function servesPickup(driver: Driver, job: Job, radiusMiles: number): boolean {
 
   const pickupArea = postcodeArea(job.pickupAddress);
   const serviceAreas = driver.serviceAreas.map(postcodeArea).filter(Boolean);
+  if (!pickupArea || serviceAreas.length === 0) {
+    return true;
+  }
   return Boolean(pickupArea && serviceAreas.some(area =>
     pickupArea === area || pickupArea.startsWith(area) || area.startsWith(pickupArea)));
 }
@@ -111,7 +114,11 @@ export async function createIndependentRideOffers(jobId: string): Promise<number
       ));
 
   const existingOffers = await prisma.rideOffer.findMany({
-    where: { jobId, driverId: { in: eligible.map(candidate => candidate.driver.id) } },
+    where: {
+      jobId,
+      driverId: { in: eligible.map(candidate => candidate.driver.id) },
+      status: { in: ['pending', 'accepted', 'declined'] },
+    },
     select: { driverId: true },
   });
   const existingDriverIds = new Set(existingOffers.map(offer => offer.driverId));
@@ -143,7 +150,7 @@ export async function createIndependentRideOffers(jobId: string): Promise<number
       driver.id,
       'driver',
       'New Direct Ride Offer',
-      `${job.bookingRef}: ${job.pickupAddress} to ${job.dropoffAddress}. Payout £${job.affiliatePayoutAmount}. Offer expires in 2 minutes.`,
+      `${job.bookingRef}: ${job.pickupAddress} to ${job.dropoffAddress}. Payout £${job.affiliatePayoutAmount}. Offer expires in 15 minutes.`,
       'job',
     );
   }));
