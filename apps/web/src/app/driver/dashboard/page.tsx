@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   BadgeCheck, Building2, Car, CheckCircle, FileCheck2, Mail, MapPin,
   Navigation, Phone, Star, TrendingUp, UserRound,
@@ -55,6 +56,7 @@ interface RideRequest {
 }
 
 export default function DriverDashboard() {
+  const router = useRouter();
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [stats, setStats] = useState<DashboardData | null>(null);
   const [online, setOnline] = useState(false);
@@ -62,6 +64,8 @@ export default function DriverDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statusError, setStatusError] = useState('');
+  const [rideActionError, setRideActionError] = useState('');
+  const [processingRide, setProcessingRide] = useState(false);
 
   const load = async () => {
     const [profileResult, dashboardResult] = await Promise.all([
@@ -126,17 +130,35 @@ export default function DriverDashboard() {
   };
 
   const acceptRide = async () => {
-    if (!rideRequest || !profile) return;
-    const action = profile.driverType === 'independentDriver' ? 'claim' : 'accept';
-    await driverApi.post(`/api/driver/jobs/${rideRequest.id}/${action}`, {});
-    setRideRequest(null);
-    await load();
+    if (!rideRequest || !profile || processingRide) return;
+    setRideActionError('');
+    setProcessingRide(true);
+    try {
+      const action = profile.driverType === 'independentDriver' ? 'claim' : 'accept';
+      await driverApi.post(`/api/driver/jobs/${rideRequest.id}/${action}`, {});
+      setRideRequest(null);
+      await load();
+      router.push('/driver/ride');
+    } catch (e) {
+      setRideActionError(e instanceof Error ? e.message : 'Could not accept this ride - it may have already expired or been taken.');
+      pollForRide();
+    } finally {
+      setProcessingRide(false);
+    }
   };
 
   const declineRide = async () => {
-    if (!rideRequest) return;
-    await driverApi.post(`/api/driver/jobs/${rideRequest.id}/decline`, {});
-    setRideRequest(null);
+    if (!rideRequest || processingRide) return;
+    setRideActionError('');
+    setProcessingRide(true);
+    try {
+      await driverApi.post(`/api/driver/jobs/${rideRequest.id}/decline`, {});
+      setRideRequest(null);
+    } catch (e) {
+      setRideActionError(e instanceof Error ? e.message : 'Could not decline this ride.');
+    } finally {
+      setProcessingRide(false);
+    }
   };
 
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-400">Loading dashboard...</div>;
@@ -172,9 +194,10 @@ export default function DriverDashboard() {
               <div className="text-right"><p className="font-bold text-xl">£{rideRequest.yourEarnings ?? 0}</p><p className="text-xs text-white/45">Your payout</p></div>
             )}
             {rideRequest.expiresAt && <p className="text-xs text-white/60">Expires {new Date(rideRequest.expiresAt).toLocaleTimeString('en-GB')}</p>}
-            <button onClick={declineRide} className="px-4 py-2.5 rounded-xl text-white font-semibold text-sm" style={{ background: 'rgba(255,255,255,0.12)' }}>Decline</button>
-            <button onClick={acceptRide} className="px-5 py-2.5 rounded-xl font-semibold text-sm" style={{ background: GOLD, color: BRAND_BLACK }}>Accept Ride</button>
+            <button disabled={processingRide} onClick={declineRide} className="px-4 py-2.5 rounded-xl text-white font-semibold text-sm disabled:opacity-50" style={{ background: 'rgba(255,255,255,0.12)' }}>Decline</button>
+            <button disabled={processingRide} onClick={acceptRide} className="px-5 py-2.5 rounded-xl font-semibold text-sm disabled:opacity-50" style={{ background: GOLD, color: BRAND_BLACK }}>{processingRide ? 'Processing...' : 'Accept Ride'}</button>
           </div>
+          {rideActionError && <p className="text-sm text-red-300 mt-3">{rideActionError}</p>}
         </div>
       )}
 
