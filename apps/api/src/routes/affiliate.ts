@@ -86,6 +86,20 @@ function shapeJob(j: {
   };
 }
 
+function availableRideWhereForAffiliate(affiliateId: string, categoryFilter: Record<string, unknown> = {}) {
+  return {
+    status: 'awaiting_affiliate',
+    affiliateId: null,
+    ...categoryFilter,
+    affiliateResponses: {
+      none: {
+        affiliateId,
+        status: 'declined',
+      },
+    },
+  };
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 /**
@@ -113,7 +127,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
       aff, pendingJobsList, myJobs, myDrivers, myEarnings,
     ] = await Promise.all([
       prisma.affiliate.findUnique({ where: { id: affId } }),
-      prisma.job.findMany({ where: { status: 'awaiting_affiliate', ...categoryFilter }, orderBy: { dateTime: 'asc' }, take: 1 }),
+      prisma.job.findMany({ where: availableRideWhereForAffiliate(affId, categoryFilter), orderBy: { dateTime: 'asc' }, take: 1 }),
       prisma.job.findMany({ where: { affiliateId: affId } }),
       prisma.driver.findMany({ where: { affiliateId: affId } }),
       prisma.earningEntry.findMany({ where: { entityId: affId, entityType: 'affiliate' } }),
@@ -123,7 +137,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
     const activeRides     = myJobs.filter(j => !['completed', 'cancelled', 'rejected', 'awaiting_affiliate'].includes(j.status)).length;
     const completedJobs   = myJobs.filter(j => j.status === 'completed').length;
     const pendingAllocations = myJobs.filter(j => j.status === 'needs_allocation').length;
-    const pendingRidesAll = await prisma.job.count({ where: { status: 'awaiting_affiliate', ...categoryFilter } });
+    const pendingRidesAll = await prisma.job.count({ where: availableRideWhereForAffiliate(affId, categoryFilter) });
     const totalEarnings   = parseFloat(myEarnings.reduce((s, e) => s + e.netAmount, 0).toFixed(2));
     const todayEarnings   = parseFloat(myEarnings.filter(e => e.date.toISOString().startsWith(today)).reduce((s, e) => s + e.netAmount, 0).toFixed(2));
     const pendingPayout   = parseFloat(myEarnings.filter(e => e.status === 'pending').reduce((s, e) => s + e.netAmount, 0).toFixed(2));
@@ -187,8 +201,7 @@ router.get('/jobs/new', async (req: Request, res: Response) => {
     const categories = myVehicleCategories.map(v => v.vehicleCategory);
     const jobs = await prisma.job.findMany({
       where: {
-        status: 'awaiting_affiliate',
-        ...(categories.length > 0 ? { vehicleCategory: { in: categories } } : {}),
+        ...availableRideWhereForAffiliate(affId, categories.length > 0 ? { vehicleCategory: { in: categories } } : {}),
       },
       orderBy: { dateTime: 'asc' },
     });
@@ -364,13 +377,44 @@ router.post('/jobs/:id/accept', async (req: Request, res: Response) => {
  */
 router.post('/jobs/:id/reject', async (req: Request, res: Response) => {
   try {
+    const affId = getAffId(req);
     const job = await prisma.job.findUnique({ where: { id: req.params.id } });
     if (!job) { res.status(404).json({ success: false, message: 'Job not found' }); return; }
     if (job.status !== 'awaiting_affiliate') {
       res.status(409).json({ success: false, message: `Cannot reject job in status: ${job.status}` }); return;
     }
-    const updated = await prisma.job.update({ where: { id: job.id }, data: { status: 'rejected' } });
-    res.json({ success: true, message: 'Job rejected', data: shapeJob(updated) });
+    if (job.affiliateId) {
+      res.status(409).json({ success: false, message: 'This ride has already been assigned to an affiliate' }); return;
+    }
+    await prisma.$transaction(async tx => {
+      await tx.affiliateRideResponse.upsert({
+        where: { jobId_affiliateId: { jobId: job.id, affiliateId: affId } },
+        update: { status: 'declined', respondedAt: new Date() },
+        create: { jobId: job.id, affiliateId: affId, status: 'declined' },
+      });
+      await tx.rideStatusHistory.create({
+        data: {
+          jobId: job.id,
+          fromStatus: job.status,
+          toStatus: job.status,
+          changedBy: affId,
+          changedByRole: 'affiliate',
+          notes: 'Affiliate declined open ride; ride remains available to other eligible providers',
+        },
+      });
+      await recordRideFlowEvent({
+        job,
+        eventType: 'affiliate_declined',
+        title: 'Affiliate declined ride',
+        description: 'Ride remains open for other eligible affiliates and independent drivers',
+        fromStatus: job.status,
+        toStatus: job.status,
+        actorId: affId,
+        actorRole: 'affiliate',
+        affiliateId: affId,
+      }, tx);
+    });
+    res.json({ success: true, message: 'Ride declined for this affiliate only', data: shapeJob(job) });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }

@@ -63,6 +63,7 @@ model Affiliate {
   drivers       Driver[]
   fleetVehicles FleetVehicle[]
   documents     AffiliateDocument[]
+  rideResponses AffiliateRideResponse[]
 
   @@index([isApproved])
   @@index([createdAt])
@@ -274,7 +275,8 @@ model Job {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  rideOffers RideOffer[]
+  rideOffers         RideOffer[]
+  affiliateResponses AffiliateRideResponse[]
 
   @@index([status, dateTime])
   @@index([status, completedAt])
@@ -301,6 +303,22 @@ model RideOffer {
 
   @@unique([jobId, driverId])
   @@index([driverId, status, expiresAt])
+  @@index([jobId, status])
+}
+
+model AffiliateRideResponse {
+  id          String    @id @default(uuid())
+  jobId       String
+  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  affiliateId String
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  status      String    @default("declined") // declined
+  respondedAt DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([jobId, affiliateId])
+  @@index([affiliateId, status])
   @@index([jobId, status])
 }
 
