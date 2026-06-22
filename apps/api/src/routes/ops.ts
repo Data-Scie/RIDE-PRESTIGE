@@ -1230,6 +1230,7 @@ router.get('/customers', async (_req: Request, res: Response) => {
         const { passwordHash: _, ...safe } = customer;
         list.push({
           ...safe,
+          phone: customer.phone ?? '',
           createdAt: customer.createdAt.toISOString(),
           isGuest: false,
           totalJobs: 0,

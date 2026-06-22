@@ -167,7 +167,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
     if (role === 'customer') {
       const cust = await prisma.customer.findUnique({ where: { email } });
-      if (!cust || !bcrypt.compareSync(password, cust.passwordHash)) {
+      if (!cust || !cust.passwordHash || !bcrypt.compareSync(password, cust.passwordHash)) {
         res.status(401).json({ success: false, message: 'Invalid credentials' });
         return;
       }
@@ -178,6 +178,58 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     }
 
     res.status(400).json({ success: false, message: 'Invalid role' });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/google:
+ *   post:
+ *     summary: Find-or-create a customer from a verified Google sign-in and issue a backend JWT
+ *     description: Internal-only - called server-to-server from the Next.js app's NextAuth callback after Google has verified the user, never directly from a browser.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, fullName]
+ *             properties:
+ *               email:    { type: string }
+ *               fullName: { type: string }
+ *     responses:
+ *       200: { description: Token issued }
+ */
+router.post('/google', async (req: Request, res: Response): Promise<void> => {
+  const secret = req.headers['x-internal-secret'];
+  if (!process.env.INTERNAL_API_SECRET || secret !== process.env.INTERNAL_API_SECRET) {
+    res.status(401).json({ success: false, message: 'Unauthorized' });
+    return;
+  }
+  const { email, fullName } = req.body as { email: string; fullName: string };
+  if (!email || !fullName) {
+    res.status(400).json({ success: false, message: 'email and fullName are required' });
+    return;
+  }
+  try {
+    let cust = await prisma.customer.findUnique({ where: { email } });
+    if (!cust) {
+      cust = await prisma.customer.create({
+        data: {
+          id: `cust-${uuid()}`,
+          fullName, email,
+          authProvider: 'google',
+          isVerified: true,
+          totalBookings: 0,
+        },
+      });
+    }
+    const token = signToken({ id: cust.id, email: cust.email, role: 'customer' });
+    const { passwordHash: _, ...safe } = cust;
+    res.json({ success: true, token, user: safe });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }

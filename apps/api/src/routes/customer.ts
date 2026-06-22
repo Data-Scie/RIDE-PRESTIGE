@@ -300,6 +300,10 @@ router.post('/bookings', async (req: Request, res: Response) => {
   try {
     const c = await prisma.customer.findUnique({ where: { id: custId } });
     if (!c) { res.status(404).json({ success: false, message: 'Customer not found' }); return; }
+    if (!c.phone) {
+      res.status(400).json({ success: false, message: 'Add a contact number to your profile before booking' });
+      return;
+    }
 
     const { pickupPostcode, dropoffPostcode, vehicleCategory, passengers, bookingType, date, time, notes, couponCode, stops } =
       req.body as {

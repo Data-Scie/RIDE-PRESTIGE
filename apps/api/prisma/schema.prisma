@@ -25,8 +25,9 @@ model Customer {
   id             String   @id
   fullName       String
   email          String   @unique
-  phone          String
-  passwordHash   String
+  phone          String?
+  passwordHash   String?
+  authProvider   String   @default("password") // password | google
   isVerified     Boolean  @default(false)
   totalBookings  Int      @default(0)
   expoPushToken  String?

@@ -3,14 +3,17 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X } from 'lucide-react';
+import { useSession, signOut } from 'next-auth/react';
+import { Menu, X, User } from 'lucide-react';
 import BrandLogo from '@/components/common/BrandLogo';
+import { deleteCookie } from '@/lib/api-client';
 import type { NavigationItem, SiteSettings } from '@/types';
 
 export default function Header({ navigation, settings }: { navigation: NavigationItem[]; settings: SiteSettings }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const nav = navigation.filter(item => item.visible).sort((a, b) => a.order - b.order);
+  const { data: session } = useSession();
 
   return (
     <header
@@ -50,7 +53,17 @@ export default function Header({ navigation, settings }: { navigation: Navigatio
           </nav>
 
           {/* CTA */}
-          <div className="hidden md:block">
+          <div className="hidden md:flex items-center gap-3">
+            {session ? (
+              <>
+                <Link href="/my-bookings" className="flex items-center gap-1.5 text-sm font-medium" style={{ color: '#6b7280' }}>
+                  <User size={15} /> My Bookings
+                </Link>
+                <button onClick={() => { deleteCookie('rp_customer_jwt'); signOut({ callbackUrl: '/' }); }} className="text-sm" style={{ color: '#9ca3af' }}>Sign out</button>
+              </>
+            ) : (
+              <Link href="/login" className="text-sm font-medium" style={{ color: '#6b7280' }}>Sign in</Link>
+            )}
             <Link
               href="/book"
               className="text-sm font-semibold px-5 py-2.5 rounded-xl transition-all hover:opacity-80"

@@ -1,0 +1,3 @@
+ALTER TABLE "Customer" ALTER COLUMN "phone" DROP NOT NULL;
+ALTER TABLE "Customer" ALTER COLUMN "passwordHash" DROP NOT NULL;
+ALTER TABLE "Customer" ADD COLUMN "authProvider" TEXT NOT NULL DEFAULT 'password';

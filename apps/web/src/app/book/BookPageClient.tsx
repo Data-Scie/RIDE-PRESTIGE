@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Bus, Car, MapPin, Star, Van } from 'lucide-react';
 import type { BookingFormData, VehicleCategory, BookingType } from '@/types';
 import { generateQuote } from '@/lib/fare';
+import { customerApi, getPortalToken } from '@/lib/api-client';
 
 const VEHICLES: { value: VehicleCategory; label: string; icon: ReactNode; desc: string }[] = [
   { value:'prestige', label:'Prestige', icon:<Star size={24} />, desc:'Luxury cars and executive vehicles' },
@@ -41,6 +42,20 @@ export default function BookPageClient({ intro }: BookPageClientProps) {
     vehicleCategory: (params.get('category') as VehicleCategory) || 'minibus',
     vehicleId: params.get('vehicleId') || undefined,
   });
+
+  useEffect(() => {
+    if (!getPortalToken('customer')) return;
+    customerApi.get<{ success: boolean; data: { fullName: string; email: string; phone: string | null } }>('/api/customer/profile')
+      .then(result => {
+        setForm(prev => ({
+          ...prev,
+          fullName: prev.fullName || result.data.fullName,
+          email: prev.email || result.data.email,
+          phone: prev.phone || result.data.phone || '',
+        }));
+      })
+      .catch(() => {});
+  }, []);
 
   const set = (k: keyof BookingFormData, v: unknown) => {
     setForm(p => ({ ...p, [k]: v }));
