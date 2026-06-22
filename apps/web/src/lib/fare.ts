@@ -103,6 +103,10 @@ export async function generateQuote(formData: BookingFormData): Promise<QuoteRes
       date: formData.date || undefined,
       time: formData.time || undefined,
       notes: formData.notes || undefined,
+      pickupLatitude: formData.pickupLatitude,
+      pickupLongitude: formData.pickupLongitude,
+      dropoffLatitude: formData.dropoffLatitude,
+      dropoffLongitude: formData.dropoffLongitude,
     }),
   });
   const payload = await response.json();

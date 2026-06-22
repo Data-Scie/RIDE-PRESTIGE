@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Car, Users, History, LogOut, ChevronRight, Building2, Menu, X, Receipt, FileCheck2 } from 'lucide-react';
 import { affiliateApi } from '@/lib/api-client';
 import BrandLogo from '@/components/common/BrandLogo';
+import LocationPermissionGate from '@/components/common/LocationPermissionGate';
 
 const GOLD = '#c9a84c';
 const BRAND_BLACK = '#0a0f1e';
@@ -111,8 +112,10 @@ function AffiliateLayoutInner({ children }: { children: React.ReactNode }) {
 
 export default function AffiliateLayout({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
-      <AffiliateLayoutInner>{children}</AffiliateLayoutInner>
-    </Suspense>
+    <LocationPermissionGate>
+      <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+        <AffiliateLayoutInner>{children}</AffiliateLayoutInner>
+      </Suspense>
+    </LocationPermissionGate>
   );
 }

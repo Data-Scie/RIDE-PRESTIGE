@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { ArrowRight, Bus, Car, MapPin, Star, Van } from 'lucide-react';
+import { ArrowRight, Bus, Car, Star, Van } from 'lucide-react';
 import type { BookingFormData, VehicleCategory, BookingType } from '@/types';
 import { generateQuote } from '@/lib/fare';
 import { customerApi, getPortalToken } from '@/lib/api-client';
+import LocationPicker from '@/components/common/LocationPicker';
 
 const VEHICLES: { value: VehicleCategory; label: string; icon: ReactNode; desc: string }[] = [
   { value:'prestige', label:'Prestige', icon:<Star size={24} />, desc:'Luxury cars and executive vehicles' },
@@ -140,28 +141,21 @@ export default function BookPageClient({ intro }: BookPageClientProps) {
               ))}
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label className="label">Pickup postcode *</label>
-                <div className="relative">
-                  <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{color:'#c9a84c'}} />
-                  <input type="text" placeholder="e.g. S1 1AX" value={form.pickupPostcode}
-                    onChange={e=>set('pickupPostcode',e.target.value.toUpperCase())}
-                    style={{paddingLeft:'2.25rem'}}
-                    className={`input-field ${errors.pickupPostcode?'border-red-400':''}`} />
-                </div>
-                {errors.pickupPostcode && <p className="text-red-500 text-xs mt-1">{errors.pickupPostcode}</p>}
-              </div>
-              <div>
-                <label className="label">Drop-off postcode *</label>
-                <div className="relative">
-                  <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300" />
-                  <input type="text" placeholder="e.g. M1 1AB" value={form.dropoffPostcode}
-                    onChange={e=>set('dropoffPostcode',e.target.value.toUpperCase())}
-                    style={{paddingLeft:'2.25rem'}}
-                    className={`input-field ${errors.dropoffPostcode?'border-red-400':''}`} />
-                </div>
-                {errors.dropoffPostcode && <p className="text-red-500 text-xs mt-1">{errors.dropoffPostcode}</p>}
-              </div>
+              <LocationPicker
+                label="Pickup postcode / address *"
+                placeholder="e.g. S1 1AX"
+                allowCurrentLocation
+                value={{ address: form.pickupPostcode, latitude: form.pickupLatitude, longitude: form.pickupLongitude }}
+                onChange={loc => setForm(p => ({ ...p, pickupPostcode: loc.address, pickupLatitude: loc.latitude, pickupLongitude: loc.longitude }))}
+                error={errors.pickupPostcode}
+              />
+              <LocationPicker
+                label="Drop-off postcode / address *"
+                placeholder="e.g. M1 1AB"
+                value={{ address: form.dropoffPostcode, latitude: form.dropoffLatitude, longitude: form.dropoffLongitude }}
+                onChange={loc => setForm(p => ({ ...p, dropoffPostcode: loc.address, dropoffLatitude: loc.latitude, dropoffLongitude: loc.longitude }))}
+                error={errors.dropoffPostcode}
+              />
               {form.bookingType==='scheduled'&&(<>
                 <div>
                   <label className="label">Date *</label>

@@ -1,12 +1,30 @@
 'use client';
 
+interface GoogleLatLng {
+  lat: () => number;
+  lng: () => number;
+}
+
+interface GoogleMarker {
+  setPosition: (pos: { lat: number; lng: number }) => void;
+  getPosition: () => GoogleLatLng | null;
+  addListener: (event: string, cb: () => void) => void;
+}
+
+interface GoogleMap {
+  setCenter: (pos: { lat: number; lng: number }) => void;
+}
+
 declare global {
   interface Window {
     google: {
       maps: {
-        Map: new (element: HTMLElement, options: Record<string, unknown>) => unknown;
-        Marker: new (options: Record<string, unknown>) => unknown;
+        Map: new (element: HTMLElement, options: Record<string, unknown>) => GoogleMap;
+        Marker: new (options: Record<string, unknown>) => GoogleMarker;
         SymbolPath: { CIRCLE: number };
+        event: {
+          addListener: (target: unknown, event: string, cb: (e: { latLng: GoogleLatLng }) => void) => void;
+        };
       };
     };
     __rpGoogleMapsCallbacks?: Array<() => void>;

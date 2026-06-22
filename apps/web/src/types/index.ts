@@ -48,6 +48,10 @@ export interface BookingFormData {
   email?: string;
   pickupPostcode: string;
   dropoffPostcode: string;
+  pickupLatitude?: number;
+  pickupLongitude?: number;
+  dropoffLatitude?: number;
+  dropoffLongitude?: number;
   bookingType: BookingType;
   date?: string;
   time?: string;

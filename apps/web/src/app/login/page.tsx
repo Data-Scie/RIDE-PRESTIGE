@@ -6,6 +6,7 @@ import { signIn, useSession } from 'next-auth/react';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
 import BrandLogo from '@/components/common/BrandLogo';
 import { getPortalToken } from '@/lib/api-client';
+import LocationPermissionGate from '@/components/common/LocationPermissionGate';
 
 const BLACK = '#0a0f1e';
 const CHARCOAL = '#1a1f2e';
@@ -168,12 +169,14 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0f1e' }}>
-        <div className="w-10 h-10 border-4 border-yellow-200 border-t-yellow-600 rounded-full animate-spin" />
-      </div>
-    }>
-      <LoginForm />
-    </Suspense>
+    <LocationPermissionGate>
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0f1e' }}>
+          <div className="w-10 h-10 border-4 border-yellow-200 border-t-yellow-600 rounded-full animate-spin" />
+        </div>
+      }>
+        <LoginForm />
+      </Suspense>
+    </LocationPermissionGate>
   );
 }

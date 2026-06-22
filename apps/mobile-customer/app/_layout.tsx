@@ -5,6 +5,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '@/context/AuthContext';
+import LocationPermissionGate from '@/components/LocationPermissionGate';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -14,17 +15,19 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="auth/login" options={{ headerShown: false }} />
-          <Stack.Screen name="auth/register" options={{ headerShown: false }} />
-          <Stack.Screen name="book" options={{ title: 'Book a Ride', headerBackTitle: 'Back' }} />
-          <Stack.Screen name="booking/[id]" options={{ title: 'Booking Details', headerBackTitle: 'Back' }} />
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </AuthProvider>
+    <LocationPermissionGate>
+      <AuthProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="auth/login" options={{ headerShown: false }} />
+            <Stack.Screen name="auth/register" options={{ headerShown: false }} />
+            <Stack.Screen name="book" options={{ title: 'Book a Ride', headerBackTitle: 'Back' }} />
+            <Stack.Screen name="booking/[id]" options={{ title: 'Booking Details', headerBackTitle: 'Back' }} />
+          </Stack>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </AuthProvider>
+    </LocationPermissionGate>
   );
 }

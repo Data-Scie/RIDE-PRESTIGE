@@ -7,6 +7,7 @@ import { signOut } from 'next-auth/react';
 import { LayoutDashboard, Calendar, User, LogOut, ChevronRight, Menu, X } from 'lucide-react';
 import BrandLogo from '@/components/common/BrandLogo';
 import { customerApi, deleteCookie } from '@/lib/api-client';
+import LocationPermissionGate from '@/components/common/LocationPermissionGate';
 
 const GOLD = '#c9a84c';
 const BRAND_BLACK = '#0a0f1e';
@@ -105,5 +106,9 @@ function AccountLayoutInner({ children }: { children: React.ReactNode }) {
 }
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<div className="min-h-screen bg-slate-50" />}><AccountLayoutInner>{children}</AccountLayoutInner></Suspense>;
+  return (
+    <LocationPermissionGate>
+      <Suspense fallback={<div className="min-h-screen bg-slate-50" />}><AccountLayoutInner>{children}</AccountLayoutInner></Suspense>
+    </LocationPermissionGate>
+  );
 }

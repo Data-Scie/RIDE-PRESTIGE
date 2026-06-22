@@ -49,13 +49,25 @@ function fallbackDistance(fromPostcode: string, toPostcode: string): number {
   return Math.max(5, (seed % 190) + 10);
 }
 
-export async function estimateDistance(fromPostcode: string, toPostcode: string): Promise<number> {
+export interface LatLng { lat: number; lng: number; }
+
+export async function estimateDistance(
+  fromPostcode: string,
+  toPostcode: string,
+  pickupCoords?: LatLng | null,
+  dropoffCoords?: LatLng | null,
+): Promise<number> {
   const apiKey = process.env.GOOGLE_MAPS_DISTANCE_MATRIX_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) return fallbackDistance(fromPostcode, toPostcode);
 
+  // Prefer exact coordinates (from the map picker / device GPS) over the free-text address -
+  // more accurate, and avoids ambiguous addresses resolving to the wrong place.
+  const origin = pickupCoords ? `${pickupCoords.lat},${pickupCoords.lng}` : `${fromPostcode}, UK`;
+  const destination = dropoffCoords ? `${dropoffCoords.lat},${dropoffCoords.lng}` : `${toPostcode}, UK`;
+
   const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json');
-  url.searchParams.set('origins', `${fromPostcode}, UK`);
-  url.searchParams.set('destinations', `${toPostcode}, UK`);
+  url.searchParams.set('origins', origin);
+  url.searchParams.set('destinations', destination);
   url.searchParams.set('units', 'imperial');
   url.searchParams.set('key', apiKey);
 

@@ -51,6 +51,10 @@ export default function QuoteClient() {
           date:            form.date || undefined,
           time:            form.time || undefined,
           notes:           form.notes || undefined,
+          pickupLatitude:  form.pickupLatitude,
+          pickupLongitude: form.pickupLongitude,
+          dropoffLatitude: form.dropoffLatitude,
+          dropoffLongitude: form.dropoffLongitude,
         }),
       });
 

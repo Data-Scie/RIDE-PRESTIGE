@@ -250,6 +250,8 @@ model Job {
   pickupLatitude        Float?
   pickupLongitude       Float?
   dropoffAddress        String
+  dropoffLatitude       Float?
+  dropoffLongitude      Float?
   stops                 Json      @default("[]")
   dateTime              DateTime
   passengerCount        Int       @default(1)

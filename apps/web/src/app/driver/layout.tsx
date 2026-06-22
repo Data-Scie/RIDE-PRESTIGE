@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { driverApi } from '@/lib/api-client';
 import BrandLogo from '@/components/common/BrandLogo';
+import LocationPermissionGate from '@/components/common/LocationPermissionGate';
 
 const GOLD = '#c9a84c';
 const BRAND_BLACK = '#0a0f1e';
@@ -128,5 +129,9 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
 }
 
 export default function DriverLayout({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<div className="min-h-screen bg-slate-50" />}><DriverLayoutInner>{children}</DriverLayoutInner></Suspense>;
+  return (
+    <LocationPermissionGate>
+      <Suspense fallback={<div className="min-h-screen bg-slate-50" />}><DriverLayoutInner>{children}</DriverLayoutInner></Suspense>
+    </LocationPermissionGate>
+  );
 }

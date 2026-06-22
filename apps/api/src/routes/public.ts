@@ -288,10 +288,11 @@ router.get('/pages/:slug', async (req: Request, res: Response) => {
  *       200: { description: Quote result }
  */
 router.post('/quote', async (req: Request, res: Response) => {
-  const { pickupPostcode, dropoffPostcode, vehicleCategory, passengers, bookingType, date, time, notes, couponCode } =
+  const { pickupPostcode, dropoffPostcode, vehicleCategory, passengers, bookingType, date, time, notes, couponCode, pickupLatitude, pickupLongitude, dropoffLatitude, dropoffLongitude } =
     req.body as {
       pickupPostcode: string; dropoffPostcode: string; vehicleCategory: VehicleCategory;
       passengers: number; bookingType: BookingType; date?: string; time?: string; notes?: string; couponCode?: string;
+      pickupLatitude?: number; pickupLongitude?: number; dropoffLatitude?: number; dropoffLongitude?: number;
     };
 
   if (!pickupPostcode || !dropoffPostcode || !vehicleCategory || !passengers || !bookingType) {
@@ -301,7 +302,9 @@ router.post('/quote', async (req: Request, res: Response) => {
 
   try {
     const pricing = await getPricingConfig();
-    const miles   = await estimateDistance(pickupPostcode, dropoffPostcode);
+    const pickupCoords = pickupLatitude !== undefined && pickupLongitude !== undefined ? { lat: pickupLatitude, lng: pickupLongitude } : null;
+    const dropoffCoords = dropoffLatitude !== undefined && dropoffLongitude !== undefined ? { lat: dropoffLatitude, lng: dropoffLongitude } : null;
+    const miles   = await estimateDistance(pickupPostcode, dropoffPostcode, pickupCoords, dropoffCoords);
     const hours   = estimateHours(miles);
     const calc    = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
     const quoteId = `qt-${uuid()}`;
@@ -313,7 +316,7 @@ router.post('/quote', async (req: Request, res: Response) => {
       bookingRef: ref,
       createdAt: new Date().toISOString(),
       expiresAt: expiry,
-      journey: { pickupPostcode, dropoffPostcode, passengers, vehicleCategory, bookingType, date, time, notes },
+      journey: { pickupPostcode, dropoffPostcode, passengers, vehicleCategory, bookingType, date, time, notes, pickupLatitude, pickupLongitude, dropoffLatitude, dropoffLongitude },
       calculation: calc,
       status: 'pending',
     };
@@ -358,11 +361,12 @@ router.post('/quote', async (req: Request, res: Response) => {
  */
 router.post('/booking', async (req: Request, res: Response) => {
   const { fullName, phone, email, pickupPostcode, dropoffPostcode, vehicleCategory, passengers,
-          bookingType, date, time, notes, couponCode } = req.body as {
+          bookingType, date, time, notes, couponCode, pickupLatitude, pickupLongitude, dropoffLatitude, dropoffLongitude } = req.body as {
     fullName: string; phone: string; email: string;
     pickupPostcode: string; dropoffPostcode: string; vehicleCategory: VehicleCategory;
     passengers: number; bookingType: BookingType; date?: string; time?: string;
     notes?: string; couponCode?: string;
+    pickupLatitude?: number; pickupLongitude?: number; dropoffLatitude?: number; dropoffLongitude?: number;
   };
 
   if (!fullName || !phone || !email || !pickupPostcode || !dropoffPostcode || !vehicleCategory || !passengers || !bookingType) {
@@ -372,7 +376,9 @@ router.post('/booking', async (req: Request, res: Response) => {
 
   try {
     const pricing = await getPricingConfig();
-    const miles = await estimateDistance(pickupPostcode, dropoffPostcode);
+    const pickupCoords = pickupLatitude !== undefined && pickupLongitude !== undefined ? { lat: pickupLatitude, lng: pickupLongitude } : null;
+    const dropoffCoords = dropoffLatitude !== undefined && dropoffLongitude !== undefined ? { lat: dropoffLatitude, lng: dropoffLongitude } : null;
+    const miles = await estimateDistance(pickupPostcode, dropoffPostcode, pickupCoords, dropoffCoords);
     const hours = estimateHours(miles);
     const calc  = calculateFare(vehicleCategory, miles, hours, passengers, couponCode, pricing);
     const { commission, affiliatePayout, driverPayout } = applyCommission(calc.total, pricing);
@@ -400,7 +406,7 @@ router.post('/booking', async (req: Request, res: Response) => {
           status: 'pending',
           customerId: existingCustomer?.id,
           customerData: { fullName, phone, email },
-          journeyData: { pickupPostcode, dropoffPostcode, bookingType, date, time, passengers, notes },
+          journeyData: { pickupPostcode, dropoffPostcode, bookingType, date, time, passengers, notes, pickupLatitude, pickupLongitude, dropoffLatitude, dropoffLongitude },
           vehicleCategory,
           estimatedMiles: miles,
           estimatedFare: calc.total,
@@ -419,7 +425,11 @@ router.post('/booking', async (req: Request, res: Response) => {
           customerPhone: phone,
           customerEmail: email,
           pickupAddress: pickupPostcode,
+          pickupLatitude: pickupLatitude ?? null,
+          pickupLongitude: pickupLongitude ?? null,
           dropoffAddress: dropoffPostcode,
+          dropoffLatitude: dropoffLatitude ?? null,
+          dropoffLongitude: dropoffLongitude ?? null,
           dateTime: rideDateTime,
           passengerCount: Number(passengers),
           luggageCount: 0,
