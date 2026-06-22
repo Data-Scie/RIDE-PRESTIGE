@@ -126,15 +126,14 @@ export async function createIndependentRideOffers(jobId: string): Promise<number
   if (newCandidates.length === 0) return 0;
 
   const expiresAt = new Date(Date.now() + OFFER_TTL_MS);
-  await prisma.rideOffer.createMany({
-    data: newCandidates.map(({ driver, vehicle }) => ({
-      jobId,
-      driverId: driver.id,
-      vehicleId: vehicle.id,
-      expiresAt,
-    })),
-    skipDuplicates: true,
-  });
+  // upsert, not createMany+skipDuplicates: the @@unique([jobId, driverId]) constraint means a
+  // driver whose earlier offer for this job already expired would otherwise block forever,
+  // since skipDuplicates silently skips the insert instead of reviving the expired row.
+  await Promise.all(newCandidates.map(({ driver, vehicle }) => prisma.rideOffer.upsert({
+    where: { jobId_driverId: { jobId, driverId: driver.id } },
+    create: { jobId, driverId: driver.id, vehicleId: vehicle.id, expiresAt },
+    update: { vehicleId: vehicle.id, status: 'pending', expiresAt, respondedAt: null },
+  })));
 
   await Promise.all(newCandidates.map(async ({ driver }) => {
     const offer = {
