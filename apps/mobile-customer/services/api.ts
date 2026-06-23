@@ -45,10 +45,10 @@ export function extractPostcode(address: string): string {
 // Map app vehicle category names to backend enum values
 export function mapVehicleCategory(cat: string): string {
   const m: Record<string, string> = {
-    'Prestige':     'prestige',
-    'Executive XL': 'prestige',
-    'Minibus':      'minibus',
-    'Coach':        'coaches',
+    Prestige: 'prestige',
+    Minibus: 'minibus',
+    Coaches: 'coaches',
+    Taxi: 'taxi',
   };
   return m[cat] ?? 'prestige';
 }
@@ -65,8 +65,11 @@ export async function createBooking(params: {
   pickupAddress: string; dropoffAddress: string; passengers: number;
   vehicleCategory: string; bookingType: string; date?: string; time?: string; notes?: string; stops?: string[];
 }): Promise<{ id: string; bookingRef: string }> {
-  const r = await req<{ success: boolean; data: { id: string; reference: string } }>(
-    'POST', '/api/customer/bookings', {
+  const r = await req<{ success: boolean; data: { booking: { id: string; reference: string } } }>(
+    'POST', '/api/public/booking', {
+      fullName: 'Demo Customer',
+      phone: '+44 7700 900000',
+      email: `demo.customer.${Date.now()}@rideprestige.test`,
       pickupPostcode:  extractPostcode(params.pickupAddress),
       dropoffPostcode: extractPostcode(params.dropoffAddress),
       vehicleCategory: mapVehicleCategory(params.vehicleCategory),
@@ -78,7 +81,7 @@ export async function createBooking(params: {
       stops:           params.stops ?? [],
     }
   );
-  return { id: r.data.id, bookingRef: r.data.reference };
+  return { id: r.data.booking.reference, bookingRef: r.data.booking.reference };
 }
 
 export async function getBookings(): Promise<Array<{ id: string; bookingRef: string; status: string; pickupPostcode: string; dropoffPostcode: string; createdAt: string; fareAmount?: number }>> {
@@ -118,6 +121,25 @@ export async function trackBooking(id: string): Promise<{
   driverLongitude?: number | null;
   lastLocationUpdate?: string | null;
 }> {
+  if (id.startsWith('RP-')) {
+    const r = await req<{
+      success: boolean;
+      data: {
+        status: string;
+        driver: { fullName: string; latitude?: number | null; longitude?: number | null; lastLocationUpdate?: string | null } | null;
+      };
+    }>(
+      'GET', `/api/public/booking/${encodeURIComponent(id)}/track`
+    );
+    return {
+      status: r.data.status,
+      driverName: r.data.driver?.fullName,
+      driverLatitude: r.data.driver?.latitude,
+      driverLongitude: r.data.driver?.longitude,
+      lastLocationUpdate: r.data.driver?.lastLocationUpdate,
+    };
+  }
+
   const r = await req<{
     success: boolean;
     data: {

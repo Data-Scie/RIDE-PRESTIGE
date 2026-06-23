@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { RideMap } from "../../components/ride-map/RideMap";
 
 type Screen =
@@ -28,16 +29,16 @@ type Screen =
   | "tracking"
   | "bookings"
   | "favourites"
-  | "payments"
   | "offers"
   | "account"
   | "support"
   | "terms"
   | "invoice";
 
-type VehicleCategory = "Prestige" | "Minibus" | "Coach" | "Executive XL";
+type VehicleCategory = "Prestige" | "Minibus" | "Coaches" | "Taxi";
+type VehicleIconName = React.ComponentProps<typeof MaterialIcons>["name"];
 type PanelSize = "collapsed" | "half" | "full";
-type ModalType = null | "time" | "vehicle" | "payment" | "profile" | "confirm" | "addFavourite";
+type ModalType = null | "time" | "vehicle" | "profile" | "confirm" | "addFavourite";
 
 const LOGO = require("../../assets/images/brand/ride-prestige-logo.png");
 const LOGO_MARK = require("../../assets/images/brand/ride-prestige-mark.png");
@@ -60,6 +61,13 @@ const FONT_REGULAR = Platform.select({ ios: "Avenir Next", android: "sans-serif"
 const FONT_LIGHT = Platform.select({ ios: "Avenir Next", android: "sans-serif-light", default: "System" });
 const FONT_MEDIUM = Platform.select({ ios: "Avenir Next", android: "sans-serif-medium", default: "System" });
 
+function vehicleIconName(category: VehicleCategory): VehicleIconName {
+  if (category === "Prestige") return "star";
+  if (category === "Minibus") return "airport-shuttle";
+  if (category === "Coaches") return "directions-bus";
+  return "local-taxi";
+}
+
 (Text as any).defaultProps = (Text as any).defaultProps || {};
 (Text as any).defaultProps.style = [{ fontFamily: FONT_REGULAR }, (Text as any).defaultProps.style];
 (TextInput as any).defaultProps = (TextInput as any).defaultProps || {};
@@ -75,7 +83,6 @@ export default function RidePrestigeApp() {
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleCategory>("Prestige");
   const [pickupDate, setPickupDate] = useState("Pickup now");
   const [pickupTime, setPickupTime] = useState("ETA: 3 min");
-  const [payment, setPayment] = useState("Apple Pay");
   const [notes, setNotes] = useState("Any special instructions");
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
@@ -176,7 +183,6 @@ export default function RidePrestigeApp() {
             pickupDate={pickupDate}
             pickupTime={pickupTime}
             isScheduledBooking={isScheduledBooking}
-            payment={payment}
             notes={notes}
             setNotes={setNotes}
             fare={fare}
@@ -192,7 +198,6 @@ export default function RidePrestigeApp() {
         {screen === "tracking" && <TrackingScreen bookingId={activeBookingId} go={setScreen} />}
         {screen === "bookings" && <BookingsScreen go={setScreen} />}
         {screen === "favourites" && <FavouritesScreen go={setScreen} onAdd={() => setModal("addFavourite")} />}
-        {screen === "payments" && <PaymentsScreen go={setScreen} setPayment={setPayment} payment={payment} />}
         {screen === "offers" && <OffersScreen go={setScreen} />}
         {screen === "account" && <AccountScreen go={setScreen} />}
         {screen === "support" && <SupportScreen go={setScreen} />}
@@ -214,8 +219,6 @@ export default function RidePrestigeApp() {
           setPickupTime={setPickupTime}
           selectedVehicle={selectedVehicle}
           setSelectedVehicle={setSelectedVehicle}
-          payment={payment}
-          setPayment={setPayment}
           fare={fare}
           isScheduledBooking={isScheduledBooking}
           confirmRequest={confirmRequest}
@@ -247,7 +250,6 @@ function HomeBookingScreen({
   pickupDate,
   pickupTime,
   isScheduledBooking,
-  payment,
   notes,
   setNotes,
   fare,
@@ -269,7 +271,6 @@ function HomeBookingScreen({
   pickupDate: string;
   pickupTime: string;
   isScheduledBooking: boolean;
-  payment: string;
   notes: string;
   setNotes: (v: string) => void;
   fare: { miles: number; minutes: number; total: number };
@@ -400,12 +401,11 @@ function HomeBookingScreen({
                 <Text style={styles.scheduleBannerText}>
                   {isScheduledBooking
                     ? "Your request will be logged now. A driver will be dispatched in advance of your selected pickup time."
-                    : "After payment authorisation, the request goes live and the app starts looking for a driver."}
+                    : "Your request goes live immediately so eligible affiliates and independent drivers can accept it."}
                 </Text>
               </View>
 
-              <ActionRow title="Vehicle type" subtitle={selectedVehicle} icon="🚘" onPress={() => setModal("vehicle")} />
-              <ActionRow title="Payment method" subtitle={payment} icon="💳" onPress={() => setModal("payment")} />
+              <ActionRow title="Vehicle type" subtitle={selectedVehicle} icon={vehicleIconName(selectedVehicle)} onPress={() => setModal("vehicle")} />
 
               {panel === "full" && (
                 <View style={styles.notesBox}>
@@ -467,8 +467,6 @@ function BookingModals({
   setPickupTime,
   selectedVehicle,
   setSelectedVehicle,
-  payment,
-  setPayment,
   fare,
   isScheduledBooking,
   confirmRequest,
@@ -481,8 +479,6 @@ function BookingModals({
   setPickupTime: (v: string) => void;
   selectedVehicle: VehicleCategory;
   setSelectedVehicle: (v: VehicleCategory) => void;
-  payment: string;
-  setPayment: (v: string) => void;
   fare: { total: number };
   isScheduledBooking: boolean;
   confirmRequest: () => void;
@@ -491,12 +487,11 @@ function BookingModals({
   const dates = ["Pickup now", "Today", "Fri, 8 May", "Sat, 9 May", "Sun, 10 May", "Mon, 11 May"];
   const times = ["ETA: 3 min", "+30 min", "+1 hour", "+2 hours", "08:00", "09:30", "12:00", "15:30", "18:30", "21:00"];
   const vehicles: { name: VehicleCategory; sub: string; price: string }[] = [
-    { name: "Prestige", sub: "Executive saloon · 1-4 passengers", price: "Best" },
-    { name: "Executive XL", sub: "Premium MPV · 1-7 passengers", price: "+£10" },
-    { name: "Minibus", sub: "Private group travel · up to 16", price: "+£24" },
-    { name: "Coach", sub: "Large group movement", price: "Quote" },
+    { name: "Prestige", sub: "Luxury cars and executive vehicles", price: "Premium" },
+    { name: "Minibus", sub: "6-16 persons", price: "Group" },
+    { name: "Coaches", sub: "20-70 persons", price: "Large" },
+    { name: "Taxi", sub: "Saloon taxi for up to 4 passengers", price: "Fast" },
   ];
-  const payments = ["Apple Pay", "Google Pay", "Card ending 4242", "Cash"];
 
   return (
     <Modal visible={!!modal} transparent animationType="slide" onRequestClose={close}>
@@ -527,7 +522,7 @@ function BookingModals({
               <Text style={styles.modalSub}>Choose the right vehicle for your journey</Text>
               {vehicles.map((v) => (
                 <Pressable key={v.name} onPress={() => setSelectedVehicle(v.name)} style={[styles.vehicleOption, selectedVehicle === v.name && styles.vehicleOptionActive]}>
-                  <View style={styles.vehicleIcon}><Text style={styles.vehicleIconText}>🚘</Text></View>
+                  <View style={styles.vehicleIcon}><MaterialIcons name={vehicleIconName(v.name)} size={22} color={ROSE_GOLD} /></View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.vehicleOptionTitle}>{v.name}</Text>
                     <Text style={styles.vehicleOptionSub}>{v.sub}</Text>
@@ -539,26 +534,17 @@ function BookingModals({
             </>
           )}
 
-          {modal === "payment" && (
-            <>
-              <Text style={styles.modalTitle}>Payment method</Text>
-              <Text style={styles.modalSub}>{isScheduledBooking ? "For scheduled bookings, payment is authorised now and the journey is held for the selected time." : "Payment is held first, then confirmed when the ride is accepted."}</Text>
-              {payments.map((p) => <SheetChoice key={p} title={p} active={payment === p} onPress={() => setPayment(p)} />)}
-              <Pressable style={styles.sheetMainButton} onPress={close}><Text style={styles.sheetMainText}>Done</Text></Pressable>
-            </>
-          )}
-
           {modal === "confirm" && (
             <>
               <Text style={styles.modalTitle}>Confirm request</Text>
-              <Text style={styles.modalSub}>Estimated fare: £{fare.total.toFixed(2)}. {isScheduledBooking ? "This scheduled booking will be logged now and dispatched before the pickup time." : "Payment will be authorised, then your app will look for a driver."}</Text>
+              <Text style={styles.modalSub}>Estimated fare: £{fare.total.toFixed(2)}. {isScheduledBooking ? "This scheduled booking will be logged now and dispatched before the pickup time." : "This demo booking will be sent directly to eligible affiliates and independent drivers."}</Text>
               <View style={styles.confirmSummary}>
                 <Text style={styles.confirmSummaryText}>✓ Route selected</Text>
                 <Text style={styles.confirmSummaryText}>✓ Time selected</Text>
                 <Text style={styles.confirmSummaryText}>✓ Vehicle selected</Text>
-                <Text style={styles.confirmSummaryText}>✓ Payment ready</Text>
+                <Text style={styles.confirmSummaryText}>✓ No payment required for demo</Text>
               </View>
-              <Pressable style={styles.sheetMainButton} onPress={confirmRequest}><Text style={styles.sheetMainText}>Authorise payment and request</Text></Pressable>
+              <Pressable style={styles.sheetMainButton} onPress={confirmRequest}><Text style={styles.sheetMainText}>Send demo booking</Text></Pressable>
             </>
           )}
 
@@ -696,7 +682,6 @@ function ProfileDrawer({ visible, close, go }: { visible: boolean; close: () => 
   const items: { title: string; sub: string; screen: Screen; icon: string }[] = [
     { title: "My bookings", sub: "Upcoming and past rides", screen: "bookings", icon: "📋" },
     { title: "Favourites", sub: "Home, work and saved stops", screen: "favourites", icon: "★" },
-    { title: "Payments", sub: "Cards, Apple Pay, receipts", screen: "payments", icon: "💳" },
     { title: "Offers", sub: "Promotions and discounts", screen: "offers", icon: "🎁" },
     { title: "Account", sub: "Personal details", screen: "account", icon: "👤" },
     { title: "Support", sub: "Help and complaints", screen: "support", icon: "💬" },
@@ -771,11 +756,6 @@ function FavouritesScreen({ go, onAdd }: { go: (s: Screen) => void; onAdd: () =>
   return <Page title="Favourites" go={go} action="Add" onAction={onAdd}>{favs.map((f) => <View key={f} style={styles.listCard}><Text style={styles.listTitle}>{f}</Text><Text style={styles.listSub}>Tap to use as pickup, stop or drop-off</Text></View>)}</Page>;
 }
 
-function PaymentsScreen({ go, payment, setPayment }: { go: (s: Screen) => void; payment: string; setPayment: (v: string) => void }) {
-  const items = ["Apple Pay", "Google Pay", "Card ending 4242", "Cash"];
-  return <Page title="Payments" go={go}>{items.map((p) => <Pressable key={p} style={styles.listCard} onPress={() => setPayment(p)}><Text style={styles.listTitle}>{p}</Text><Text style={styles.listSub}>{payment === p ? "Default payment method" : "Tap to set as default"}</Text></Pressable>)}</Page>;
-}
-
 function OffersScreen({ go }: { go: (s: Screen) => void }) {
   return <Page title="Offers" go={go}><View style={styles.offerBig}><Text style={styles.offerValue}>15%</Text><Text style={styles.offerTitle}>Scheduled booking offer</Text><Text style={styles.offerSub}>Book ahead and save on selected journeys this week.</Text></View><View style={styles.listCard}><Text style={styles.listTitle}>Refer a friend</Text><Text style={styles.listSub}>Earn £5 when your friend completes a first ride.</Text></View></Page>;
 }
@@ -845,7 +825,7 @@ function SupportScreen({ go }: { go: (s: Screen) => void }) {
 }
 
 function TermsScreen({ go }: { go: (s: Screen) => void }) {
-  return <Page title="Terms & Conditions" go={go}><View style={styles.termsPaper}><Image source={LOGO} style={styles.termsLogo} resizeMode="contain" /><Text style={styles.termsHeading}>Ride Prestige Terms</Text><Text style={styles.termsText}>Attach your final legal document here. This screen is prepared for booking terms, cancellation policy, refund policy, payment authorisation and privacy information.</Text><Text style={styles.termsText}>Customers should accept these terms before completing payment and ride request.</Text></View></Page>;
+  return <Page title="Terms & Conditions" go={go}><View style={styles.termsPaper}><Image source={LOGO} style={styles.termsLogo} resizeMode="contain" /><Text style={styles.termsHeading}>Ride Prestige Terms</Text><Text style={styles.termsText}>Attach your final legal document here. This screen is prepared for booking terms, cancellation policy, refund policy and privacy information.</Text><Text style={styles.termsText}>Customers should accept these terms before completing a ride request.</Text></View></Page>;
 }
 
 function InvoiceScreen({ go, fare, vehicle }: { go: (s: Screen) => void; fare: { total: number }; vehicle: VehicleCategory }) {
@@ -878,10 +858,13 @@ function LocationInput({ label, value, onChange, icon }: { label: string; value:
   );
 }
 
-function ActionRow({ title, subtitle, icon, onPress }: { title: string; subtitle: string; icon: string; onPress: () => void }) {
+function ActionRow({ title, subtitle, icon, onPress }: { title: string; subtitle: string; icon: string | VehicleIconName; onPress: () => void }) {
+  const isVehicleIcon = typeof icon === "string" && ["star", "airport-shuttle", "directions-bus", "local-taxi"].includes(icon);
   return (
     <Pressable onPress={onPress} style={styles.actionRow}>
-      <Text style={styles.actionIcon}>{icon}</Text>
+      {isVehicleIcon
+        ? <MaterialIcons name={icon as VehicleIconName} size={22} color={ROSE_GOLD} style={styles.actionIconMaterial} />
+        : <Text style={styles.actionIcon}>{icon}</Text>}
       <View style={{ flex: 1 }}><Text style={styles.actionTitle}>{title}</Text><Text style={styles.actionSub}>{subtitle}</Text></View>
       <Text style={styles.actionArrow}>→</Text>
     </Pressable>
@@ -947,6 +930,7 @@ const styles = StyleSheet.create({
   expandButtonText: { color: WHITE, fontFamily: FONT_MEDIUM, fontWeight: "600" },
   actionRow: { minHeight: 56, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: LINE, paddingVertical: 10 },
   actionIcon: { fontSize: 18, width: 36 },
+  actionIconMaterial: { width: 36 },
   actionTitle: { color: TEXT, fontFamily: FONT_MEDIUM, fontWeight: "600", fontSize: 14 },
   actionSub: { color: MUTED, marginTop: 3, fontFamily: FONT_REGULAR, fontWeight: "600", fontSize: 12 },
   actionArrow: { color: ROSE_GOLD, fontFamily: FONT_MEDIUM, fontWeight: "600", fontSize: 18 },
