@@ -4,17 +4,10 @@ import {
   KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
+import { GoogleSignin, isErrorWithCode, isSuccessResponse, statusCodes } from '@react-native-google-signin/google-signin';
 import { useAuth } from '@/context/AuthContext';
 
-WebBrowser.maybeCompleteAuthSession();
-
-const GOOGLE_CONFIGURED = Boolean(
-  process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
-  process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ||
-  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
-);
+const GOOGLE_CONFIGURED = Boolean(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
 
 export default function LoginScreen() {
   const { login, loginWithGoogle } = useAuth();
@@ -23,23 +16,16 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  const [, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-  });
-
   useEffect(() => {
-    if (googleResponse?.type === 'success' && googleResponse.authentication?.idToken) {
-      setGoogleLoading(true);
-      loginWithGoogle(googleResponse.authentication.idToken)
-        .then(() => router.replace('/(tabs)'))
-        .catch((e: unknown) => Alert.alert('Google sign-in failed', (e as Error).message ?? 'Please try again.'))
-        .finally(() => setGoogleLoading(false));
-    } else if (googleResponse?.type === 'error') {
-      Alert.alert('Google sign-in failed', googleResponse.error?.message ?? 'Please try again.');
+    if (GOOGLE_CONFIGURED) {
+      try {
+        GoogleSignin.configure({ webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID });
+      } catch {
+        // If the native module isn't ready for any reason, the Google button below
+        // will surface a clear "failed" alert when tapped rather than crashing here.
+      }
     }
-  }, [googleResponse]);
+  }, []);
 
   const handleLogin = async () => {
     if (!identifier.trim() || !password) return;
@@ -54,12 +40,28 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGoogle = () => {
+  const handleGoogle = async () => {
     if (!GOOGLE_CONFIGURED) {
       Alert.alert('Google sign-in not configured', 'Add the Google OAuth client IDs to the customer app environment before enabling Google sign-in.');
       return;
     }
-    promptGoogleAsync().catch((e: unknown) => Alert.alert('Google sign-in failed', (e as Error).message ?? 'Please try again.'));
+    setGoogleLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      if (isSuccessResponse(response) && response.data.idToken) {
+        await loginWithGoogle(response.data.idToken);
+        router.replace('/(tabs)');
+      }
+    } catch (e: unknown) {
+      if (isErrorWithCode(e) && e.code === statusCodes.SIGN_IN_CANCELLED) {
+        // User closed the picker - not an error worth surfacing.
+      } else {
+        Alert.alert('Google sign-in failed', (e as Error).message ?? 'Please try again.');
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   return (
