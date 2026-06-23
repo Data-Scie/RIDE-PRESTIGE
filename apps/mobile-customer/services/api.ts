@@ -62,6 +62,14 @@ export async function login(identifier: string, password: string): Promise<{ id:
   return { id: r.user.id, name: r.user.name ?? r.user.fullName ?? loginId.split('@')[0], email: r.user.email, phone: r.user.phone };
 }
 
+export async function loginWithGoogle(idToken: string): Promise<{ id: string; name: string; email: string; phone?: string }> {
+  const r = await req<{ success: boolean; token: string; user: { id: string; name?: string; fullName?: string; email: string; phone?: string } }>(
+    'POST', '/api/auth/google/mobile', { idToken }
+  );
+  await storeToken(r.token);
+  return { id: r.user.id, name: r.user.name ?? r.user.fullName ?? r.user.email.split('@')[0], email: r.user.email, phone: r.user.phone };
+}
+
 export async function createBooking(params: {
   pickupAddress: string; dropoffAddress: string; passengers: number;
   vehicleCategory: string; bookingType: string; date?: string; time?: string; notes?: string; stops?: string[];

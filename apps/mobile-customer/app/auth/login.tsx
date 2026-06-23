@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/context/AuthContext';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_CONFIGURED = Boolean(
   process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
@@ -13,10 +17,29 @@ const GOOGLE_CONFIGURED = Boolean(
 );
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const [, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  });
+
+  useEffect(() => {
+    if (googleResponse?.type === 'success' && googleResponse.authentication?.idToken) {
+      setGoogleLoading(true);
+      loginWithGoogle(googleResponse.authentication.idToken)
+        .then(() => router.replace('/(tabs)'))
+        .catch((e: unknown) => Alert.alert('Google sign-in failed', (e as Error).message ?? 'Please try again.'))
+        .finally(() => setGoogleLoading(false));
+    } else if (googleResponse?.type === 'error') {
+      Alert.alert('Google sign-in failed', googleResponse.error?.message ?? 'Please try again.');
+    }
+  }, [googleResponse]);
 
   const handleLogin = async () => {
     if (!identifier.trim() || !password) return;
@@ -36,7 +59,7 @@ export default function LoginScreen() {
       Alert.alert('Google sign-in not configured', 'Add the Google OAuth client IDs to the customer app environment before enabling Google sign-in.');
       return;
     }
-    Alert.alert('Google sign-in', 'Google sign-in credentials are present, but the native OAuth exchange still needs to be connected before release.');
+    promptGoogleAsync().catch((e: unknown) => Alert.alert('Google sign-in failed', (e as Error).message ?? 'Please try again.'));
   };
 
   return (
@@ -80,8 +103,11 @@ export default function LoginScreen() {
             />
           </View>
 
-          <TouchableOpacity style={styles.googleBtn} onPress={handleGoogle} activeOpacity={0.8}>
-            <Text style={styles.googleText}>Continue with Google</Text>
+          <TouchableOpacity style={[styles.googleBtn, googleLoading && styles.btnDisabled]} onPress={handleGoogle} disabled={googleLoading} activeOpacity={0.8}>
+            {googleLoading
+              ? <ActivityIndicator color={BLACK} />
+              : <Text style={styles.googleText}>Continue with Google</Text>
+            }
           </TouchableOpacity>
 
           <TouchableOpacity

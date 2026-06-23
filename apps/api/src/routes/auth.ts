@@ -2,11 +2,17 @@ import { Router, Request, Response, RequestHandler } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
 import multer from 'multer';
+import { OAuth2Client } from 'google-auth-library';
 import { prisma } from '../lib/db';
 import { signToken, authenticate } from '../middleware/auth';
 import { DRIVER_DOCUMENTS } from '../lib/driverDocuments';
 import { storeDocumentFile, validateDocumentFile, type UploadedFile } from '../lib/documentUpload';
 import type { PortalRole } from '../types';
+
+const GOOGLE_AUDIENCES = [process.env.GOOGLE_WEB_CLIENT_ID, process.env.GOOGLE_ANDROID_CLIENT_ID].filter(
+  (id): id is string => Boolean(id)
+);
+const googleOAuthClient = new OAuth2Client();
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 8 } });
@@ -236,6 +242,66 @@ router.post('/google', async (req: Request, res: Response): Promise<void> => {
     res.json({ success: true, token, user: safe });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/google/mobile:
+ *   post:
+ *     summary: Find-or-create a customer from a Google ID token (native mobile sign-in)
+ *     description: Unlike /api/auth/google (which trusts the Next.js server after it verifies Google itself), this endpoint is called directly from the mobile app, so it independently verifies the ID token's signature, issuer, audience and expiry against Google before trusting any of its claims.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [idToken]
+ *             properties:
+ *               idToken: { type: string }
+ *     responses:
+ *       200: { description: Token issued }
+ *       401: { description: Invalid Google ID token }
+ */
+router.post('/google/mobile', async (req: Request, res: Response): Promise<void> => {
+  const { idToken } = req.body as { idToken?: string };
+  if (!idToken) {
+    res.status(400).json({ success: false, message: 'idToken is required' });
+    return;
+  }
+  if (GOOGLE_AUDIENCES.length === 0) {
+    res.status(503).json({ success: false, message: 'Google sign-in is not configured' });
+    return;
+  }
+  try {
+    const ticket = await googleOAuthClient.verifyIdToken({ idToken, audience: GOOGLE_AUDIENCES });
+    const payload = ticket.getPayload();
+    if (!payload?.email || !payload.email_verified) {
+      res.status(401).json({ success: false, message: 'Google account email is not verified' });
+      return;
+    }
+    const email = payload.email.toLowerCase();
+    const fullName = payload.name || email.split('@')[0];
+
+    let cust = await prisma.customer.findUnique({ where: { email } });
+    if (!cust) {
+      cust = await prisma.customer.create({
+        data: {
+          id: `cust-${uuid()}`,
+          fullName, email,
+          authProvider: 'google',
+          isVerified: true,
+          totalBookings: 0,
+        },
+      });
+    }
+    const token = signToken({ id: cust.id, email: cust.email, role: 'customer' });
+    const { passwordHash: _, ...safe } = cust;
+    res.json({ success: true, token, user: safe });
+  } catch (e) {
+    res.status(401).json({ success: false, message: 'Invalid Google ID token' });
   }
 });
 

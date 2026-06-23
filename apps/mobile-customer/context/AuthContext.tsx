@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { login as apiLogin, getProfile, clearToken } from '@/services/api';
+import { login as apiLogin, loginWithGoogle as apiLoginWithGoogle, getProfile, clearToken } from '@/services/api';
 import { registerCustomerPushToken } from '@/services/pushNotifications';
 
 interface Customer {
@@ -14,6 +14,7 @@ interface AuthContextValue {
   customer: Customer | null;
   loading: boolean;
   login: (identifier: string, password: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextValue>({
   customer: null,
   loading: true,
   login: async () => {},
+  loginWithGoogle: async () => {},
   logout: async () => {},
   refreshProfile: async () => {},
 });
@@ -51,6 +53,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     registerCustomerPushToken().catch(() => {});
   };
 
+  const loginWithGoogle = async (idToken: string) => {
+    const user = await apiLoginWithGoogle(idToken);
+    setCustomer(user);
+    registerCustomerPushToken().catch(() => {});
+  };
+
   const logout = async () => {
     await clearToken();
     setCustomer(null);
@@ -62,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ customer, loading, login, logout, refreshProfile }}>
+    <AuthContext.Provider value={{ customer, loading, login, loginWithGoogle, logout, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
