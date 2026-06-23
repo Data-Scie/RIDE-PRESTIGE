@@ -16,8 +16,12 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-    if (!fullName.trim() || !email.trim() || !password) {
+    if (!fullName.trim() || !email.trim() || !phone.trim() || !password) {
       Alert.alert('Missing fields', 'Please fill in all required fields.');
+      return;
+    }
+    if (password.length < 8) {
+      Alert.alert('Password too short', 'Please use at least 8 characters.');
       return;
     }
     setLoading(true);
@@ -50,7 +54,7 @@ export default function RegisterScreen() {
           {[
             { label: 'Full name *', value: fullName, setter: setFullName, keyboard: 'default' as const, auto: 'name' as const, placeholder: 'Jane Smith' },
             { label: 'Email *', value: email, setter: setEmail, keyboard: 'email-address' as const, auto: 'email' as const, placeholder: 'jane@example.com' },
-            { label: 'Phone', value: phone, setter: setPhone, keyboard: 'phone-pad' as const, auto: 'tel' as const, placeholder: '+44 7700 900000' },
+            { label: 'Phone *', value: phone, setter: setPhone, keyboard: 'phone-pad' as const, auto: 'tel' as const, placeholder: '+44 7700 900000' },
           ].map(f => (
             <View key={f.label} style={styles.field}>
               <Text style={styles.label}>{f.label}</Text>

@@ -53,23 +53,21 @@ export function mapVehicleCategory(cat: string): string {
   return m[cat] ?? 'prestige';
 }
 
-export async function login(email: string, password: string): Promise<{ id: string; name: string; email: string }> {
-  const r = await req<{ success: boolean; token: string; user: { id: string; name?: string; fullName?: string; email: string } }>(
-    'POST', '/api/auth/login', { email, password, role: 'customer' }
+export async function login(identifier: string, password: string): Promise<{ id: string; name: string; email: string; phone?: string }> {
+  const loginId = identifier.trim();
+  const r = await req<{ success: boolean; token: string; user: { id: string; name?: string; fullName?: string; email: string; phone?: string } }>(
+    'POST', '/api/auth/login', { identifier: loginId, email: loginId, password, role: 'customer' }
   );
   await storeToken(r.token);
-  return { id: r.user.id, name: r.user.name ?? r.user.fullName ?? email.split('@')[0], email: r.user.email };
+  return { id: r.user.id, name: r.user.name ?? r.user.fullName ?? loginId.split('@')[0], email: r.user.email, phone: r.user.phone };
 }
 
 export async function createBooking(params: {
   pickupAddress: string; dropoffAddress: string; passengers: number;
   vehicleCategory: string; bookingType: string; date?: string; time?: string; notes?: string; stops?: string[];
 }): Promise<{ id: string; bookingRef: string }> {
-  const r = await req<{ success: boolean; data: { booking: { id: string; reference: string } } }>(
-    'POST', '/api/public/booking', {
-      fullName: 'Demo Customer',
-      phone: '+44 7700 900000',
-      email: `demo.customer.${Date.now()}@rideprestige.test`,
+  const r = await req<{ success: boolean; data: { id: string; reference: string } }>(
+    'POST', '/api/customer/bookings', {
       pickupPostcode:  extractPostcode(params.pickupAddress),
       dropoffPostcode: extractPostcode(params.dropoffAddress),
       vehicleCategory: mapVehicleCategory(params.vehicleCategory),
@@ -81,7 +79,7 @@ export async function createBooking(params: {
       stops:           params.stops ?? [],
     }
   );
-  return { id: r.data.booking.reference, bookingRef: r.data.booking.reference };
+  return { id: r.data.id, bookingRef: r.data.reference };
 }
 
 export async function getBookings(): Promise<Array<{ id: string; bookingRef: string; status: string; pickupPostcode: string; dropoffPostcode: string; createdAt: string; fareAmount?: number }>> {

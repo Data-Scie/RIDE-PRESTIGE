@@ -114,15 +114,16 @@ async function buildAffiliateDocumentCreates(req: Request, affiliateId: string) 
  *       401: { description: Invalid credentials }
  */
 router.post('/login', async (req: Request, res: Response): Promise<void> => {
-  const { email, password, role } = req.body as { email: string; password: string; role: string };
-  if (!email || !password || !role) {
-    res.status(400).json({ success: false, message: 'email, password and role are required' });
+  const { email, identifier, password, role } = req.body as { email?: string; identifier?: string; password: string; role: string };
+  const loginId = (email ?? identifier ?? '').trim();
+  if (!loginId || !password || !role) {
+    res.status(400).json({ success: false, message: 'email/phone, password and role are required' });
     return;
   }
 
   try {
     if (role === 'admin' || role === 'ops') {
-      const admin = await prisma.admin.findUnique({ where: { email } });
+      const admin = await prisma.admin.findUnique({ where: { email: loginId.toLowerCase() } });
       if (!admin || !bcrypt.compareSync(password, admin.passwordHash)) {
         res.status(401).json({ success: false, message: 'Invalid credentials' });
         return;
@@ -134,7 +135,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     }
 
     if (role === 'affiliate') {
-      const aff = await prisma.affiliate.findUnique({ where: { email } });
+      const aff = await prisma.affiliate.findUnique({ where: { email: loginId.toLowerCase() } });
       if (!aff || !bcrypt.compareSync(password, aff.passwordHash)) {
         res.status(401).json({ success: false, message: 'Invalid credentials' });
         return;
@@ -150,7 +151,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     }
 
     if (role === 'driver') {
-      const drv = await prisma.driver.findUnique({ where: { email }, include: { documents: true } });
+      const drv = await prisma.driver.findUnique({ where: { email: loginId.toLowerCase() }, include: { documents: true } });
       if (!drv || !bcrypt.compareSync(password, drv.passwordHash)) {
         res.status(401).json({ success: false, message: 'Invalid credentials' });
         return;
@@ -166,7 +167,10 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     }
 
     if (role === 'customer') {
-      const cust = await prisma.customer.findUnique({ where: { email } });
+      const normalizedId = loginId.toLowerCase();
+      const cust = normalizedId.includes('@')
+        ? await prisma.customer.findUnique({ where: { email: normalizedId } })
+        : await prisma.customer.findFirst({ where: { phone: loginId } });
       if (!cust || !cust.passwordHash || !bcrypt.compareSync(password, cust.passwordHash)) {
         res.status(401).json({ success: false, message: 'Invalid credentials' });
         return;

@@ -13,7 +13,7 @@ interface Customer {
 interface AuthContextValue {
   customer: Customer | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -45,8 +45,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const user = await apiLogin(email, password);
+  const login = async (identifier: string, password: string) => {
+    const user = await apiLogin(identifier, password);
     setCustomer(user);
     registerCustomerPushToken().catch(() => {});
   };

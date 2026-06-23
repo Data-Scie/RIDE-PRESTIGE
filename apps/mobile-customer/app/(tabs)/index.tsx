@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createBooking, getBookings, getProfile, updateProfile, submitSupportTicket, cancelBooking, getQuote, trackBooking } from "../../services/api";
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Image,
@@ -20,6 +21,8 @@ import {
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { router } from "expo-router";
+import { useAuth } from "../../context/AuthContext";
 import { RideMap } from "../../components/ride-map/RideMap";
 
 type Screen =
@@ -74,6 +77,7 @@ function vehicleIconName(category: VehicleCategory): VehicleIconName {
 (TextInput as any).defaultProps.style = [{ fontFamily: FONT_REGULAR }, (TextInput as any).defaultProps.style];
 
 export default function RidePrestigeApp() {
+  const { customer, loading: authLoading, logout } = useAuth();
   const [screen, setScreen] = useState<Screen>("splash");
   const [modal, setModal] = useState<ModalType>(null);
   const [panel, setPanel] = useState<PanelSize>("half");
@@ -90,11 +94,17 @@ export default function RidePrestigeApp() {
   const quoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (screen === "splash") {
+    if (!authLoading && !customer) {
+      router.replace("/auth/login");
+    }
+  }, [authLoading, customer]);
+
+  useEffect(() => {
+    if (!authLoading && customer && screen === "splash") {
       const timer = setTimeout(() => setScreen("home"), 1700);
       return () => clearTimeout(timer);
     }
-  }, [screen]);
+  }, [screen, authLoading, customer]);
 
   // Debounced quote fetch whenever pickup/dropoff/vehicle changes
   useEffect(() => {
@@ -142,6 +152,18 @@ export default function RidePrestigeApp() {
   };
 
   const confirmRequest = useCallback(async () => {
+    if (!customer) {
+      Alert.alert("Sign in required", "Please sign in or create an account before booking.");
+      router.replace("/auth/login");
+      return;
+    }
+    if (!customer.phone?.trim()) {
+      Alert.alert("Phone number required", "Please add a contact phone number in Account before booking so drivers can reach you.");
+      setModal(null);
+      setScreen("account");
+      return;
+    }
+
     setModal(null);
     setScreen("searching");
     try {
@@ -161,8 +183,9 @@ export default function RidePrestigeApp() {
       setScreen("home");
       Alert.alert("Booking failed", error instanceof Error ? error.message : "Could not create the booking.");
     }
-  }, [pickupAddress, dropoffAddress, stops, selectedVehicle, isScheduledBooking, pickupDate, pickupTime, notes]);
+  }, [customer, pickupAddress, dropoffAddress, stops, selectedVehicle, isScheduledBooking, pickupDate, pickupTime, notes]);
 
+  if (authLoading || !customer) return <AuthLoadingScreen />;
   if (screen === "splash") return <SplashScreen />;
 
   return (
@@ -208,6 +231,12 @@ export default function RidePrestigeApp() {
           visible={menuOpen}
           close={() => setMenuOpen(false)}
           go={(target) => { setMenuOpen(false); setScreen(target); }}
+          customer={customer}
+          logout={async () => {
+            await logout();
+            setMenuOpen(false);
+            router.replace("/auth/login");
+          }}
         />
 
         <BookingModals
@@ -225,6 +254,16 @@ export default function RidePrestigeApp() {
         />
       </View>
     </SafeAreaView>
+  );
+}
+
+function AuthLoadingScreen() {
+  return (
+    <View style={styles.splash}>
+      <StatusBar barStyle="light-content" backgroundColor={BLACK} />
+      <Image source={LOGO_MARK} style={styles.loadingMark} resizeMode="contain" />
+      <ActivityIndicator color={ROSE_GOLD} />
+    </View>
   );
 }
 
@@ -678,14 +717,26 @@ function TrackingScreen({ bookingId, go }: { bookingId: string | null; go: (s: S
   );
 }
 
-function ProfileDrawer({ visible, close, go }: { visible: boolean; close: () => void; go: (s: Screen) => void }) {
-  const items: { title: string; sub: string; screen: Screen; icon: string }[] = [
-    { title: "My bookings", sub: "Upcoming and past rides", screen: "bookings", icon: "📋" },
-    { title: "Favourites", sub: "Home, work and saved stops", screen: "favourites", icon: "★" },
-    { title: "Offers", sub: "Promotions and discounts", screen: "offers", icon: "🎁" },
-    { title: "Account", sub: "Personal details", screen: "account", icon: "👤" },
-    { title: "Support", sub: "Help and complaints", screen: "support", icon: "💬" },
-    { title: "Terms & Conditions", sub: "Policies and privacy", screen: "terms", icon: "📄" },
+function ProfileDrawer({
+  visible,
+  close,
+  go,
+  customer,
+  logout,
+}: {
+  visible: boolean;
+  close: () => void;
+  go: (s: Screen) => void;
+  customer: { name: string; email: string; phone?: string } | null;
+  logout: () => Promise<void>;
+}) {
+  const items: { title: string; sub: string; screen: Screen; icon: VehicleIconName }[] = [
+    { title: "My bookings", sub: "Upcoming and past rides", screen: "bookings", icon: "receipt-long" },
+    { title: "Favourites", sub: "Home, work and saved stops", screen: "favourites", icon: "star-border" },
+    { title: "Offers", sub: "Promotions and discounts", screen: "offers", icon: "local-offer" },
+    { title: "Account", sub: "Personal details", screen: "account", icon: "person" },
+    { title: "Support", sub: "Help and complaints", screen: "support", icon: "chat-bubble-outline" },
+    { title: "Terms & Conditions", sub: "Policies and privacy", screen: "terms", icon: "description" },
   ];
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
@@ -694,15 +745,22 @@ function ProfileDrawer({ visible, close, go }: { visible: boolean; close: () => 
         <View style={styles.drawer}>
           <View style={styles.drawerHeader}>
             <Image source={LOGO_MARK} style={styles.drawerLogo} resizeMode="contain" />
-            <View style={{ flex: 1 }}><Text style={styles.drawerName}>Ride Prestige</Text><Text style={styles.drawerSub}>Premium customer account</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.drawerName}>{customer?.name ?? "Ride Prestige"}</Text>
+              <Text style={styles.drawerSub}>{customer?.email ?? "Premium customer account"}</Text>
+            </View>
           </View>
           {items.map((item) => (
             <Pressable key={item.title} style={styles.drawerItem} onPress={() => go(item.screen)}>
-              <Text style={styles.drawerIcon}>{item.icon}</Text>
+              <MaterialIcons name={item.icon} size={22} color={ROSE_GOLD} style={styles.drawerMaterialIcon} />
               <View style={{ flex: 1 }}><Text style={styles.drawerItemTitle}>{item.title}</Text><Text style={styles.drawerItemSub}>{item.sub}</Text></View>
-              <Text style={styles.drawerChevron}>→</Text>
+              <MaterialIcons name="chevron-right" size={22} color={ROSE_GOLD} />
             </Pressable>
           ))}
+          <Pressable style={styles.logoutButton} onPress={logout}>
+            <MaterialIcons name="logout" size={20} color={BLACK} />
+            <Text style={styles.logoutButtonText}>Sign out</Text>
+          </Pressable>
         </View>
       </View>
     </Modal>
@@ -761,6 +819,7 @@ function OffersScreen({ go }: { go: (s: Screen) => void }) {
 }
 
 function AccountScreen({ go }: { go: (s: Screen) => void }) {
+  const { refreshProfile } = useAuth();
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -773,9 +832,14 @@ function AccountScreen({ go }: { go: (s: Screen) => void }) {
   }, []);
 
   const save = async () => {
+    if (!fullName.trim() || !phone.trim()) {
+      Alert.alert("Missing details", "Full name and phone number are required.");
+      return;
+    }
     setSaving(true);
     try {
       await updateProfile({ fullName, phone });
+      await refreshProfile();
       Alert.alert("Saved", "Profile updated.");
     } catch { Alert.alert("Error", "Could not save profile."); }
     finally { setSaving(false); }
@@ -889,6 +953,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BLACK },
   splash: { flex: 1, backgroundColor: BLACK, alignItems: "center", justifyContent: "center" },
   splashLogo: { width: 190, height: 190 },
+  loadingMark: { width: 92, height: 92, marginBottom: 18 },
   mapArea: { height: "75%", backgroundColor: "#111111", overflow: "hidden" },
   mapAreaExpanded: { height: "100%" },
   mapShade: { position: "absolute", left: 0, right: 0, top: 0, height: 170 },
@@ -996,10 +1061,11 @@ const styles = StyleSheet.create({
   drawerName: { color: TEXT, fontFamily: FONT_MEDIUM, fontWeight: "600", fontSize: 18 },
   drawerSub: { color: MUTED, fontFamily: FONT_REGULAR, fontWeight: "600", marginTop: 3 },
   drawerItem: { minHeight: 68, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: LINE },
-  drawerIcon: { width: 34, fontSize: 19 },
+  drawerMaterialIcon: { width: 34 },
   drawerItemTitle: { color: TEXT, fontFamily: FONT_MEDIUM, fontWeight: "600" },
   drawerItemSub: { color: MUTED, fontSize: 12, marginTop: 3 },
-  drawerChevron: { color: ROSE_GOLD, fontFamily: FONT_MEDIUM, fontWeight: "600", fontSize: 18 },
+  logoutButton: { marginTop: 18, minHeight: 48, borderRadius: 14, backgroundColor: ROSE_GOLD, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
+  logoutButtonText: { color: BLACK, fontFamily: FONT_MEDIUM, fontWeight: "700", fontSize: 14 },
   page: { flex: 1, backgroundColor: BLACK },
   pageHeader: { height: 96, paddingHorizontal: 16, paddingTop: 38, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: LINE },
   backButton: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
