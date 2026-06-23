@@ -1,6 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
 import Constants from "expo-constants";
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 
 type LatLng = { latitude: number; longitude: number };
 
@@ -58,6 +57,7 @@ function RideMapFallback({ stops, showRoute }: RideMapProps) {
 }
 
 function RideMapLive({ stops, showRoute, driverCoordinate, pickupCoordinate, dropoffCoordinate }: RideMapProps) {
+  const { default: MapView, Marker, Polyline, PROVIDER_GOOGLE } = require("react-native-maps");
   const pickup  = pickupCoordinate  ?? defaultPickup;
   const dropoff = dropoffCoordinate ?? defaultDropoff;
   const driver  = driverCoordinate  ?? defaultDriver;
