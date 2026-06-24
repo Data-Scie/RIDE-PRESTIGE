@@ -424,7 +424,26 @@ router.put('/rides/:id/status', async (req: Request, res: Response) => {
     const job = await prisma.job.findUnique({ where: { id: req.params.id } });
     if (!job) { res.status(404).json({ success: false, message: 'Ride not found' }); return; }
     const { status } = req.body as { status: JobStatus };
-    const updated = await prisma.job.update({ where: { id: job.id }, data: { status, ...(status === 'completed' ? { completedAt: new Date() } : {}) } });
+    const updated = await prisma.$transaction(async tx => {
+      const row = await tx.job.update({ where: { id: job.id }, data: { status, ...(status === 'completed' ? { completedAt: new Date() } : {}) } });
+      if (['cancelled', 'rejected'].includes(status)) {
+        await tx.booking.updateMany({
+          where: { OR: [{ id: job.bookingId ?? '' }, { jobId: job.id }] },
+          data: { status },
+        });
+        await tx.rideOffer.updateMany({
+          where: { jobId: job.id, status: 'pending' },
+          data: { status: 'withdrawn', respondedAt: new Date() },
+        });
+        if (job.assignedDriverId) {
+          await tx.driver.update({ where: { id: job.assignedDriverId }, data: { status: 'available', assignedVehicleId: null } });
+        }
+        if (job.assignedVehicleId) {
+          await tx.fleetVehicle.update({ where: { id: job.assignedVehicleId }, data: { status: 'available', assignedDriverId: null } });
+        }
+      }
+      return row;
+    });
     await recordRideFlowEvent({
       job: updated,
       eventType: 'status_changed',

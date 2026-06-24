@@ -230,7 +230,7 @@ router.get('/jobs/accepted', async (req: Request, res: Response) => {
     const jobs = await prisma.job.findMany({
       where: {
         affiliateId: affId,
-        status: { notIn: ['awaiting_affiliate', 'cancelled', 'rejected', 'completed'] },
+        status: { notIn: ['awaiting_affiliate', 'rejected'] },
       },
       orderBy: { dateTime: 'asc' },
     });

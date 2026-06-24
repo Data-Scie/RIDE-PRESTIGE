@@ -171,7 +171,12 @@ router.get('/jobs/available', async (req: Request, res: Response) => {
     }
     await expireRideOffers();
     const offers = await prisma.rideOffer.findMany({
-      where: { driverId: drvId, status: 'pending', expiresAt: { gt: new Date() } },
+      where: {
+        driverId: drvId,
+        status: 'pending',
+        expiresAt: { gt: new Date() },
+        job: { status: 'awaiting_affiliate' },
+      },
       include: { job: true },
       orderBy: { expiresAt: 'asc' },
     });

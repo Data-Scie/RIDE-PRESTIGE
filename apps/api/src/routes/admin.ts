@@ -357,12 +357,38 @@ router.put('/bookings/:id', async (req: Request, res: Response) => {
     const exists = await prisma.booking.findUnique({ where: { id: req.params.id } });
     if (!exists) { res.status(404).json({ success: false, message: 'Booking not found' }); return; }
     const { status, adminNotes } = req.body as { status?: string; adminNotes?: string };
-    const updated = await prisma.booking.update({
-      where: { id: req.params.id },
-      data: {
-        ...(status ? { status } : {}),
-        ...(adminNotes !== undefined ? { adminNotes } : {}),
-      },
+    const updated = await prisma.$transaction(async tx => {
+      const booking = await tx.booking.update({
+        where: { id: req.params.id },
+        data: {
+          ...(status ? { status } : {}),
+          ...(adminNotes !== undefined ? { adminNotes } : {}),
+        },
+      });
+
+      if (status && ['cancelled', 'rejected', 'completed'].includes(status)) {
+        const job = await tx.job.findFirst({ where: { OR: [{ id: exists.jobId ?? '' }, { bookingId: exists.id }] } });
+        if (job) {
+          await tx.job.update({
+            where: { id: job.id },
+            data: { status, ...(status === 'completed' ? { completedAt: new Date() } : {}) },
+          });
+          await tx.rideOffer.updateMany({
+            where: { jobId: job.id, status: 'pending' },
+            data: { status: 'withdrawn', respondedAt: new Date() },
+          });
+          if (['cancelled', 'rejected'].includes(status)) {
+            if (job.assignedDriverId) {
+              await tx.driver.update({ where: { id: job.assignedDriverId }, data: { status: 'available', assignedVehicleId: null } });
+            }
+            if (job.assignedVehicleId) {
+              await tx.fleetVehicle.update({ where: { id: job.assignedVehicleId }, data: { status: 'available', assignedDriverId: null } });
+            }
+          }
+        }
+      }
+
+      return booking;
     });
     res.json({ success: true, data: shapeBooking(updated) });
   } catch (e) {
@@ -390,7 +416,22 @@ router.delete('/bookings/:id', async (req: Request, res: Response) => {
   try {
     const exists = await prisma.booking.findUnique({ where: { id: req.params.id } });
     if (!exists) { res.status(404).json({ success: false, message: 'Booking not found' }); return; }
-    await prisma.booking.update({ where: { id: req.params.id }, data: { status: 'cancelled' } });
+    await prisma.$transaction(async tx => {
+      await tx.booking.update({ where: { id: req.params.id }, data: { status: 'cancelled' } });
+      const job = await tx.job.findFirst({ where: { OR: [{ id: exists.jobId ?? '' }, { bookingId: exists.id }] } });
+      if (!job) return;
+      await tx.job.update({ where: { id: job.id }, data: { status: 'cancelled' } });
+      await tx.rideOffer.updateMany({
+        where: { jobId: job.id, status: 'pending' },
+        data: { status: 'withdrawn', respondedAt: new Date() },
+      });
+      if (job.assignedDriverId) {
+        await tx.driver.update({ where: { id: job.assignedDriverId }, data: { status: 'available', assignedVehicleId: null } });
+      }
+      if (job.assignedVehicleId) {
+        await tx.fleetVehicle.update({ where: { id: job.assignedVehicleId }, data: { status: 'available', assignedDriverId: null } });
+      }
+    });
     res.json({ success: true, message: 'Booking cancelled' });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });

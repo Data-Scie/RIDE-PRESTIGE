@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  BackHandler,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -18,6 +19,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -45,6 +47,10 @@ type ModalType = null | "time" | "vehicle" | "profile" | "confirm" | "addFavouri
 
 const LOGO = require("../../assets/images/brand/ride-prestige-logo.png");
 const LOGO_MARK = require("../../assets/images/brand/ride-prestige-mark.png");
+const ACTIVE_BOOKING_KEY = "rp_customer_active_booking_id";
+const PRE_DRIVER_STATUSES = ["pending", "awaiting_affiliate", "needs_allocation"];
+const TRACKING_STATUSES = ["driver_assigned", "vehicle_assigned", "driver_accepted", "on_route", "arrived_pickup", "passenger_onboard", "in_progress"];
+const TERMINAL_STATUSES = ["completed", "cancelled", "rejected"];
 
 const BLACK = "#030303";
 const BLACK_2 = "#090A09";
@@ -98,6 +104,54 @@ export default function RidePrestigeApp() {
       router.replace("/auth/login");
     }
   }, [authLoading, customer]);
+
+  useEffect(() => {
+    if (authLoading || !customer) return;
+    let cancelled = false;
+
+    const restoreActiveRide = async () => {
+      try {
+        let bookingId = await AsyncStorage.getItem(ACTIVE_BOOKING_KEY);
+        if (!bookingId) {
+          const bookings = await getBookings();
+          const active = bookings.find((booking) => !TERMINAL_STATUSES.includes(booking.status));
+          bookingId = active?.id ?? null;
+        }
+        if (!bookingId || cancelled) return;
+
+        const tracking = await trackBooking(bookingId);
+        if (cancelled) return;
+        if (TERMINAL_STATUSES.includes(tracking.status)) {
+          await AsyncStorage.removeItem(ACTIVE_BOOKING_KEY);
+          return;
+        }
+        await AsyncStorage.setItem(ACTIVE_BOOKING_KEY, bookingId);
+        setActiveBookingId(bookingId);
+        setScreen(TRACKING_STATUSES.includes(tracking.status) ? "tracking" : "searching");
+      } catch {
+        // If restore fails, leave the customer at the normal booking screen.
+      }
+    };
+
+    restoreActiveRide();
+    return () => { cancelled = true; };
+  }, [authLoading, customer]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (modal) {
+        setModal(null);
+        return true;
+      }
+      if (screen === "searching" || screen === "tracking") return true;
+      if (screen !== "home" && screen !== "splash") {
+        setScreen("home");
+        return true;
+      }
+      return true;
+    });
+    return () => subscription.remove();
+  }, [modal, screen]);
 
   useEffect(() => {
     if (!authLoading && customer && screen === "splash") {
@@ -179,6 +233,7 @@ export default function RidePrestigeApp() {
         notes: notes !== "Any special instructions" ? notes : undefined,
       });
       setActiveBookingId(booking.id);
+      await AsyncStorage.setItem(ACTIVE_BOOKING_KEY, booking.id);
     } catch (error) {
       setScreen("home");
       Alert.alert("Booking failed", error instanceof Error ? error.message : "Could not create the booking.");
@@ -480,19 +535,56 @@ function HomeBookingScreen({
   );
 }
 
-function MapArea({ title, subtitle, stops, showRoute, expanded, driverCoordinate }: {
+function MapArea({ title, subtitle, stops, showRoute, expanded, driverCoordinate, searching }: {
   title: string; subtitle: string; stops: string[]; showRoute: boolean; expanded?: boolean;
   driverCoordinate?: { latitude: number; longitude: number } | null;
+  searching?: boolean;
 }) {
   return (
     <View style={[styles.mapArea, expanded && styles.mapAreaExpanded]}>
       <RideMap stops={stops} showRoute={showRoute} driverCoordinate={driverCoordinate} />
+      {searching && <SearchRadiusPulse />}
       <LinearGradient colors={["rgba(3,3,3,0.78)", "rgba(3,3,3,0.20)", "transparent"]} style={styles.mapShade} />
       <View style={styles.mapTitleBlock}>
         <Text style={styles.mapSmall}>{subtitle}</Text>
         <Text style={styles.mapTitle}>{title}</Text>
       </View>
       <View style={styles.referBar}><Text style={styles.referText}>REFER A FRIEND, EARN £5 →</Text></View>
+    </View>
+  );
+}
+
+function SearchRadiusPulse() {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(pulse, {
+        toValue: 1,
+        duration: 1800,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  const makeStyle = (offset: number) => {
+    const progress = Animated.modulo(Animated.add(pulse, offset), 1);
+    return {
+      opacity: progress.interpolate({ inputRange: [0, 0.75, 1], outputRange: [0.55, 0.18, 0] }),
+      transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.35, 2.6] }) }],
+    };
+  };
+
+  return (
+    <View pointerEvents="none" style={styles.searchPulseWrap}>
+      {[0, 0.33, 0.66].map((offset) => (
+        <Animated.View key={offset} style={[styles.searchPulseRing, makeStyle(offset)]} />
+      ))}
+      <View style={styles.searchPassengerPin}>
+        <View style={styles.searchPassengerDot} />
+      </View>
     </View>
   );
 }
@@ -609,8 +701,7 @@ function SearchingScreen({ bookingId, onFound }: { bookingId: string | null; onF
     const interval = setInterval(async () => {
       try {
         const data = await trackBooking(bookingId);
-        const activeStatuses = ["driver_assigned", "vehicle_assigned", "driver_accepted", "on_route", "arrived_pickup", "passenger_onboard", "in_progress"];
-        if (data.status && activeStatuses.includes(data.status)) {
+        if (data.status && TRACKING_STATUSES.includes(data.status)) {
           clearInterval(interval);
           onFound();
         }
@@ -623,17 +714,26 @@ function SearchingScreen({ bookingId, onFound }: { bookingId: string | null; onF
 
   return (
     <View style={styles.screen}>
-      <MapArea title="Finding your driver" subtitle="Booking confirmed" stops={[]} showRoute={false} expanded />
+      <MapArea title="Finding your driver" subtitle="Booking confirmed" stops={[]} showRoute={false} expanded searching />
       <View style={styles.searchingCard}>
-        <View style={styles.spinner} />
-        <Text style={styles.searchingTitle}>Looking for a nearby driver</Text>
-        <Text style={styles.searchingSub}>Your request is being matched with the best available operator. Scheduled journeys are held and dispatched before pickup time.</Text>
+        <View style={styles.searchingHeaderRow}>
+          <View style={styles.spinner} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.searchingKicker}>Pickup confirmed</Text>
+            <Text style={styles.searchingTitle}>Finding your driver</Text>
+          </View>
+        </View>
+        <Text style={styles.searchingSub}>
+          We are checking eligible drivers and approved operators around your pickup area. Driver details will appear here as soon as a driver is allocated.
+        </Text>
       </View>
     </View>
   );
 }
 
 const STATUS_STEPS = [
+  { key: "awaiting_affiliate", label: "Finding driver" },
+  { key: "needs_allocation",   label: "Operator accepted" },
   { key: "driver_assigned",    label: "Driver assigned" },
   { key: "vehicle_assigned",   label: "Vehicle assigned" },
   { key: "driver_accepted",    label: "Driver accepted" },
@@ -642,6 +742,7 @@ const STATUS_STEPS = [
   { key: "passenger_onboard",  label: "Passenger onboard" },
   { key: "in_progress",        label: "Trip in progress" },
   { key: "completed",          label: "Completed" },
+  { key: "cancelled",          label: "Cancelled" },
 ];
 
 function TrackingScreen({ bookingId, go }: { bookingId: string | null; go: (s: Screen) => void }) {
@@ -674,7 +775,13 @@ function TrackingScreen({ bookingId, go }: { bookingId: string | null; go: (s: S
     return () => clearInterval(interval);
   }, [bookingId]);
 
-  const currentStepIndex = STATUS_STEPS.findIndex(s => s.key === tracking.status);
+  useEffect(() => {
+    if (TERMINAL_STATUSES.includes(tracking.status)) {
+      AsyncStorage.removeItem(ACTIVE_BOOKING_KEY).catch(() => {});
+    }
+  }, [tracking.status]);
+
+  const currentStepIndex = Math.max(0, STATUS_STEPS.findIndex(s => s.key === tracking.status));
   const driverCoordinate = typeof tracking.driverLat === "number" && typeof tracking.driverLng === "number"
     ? { latitude: tracking.driverLat, longitude: tracking.driverLng }
     : null;
@@ -687,7 +794,7 @@ function TrackingScreen({ bookingId, go }: { bookingId: string | null; go: (s: S
         title={statusLabel}
         subtitle={tracking.driverName ? `Driver: ${tracking.driverName}` : "Waiting for driver"}
         stops={[]}
-        showRoute={tracking.status !== "driver_assigned"}
+        showRoute={!PRE_DRIVER_STATUSES.includes(tracking.status)}
         driverCoordinate={driverCoordinate}
         expanded
       />
@@ -696,8 +803,8 @@ function TrackingScreen({ bookingId, go }: { bookingId: string | null; go: (s: S
         <View style={styles.driverCard}>
           <View style={styles.driverAvatar}><Text style={styles.driverAvatarText}>{tracking.driverName ? tracking.driverName.slice(0, 2).toUpperCase() : "RP"}</Text></View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.driverName}>{tracking.driverName ?? "Awaiting driver assignment"}</Text>
-            <Text style={styles.driverSub}>{tracking.driverPhone ? `📞 ${tracking.driverPhone}` : "Driver will be assigned shortly"}</Text>
+            <Text style={styles.driverName}>{tracking.driverName ?? "Driver details pending"}</Text>
+            <Text style={styles.driverSub}>{tracking.driverPhone ? `Call: ${tracking.driverPhone}` : "Affiliate/operator details stay private. Driver contact appears after allocation."}</Text>
           </View>
         </View>
         {STATUS_STEPS.map((s, i) => (
@@ -960,6 +1067,10 @@ const styles = StyleSheet.create({
   mapTitleBlock: { position: "absolute", top: 74, left: 18, right: 18 },
   mapSmall: { color: ROSE_GOLD_2, fontSize: 11, fontFamily: FONT_MEDIUM, fontWeight: "600", letterSpacing: 1.2, textTransform: "uppercase" },
   mapTitle: { color: WHITE, fontSize: 22, fontFamily: FONT_MEDIUM, fontWeight: "600", marginTop: 4 },
+  searchPulseWrap: { position: "absolute", left: "50%", top: "44%", width: 220, height: 220, marginLeft: -110, marginTop: -110, alignItems: "center", justifyContent: "center" },
+  searchPulseRing: { position: "absolute", width: 132, height: 132, borderRadius: 66, borderWidth: 2, borderColor: ROSE_GOLD, backgroundColor: "rgba(215,180,106,0.08)" },
+  searchPassengerPin: { width: 44, height: 44, borderRadius: 22, backgroundColor: WHITE, borderWidth: 4, borderColor: RED, alignItems: "center", justifyContent: "center", shadowColor: BLACK, shadowOpacity: 0.35, shadowRadius: 14, elevation: 8 },
+  searchPassengerDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: RED },
   topBar: { position: "absolute", top: 18, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   topLogo: { width: 38, height: 38, borderRadius: 9 },
   profileButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(3,3,3,0.86)", borderWidth: 1, borderColor: LINE, alignItems: "center", justifyContent: "center" },
@@ -1035,10 +1146,12 @@ const styles = StyleSheet.create({
   vehicleOptionPrice: { color: ROSE_GOLD, fontFamily: FONT_MEDIUM, fontWeight: "600" },
   confirmSummary: { backgroundColor: CARD, borderRadius: 18, borderWidth: 1, borderColor: LINE, padding: 14 },
   confirmSummaryText: { color: TEXT, fontFamily: FONT_MEDIUM, fontWeight: "600", marginVertical: 4 },
-  searchingCard: { position: "absolute", left: 16, right: 16, bottom: 28, borderRadius: 24, backgroundColor: BLACK_2, borderWidth: 1, borderColor: LINE, padding: 22, alignItems: "center" },
-  spinner: { width: 48, height: 48, borderRadius: 24, borderWidth: 5, borderColor: "#2D3432", borderTopColor: RED, marginBottom: 16 },
-  searchingTitle: { color: TEXT, fontFamily: FONT_MEDIUM, fontWeight: "600", fontSize: 20 },
-  searchingSub: { color: MUTED, textAlign: "center", lineHeight: 20, marginTop: 8 },
+  searchingCard: { position: "absolute", left: 16, right: 16, bottom: 34, borderRadius: 24, backgroundColor: BLACK_2, borderWidth: 1, borderColor: LINE, padding: 22 },
+  searchingHeaderRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 14 },
+  spinner: { width: 46, height: 46, borderRadius: 23, borderWidth: 5, borderColor: "#2D3432", borderTopColor: RED },
+  searchingKicker: { color: ROSE_GOLD, fontFamily: FONT_MEDIUM, fontWeight: "800", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 },
+  searchingTitle: { color: TEXT, fontFamily: FONT_MEDIUM, fontWeight: "600", fontSize: 20, marginTop: 3 },
+  searchingSub: { color: MUTED, lineHeight: 20, marginTop: 4 },
   trackingSheet: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: BLACK_2, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 16, paddingBottom: 32, borderTopWidth: 1, borderColor: LINE },
   driverCard: { flexDirection: "row", alignItems: "center", backgroundColor: CARD, borderRadius: 20, padding: 14, borderWidth: 1, borderColor: LINE, marginVertical: 14 },
   driverAvatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: ROSE_GOLD, alignItems: "center", justifyContent: "center", marginRight: 12 },
