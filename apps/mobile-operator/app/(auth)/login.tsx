@@ -31,8 +31,9 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim(), password, role);
-    } catch {
-      Alert.alert('Login Failed', 'Invalid credentials. Please try again.');
+      router.replace(role === 'affiliate' ? '/(affiliate)' : '/(driver)');
+    } catch (error) {
+      Alert.alert('Login Failed', error instanceof Error ? error.message : 'Invalid credentials. Please try again.');
     } finally {
       setLoading(false);
     }

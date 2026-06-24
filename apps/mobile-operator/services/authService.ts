@@ -16,6 +16,13 @@ interface LoginResponse {
   };
 }
 
+interface MeResponse {
+  success: boolean;
+  user: LoginResponse['user'] & {
+    driverType?: 'affiliateDriver' | 'independentDriver';
+  };
+}
+
 export interface ApprovedAffiliate {
   id: string;
   companyName: string;
@@ -24,23 +31,40 @@ export interface ApprovedAffiliate {
 }
 
 export const authService = {
+  userFromProfile(profile: MeResponse['user'], fallbackRole: UserRole): User {
+    const role = profile.role === 'affiliate'
+      ? 'affiliate'
+      : profile.driverType === 'independentDriver'
+        ? 'independentDriver'
+        : profile.driverType === 'affiliateDriver'
+          ? 'affiliateDriver'
+          : fallbackRole;
+
+    const displayName = profile.name ?? profile.fullName ?? profile.companyName ?? profile.email;
+    return {
+      id:             profile.id,
+      name:           displayName,
+      email:          profile.email,
+      phone:          profile.phone ?? '',
+      role,
+      avatarInitials: displayName.substring(0, 2).toUpperCase(),
+      isApproved:     profile.isApproved ?? true,
+      createdAt:      profile.createdAt ?? new Date().toISOString(),
+    };
+  },
+
   async login(email: string, password: string, role: UserRole): Promise<User> {
     const backendRole = ROLE_MAP[role];
     const res = await api.post<LoginResponse>('/api/auth/login', { email, password, role: backendRole });
 
     await setToken(res.token);
 
-    const u = res.user;
-    return {
-      id:             u.id,
-      name:           u.name ?? u.fullName ?? u.companyName ?? email.split('@')[0],
-      email:          u.email,
-      phone:          u.phone ?? '',
-      role,
-      avatarInitials: (u.name ?? u.fullName ?? u.companyName ?? email).substring(0, 2).toUpperCase(),
-      isApproved:     u.isApproved ?? true,
-      createdAt:      u.createdAt ?? new Date().toISOString(),
-    };
+    return this.userFromProfile(res.user, role);
+  },
+
+  async me(): Promise<User> {
+    const res = await api.get<MeResponse>('/api/auth/me');
+    return this.userFromProfile(res.user, res.user.role === 'affiliate' ? 'affiliate' : 'affiliateDriver');
   },
 
   async logout(): Promise<void> {
