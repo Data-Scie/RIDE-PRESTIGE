@@ -61,7 +61,9 @@ app.use((req, res, next) => {
 const allowedOrigins = [
   'http://localhost:3000',
   'https://ride-prestige-sigma.vercel.app',
-  ...(process.env.WEB_ORIGIN ? [process.env.WEB_ORIGIN] : []),
+  // WEB_ORIGIN supports a comma-separated list so both the Vercel demo and a
+  // custom production domain (e.g. cPanel hosting) can be allowed at once.
+  ...(process.env.WEB_ORIGIN ? process.env.WEB_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean) : []),
 ];
 app.use(cors({
   origin(origin, callback) {

@@ -21,6 +21,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   session: { strategy: 'jwt' },
   pages: { signIn: '/login' },
+  // Vercel sets this automatically via its own env var, but a generic Node host
+  // (e.g. cPanel) behind a different reverse proxy doesn't - without it Auth.js
+  // rejects every request with "UntrustedHost" because it can't infer its own
+  // origin from request headers it doesn't recognize.
+  trustHost: true,
   callbacks: {
     async jwt({ token, account, profile }) {
       if (account && profile?.email) {
