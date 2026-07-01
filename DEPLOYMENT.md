@@ -125,7 +125,87 @@ Test in this order:
 If Render uses a free service, its first request after inactivity can take longer
 while the service starts.
 
-## 5. Cloud Operation
+## 5. cPanel Node.js Host (rideprestige.co.uk)
+
+The custom domain `rideprestige.co.uk` runs the Next.js app as a standalone Node
+process on a cPanel server. This is a separate deployment from Vercel; the Render
+API is shared by both.
+
+### Build the standalone bundle
+
+```powershell
+npm run build --workspace=apps/web
+```
+
+The `output: "standalone"` setting in `apps/web/next.config.ts` produces a
+self-contained server at `apps/web/.next/standalone/`. Copy static assets then
+archive for upload:
+
+```powershell
+# Run from repo root
+Copy-Item -Recurse -Force apps/web/.next/static `
+  apps/web/.next/standalone/apps/web/.next/static
+Copy-Item -Recurse -Force apps/web/public `
+  apps/web/.next/standalone/apps/web/public
+Compress-Archive -Force `
+  -Path apps/web/.next/standalone/* `
+  -DestinationPath artifacts/ride-prestige-cpanel-node.zip
+```
+
+Upload and extract `artifacts/ride-prestige-cpanel-node.zip` to the cPanel
+application root, then set the startup file to `apps/web/server.js`.
+
+### Environment variables — parity checklist
+
+Set these in cPanel → Node.js → Application → Environment Variables.
+Every variable marked ✅ for cPanel must be present or Google sign-in, maps,
+and API calls will silently fail.
+
+| Variable | Render API | Vercel | cPanel |
+|---|---|---|---|
+| `DATABASE_URL` | ✅ Supavisor pooler (port 6543) | — | — |
+| `DIRECT_URL` | ✅ Supavisor session (port 5432) | — | — |
+| `JWT_SECRET` | ✅ | — | — |
+| `NODE_ENV` | ✅ `production` | auto | ✅ `production` |
+| `API_URL` | — | ✅ Render HTTPS URL | ✅ same Render HTTPS URL |
+| `NEXT_PUBLIC_API_URL` | — | ✅ Render HTTPS URL | ✅ same Render HTTPS URL |
+| `NEXT_PUBLIC_BASE_URL` | — | ✅ Vercel URL | ✅ `https://rideprestige.co.uk` |
+| `WEB_ORIGIN` | ✅ comma-separated all origins | — | — |
+| `AUTH_SECRET` | — | ✅ | ✅ **same value as Vercel** |
+| `ADMIN_SECRET` | — | ✅ | ✅ **same value as Vercel** |
+| `INTERNAL_API_SECRET` | ✅ | ✅ | ✅ **same value everywhere** |
+| `AUTH_GOOGLE_ID` | — | ✅ | ✅ same value |
+| `AUTH_GOOGLE_SECRET` | — | ✅ | ✅ same value |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | — | ✅ | ✅ same value |
+| `GOOGLE_MAPS_DISTANCE_MATRIX_API_KEY` | — | ✅ | ✅ same value |
+
+### Render `WEB_ORIGIN` — include every web origin
+
+The Render API's `WEB_ORIGIN` must list all allowed origins separated by commas.
+Update this whenever you add or change a front-end domain:
+
+```text
+WEB_ORIGIN=https://rideprestige.co.uk,https://www.rideprestige.co.uk,https://ride-prestige-sigma.vercel.app
+```
+
+### Google Cloud Console — register the custom domain
+
+Open the OAuth client (ID begins `558697251419-...`) at
+Google Cloud Console → APIs & Services → Credentials and add:
+
+- **Authorized JavaScript origins:** `https://rideprestige.co.uk`
+- **Authorized redirect URIs:** `https://rideprestige.co.uk/api/auth/callback/google`
+
+Google sign-in on the custom domain will return an error until both entries are saved.
+
+### Smoke test
+
+After starting the cPanel Node.js application, run the Section 4 smoke test with
+`rideprestige.co.uk` substituted for the Vercel URL.
+
+---
+
+## 6. Cloud Operation
 
 The live system does not depend on the development computer:
 

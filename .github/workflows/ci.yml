@@ -52,3 +52,21 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint:mobile
+
+  # CI-gated deploy: Render is triggered here instead of on raw git push, so a
+  # failing CI run blocks production. To enable:
+  #   1. In Render dashboard: Service → Settings → Build & Deploy → disable "Auto-Deploy".
+  #   2. In Render dashboard: Service → Settings → Build & Deploy → copy "Deploy Hook" URL.
+  #   3. In GitHub: repo Settings → Secrets → Actions → add RENDER_DEPLOY_HOOK_URL.
+  #   4. In GitHub: repo Settings → Branches → add branch protection rule for "main",
+  #      require status checks "API (typecheck + build)", "Web (lint + typecheck + build)",
+  #      "Mobile apps (lint)", and "Deploy to Render" to pass before merging.
+  deploy-render:
+    name: Deploy to Render
+    needs: [api, web, mobile-lint]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+        run: curl --fail -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"

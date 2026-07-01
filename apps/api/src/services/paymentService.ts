@@ -31,6 +31,8 @@ export async function createCheckoutSession(input: {
 
   const stripe = getStripe();
   const origin = webOrigin();
+  // Idempotency key means a network retry or double-submit returns the same session rather
+  // than creating a second charge for the same booking.
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
     payment_method_types: ['card'],
@@ -49,7 +51,7 @@ export async function createCheckoutSession(input: {
     metadata: { bookingId: input.bookingId, jobId: input.jobId, bookingRef: input.bookingRef },
     success_url: `${origin}/thank-you?status=accepted&ref=${encodeURIComponent(input.bookingRef)}&payment=paid`,
     cancel_url: `${origin}/thank-you?status=accepted&ref=${encodeURIComponent(input.bookingRef)}&payment=cancelled`,
-  });
+  }, { idempotencyKey: `booking-checkout-${input.bookingId}` });
 
   if (!session.url) return null;
 
@@ -93,4 +95,18 @@ export async function handleCheckoutSessionExpired(session: Stripe.Checkout.Sess
   const payment = await prisma.payment.findFirst({ where: { transactionRef: session.id } });
   if (!payment) return;
   await prisma.payment.update({ where: { id: payment.id }, data: { status: 'failed' } });
+}
+
+// Called when a booking is cancelled — expires the open Stripe session so the customer
+// cannot complete payment after the ride has been cancelled, and updates the Payment row.
+export async function cancelCheckoutSession(bookingId: string): Promise<void> {
+  if (!isStripeConfigured()) return;
+  const payment = await prisma.payment.findFirst({ where: { bookingId, status: 'pending' } });
+  if (!payment) return;
+  try {
+    await getStripe().checkout.sessions.expire(payment.transactionRef);
+  } catch {
+    // Session already expired or completed — still update the DB record below
+  }
+  await prisma.payment.update({ where: { id: payment.id }, data: { status: 'cancelled' } });
 }

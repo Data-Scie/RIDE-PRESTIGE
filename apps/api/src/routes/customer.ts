@@ -8,7 +8,7 @@ import { createIndependentRideOffers } from '../services/dispatchService';
 import { pushNotification } from '../services/notificationService';
 import { bookingConfirmationEmail, sendTransactionalEmail } from '../services/emailService';
 import { bookingConfirmationSms, sendSms } from '../services/smsService';
-import { createCheckoutSession, isStripeConfigured } from '../services/paymentService';
+import { createCheckoutSession, cancelCheckoutSession, isStripeConfigured } from '../services/paymentService';
 import type { VehicleCategory, VehicleType, BookingType, Stop } from '../types';
 
 const router = Router();
@@ -496,6 +496,8 @@ router.put('/bookings/:id/cancel', async (req: Request, res: Response) => {
         }
       }
     }
+    // Expire any open Stripe checkout session so payment can't complete after cancellation
+    await cancelCheckoutSession(row.id).catch(err => console.error('Stripe session cancel failed:', err));
     res.json({ success: true, message: 'Booking cancelled', data: shapeBooking(updated) });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
