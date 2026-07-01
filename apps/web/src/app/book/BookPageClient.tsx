@@ -29,6 +29,7 @@ export default function BookPageClient({ intro }: BookPageClientProps) {
   const { status: sessionStatus } = useSession();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [quoteError, setQuoteError] = useState<string | null>(null);
   const [minDate, setMinDate] = useState('');
 
   useEffect(() => { setMinDate(new Date().toISOString().split('T')[0]); }, []);
@@ -83,12 +84,16 @@ export default function BookPageClient({ intro }: BookPageClientProps) {
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
     setLoading(true);
+    setQuoteError(null);
     try {
       const quote = await generateQuote(form);
       sessionStorage.setItem('rp_quote', JSON.stringify(quote));
       sessionStorage.setItem('rp_booking_form', JSON.stringify(form));
       router.push('/quote');
-    } catch { setLoading(false); }
+    } catch (err) {
+      setLoading(false);
+      setQuoteError((err as Error).message || 'Unable to generate a quote right now. Please check your details and try again.');
+    }
   };
 
   return (
@@ -199,6 +204,11 @@ export default function BookPageClient({ intro }: BookPageClientProps) {
             </div>
           </div>
 
+          {quoteError && (
+            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              {quoteError}
+            </div>
+          )}
           <button type="button" onClick={handleSubmit} disabled={loading}
             className="btn-gold w-full flex items-center justify-center gap-2 text-base py-4 disabled:opacity-60">
             {loading?(<span className="flex items-center gap-2"><span className="w-5 h-5 border-2 border-yellow-800/30 border-t-yellow-900 rounded-full animate-spin"/>Generating quote…</span>):(<>Get My Quote <ArrowRight size={18}/></>)}

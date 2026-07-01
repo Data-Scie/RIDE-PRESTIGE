@@ -84,13 +84,14 @@ function AffiliateLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [identity, setIdentity] = useState<AffiliateIdentity | null>(null);
+  const [apiError, setApiError] = useState(false);
   const isAuthPage = pathname === '/affiliate/login' || pathname === '/affiliate/register';
 
   useEffect(() => {
     if (isAuthPage) return;
     affiliateApi.get<{ success: boolean; data: AffiliateIdentity }>('/api/affiliate/profile')
       .then(r => setIdentity(r.data))
-      .catch(() => {});
+      .catch(err => { console.error('Failed to load affiliate profile:', err); setApiError(true); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthPage]);
 
@@ -104,6 +105,11 @@ function AffiliateLayoutInner({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2"><BrandLogo width={24} /><span className="font-bold text-sm" style={{ color: BRAND_BLACK }}>Affiliate</span></div>
           <button onClick={() => setOpen(!open)} style={{ color: BRAND_GREY }}>{open ? <X size={20} /> : <Menu size={20} />}</button>
         </header>
+        {apiError && (
+          <div className="px-4 py-2 text-xs text-amber-800 bg-amber-50 border-b border-amber-200">
+            Could not reach the server. Some information may not load — please refresh or try again shortly.
+          </div>
+        )}
         <main className="flex-1 p-4 lg:p-6 overflow-auto">{children}</main>
       </div>
     </div>

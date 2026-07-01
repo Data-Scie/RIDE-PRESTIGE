@@ -1,3 +1,11 @@
+// Schema management strategy: prisma db push (intentional — see DEPLOYMENT.md §2)
+// The migrations/ folder contains a few stale partial stubs from early dev; they are
+// NOT applied to production and can be deleted with: git rm -r prisma/migrations/
+// Do NOT run "prisma migrate deploy" — it will fail because no baseline migration
+// covers the full schema. If you want to switch to migrate, generate a baseline first:
+//   npx prisma migrate resolve --applied "migration_name" (for each existing table)
+// and update the Render build command accordingly.
+
 generator client {
   provider = "prisma-client-js"
 }

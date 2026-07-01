@@ -31,11 +31,12 @@ export default function AdminFleetPage() {
   const [editing, setEditing] = useState<FleetCategory | null>(null);
   const [saved, setSaved]   = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     adminApi.get<{ success: boolean; categories: Record<string, unknown>[] }>('/api/admin/fleet')
       .then(r => setFleet((r.categories ?? []).map(mapCategory)))
-      .catch(() => {})
+      .catch(err => { console.error('Fleet load failed:', err); setError('Unable to load fleet categories. Please refresh.'); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -63,6 +64,7 @@ export default function AdminFleetPage() {
     setEditing(prev => prev ? { ...prev, [key]: value } : null);
 
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-400">Loading fleet categories…</div>;
+  if (error) return <div className="p-8 text-sm text-red-600 bg-red-50 rounded-xl m-6">{error}</div>;
 
   return (
     <div className="space-y-6 max-w-5xl">

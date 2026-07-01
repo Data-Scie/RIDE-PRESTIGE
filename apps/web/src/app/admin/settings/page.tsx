@@ -45,11 +45,12 @@ export default function AdminSettingsPage() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     adminApi.get<{ success: boolean; data: SiteSettings }>('/api/admin/settings')
       .then(r => { if (r.data) setSite(r.data); })
-      .catch(() => {})
+      .catch(err => { console.error('Settings load failed:', err); setLoadError('Unable to load settings from the server. Changes below may overwrite live data — refresh first.'); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -73,6 +74,7 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="space-y-6 max-w-5xl">
+      {loadError && <div className="px-4 py-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl">{loadError}</div>}
       {/* Tabs */}
       <div className="bg-white rounded-2xl border border-gray-100 p-2 flex flex-wrap gap-1">
         {tabs.map(({ id, label, icon: Icon }) => (

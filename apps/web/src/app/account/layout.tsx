@@ -83,11 +83,12 @@ function Sidebar({ profile, onNav }: { profile: CustomerIdentity | null; onNav?:
 function AccountLayoutInner({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [profile, setProfile] = useState<CustomerIdentity | null>(null);
+  const [apiError, setApiError] = useState(false);
 
   useEffect(() => {
     customerApi.get<{ success: boolean; data: CustomerIdentity }>('/api/customer/profile')
       .then(result => setProfile(result.data))
-      .catch(() => {});
+      .catch(err => { console.error('Failed to load customer profile:', err); setApiError(true); });
   }, []);
 
   return (
@@ -99,6 +100,11 @@ function AccountLayoutInner({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2 min-w-0"><BrandLogo width={24} /><div className="min-w-0"><p className="font-bold text-sm truncate" style={{ color: BRAND_BLACK }}>{profile?.fullName || 'My Account'}</p></div></div>
           <button onClick={() => setOpen(!open)} style={{ color: BRAND_GREY }}>{open ? <X size={20} /> : <Menu size={20} />}</button>
         </header>
+        {apiError && (
+          <div className="px-4 py-2 text-xs text-amber-800 bg-amber-50 border-b border-amber-200">
+            Could not reach the server. Some information may not load — please refresh or try again shortly.
+          </div>
+        )}
         <main className="flex-1 p-4 lg:p-6 overflow-auto">{children}</main>
       </div>
     </div>

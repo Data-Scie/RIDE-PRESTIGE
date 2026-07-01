@@ -28,6 +28,7 @@ import customerRouter from './routes/customer';
 
 import { notFound, errorHandler } from './middleware/errorHandler';
 import { verifyToken } from './middleware/auth';
+import { isCloudinaryConfigured } from './lib/cloudinary';
 import type { Request, Response, NextFunction } from 'express';
 
 const app    = express();
@@ -227,6 +228,7 @@ app.get('/health', (_req, res) => {
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV ?? 'development',
+    cloudinary: isCloudinaryConfigured() ? 'configured' : 'NOT CONFIGURED — documents on ephemeral disk',
   });
 });
 
@@ -257,6 +259,9 @@ server.listen(PORT, () => {
   console.log('  ║  Do not expose portal passwords in public logs        ║');
   console.log('  ╚══════════════════════════════════════════════════════╝');
   console.log('');
+  if (!isCloudinaryConfigured()) {
+    console.warn('⚠  CLOUDINARY env vars not set — compliance documents will be stored on ephemeral disk and lost on redeploy. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET in production.');
+  }
 });
 
 export { app, server };

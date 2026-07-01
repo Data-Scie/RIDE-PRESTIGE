@@ -216,3 +216,70 @@ The live system does not depend on the development computer:
 The development computer can be switched off after both deployments are healthy.
 Free Render services may sleep during inactivity, but requests wake the service
 and all persistent dispatch state remains in Supabase.
+
+---
+
+## 7. Backup & Disaster Recovery
+
+### What is backed up and by whom
+
+| Data | Where | Backup owner |
+|---|---|---|
+| Database (all tables) | Supabase | Supabase automatic daily snapshots |
+| Compliance documents | Cloudinary (production) | Cloudinary CDN — no extra action needed |
+| Compliance documents | Render ephemeral disk (if Cloudinary not configured) | **Not backed up — configure Cloudinary** |
+| CMS content | Supabase (same database) | Supabase automatic daily snapshots |
+| Application code | GitHub | Git history |
+
+### Confirm your Supabase backup tier
+
+1. Open Supabase dashboard → your project → Settings → Backups.
+2. **Free tier**: daily snapshots, 7-day retention. No PITR.
+3. **Pro tier**: daily snapshots + Point-in-Time Recovery (PITR) to any second within the retention window.
+
+For a production service with real customers and payments, upgrade to Pro and enable PITR before directing real traffic.
+
+### Pre-deploy backup checklist
+
+Before any schema change or `prisma db push` run:
+
+```bash
+# Export a full schema dump (no data, schema only — fast and safe)
+supabase db dump --db-url "$DATABASE_URL" -f schema-$(date +%Y%m%d).sql
+
+# Export data for critical tables
+supabase db dump --db-url "$DATABASE_URL" --data-only \
+  -t Admin -t Affiliate -t Driver -t Customer -t Booking -t Job -t Payment \
+  -f data-$(date +%Y%m%d).sql
+```
+
+Store both files somewhere off-Supabase (e.g. a private GitHub gist or local file) before running the deploy.
+
+### Restore procedure
+
+**Scenario A — bad `db push` corrupted a table:**
+
+1. Stop the Render service (Settings → Suspend) to prevent further writes.
+2. In Supabase dashboard → Backups → select the last known-good snapshot → Restore.
+   - Pro tier: use PITR to restore to one minute before the bad push.
+3. Confirm the affected rows are correct via Supabase Table Editor.
+4. Resume the Render service.
+5. Redeploy the last known-good API commit.
+
+**Scenario B — accidental data delete (customer/booking rows):**
+
+1. Use Supabase PITR (Pro) or the most recent daily snapshot to identify the state of the table just before the delete.
+2. Export only the affected rows from the backup (Supabase SQL editor on the restored snapshot).
+3. Re-insert the missing rows into production using a targeted `INSERT ... ON CONFLICT DO NOTHING`.
+
+**Scenario C — Render service completely lost (ephemeral disk):**
+
+No action needed for the database — it lives in Supabase independently.
+If Cloudinary is configured, documents are safe. If not, uploaded compliance documents
+are unrecoverable; affiliates and drivers must re-upload them.
+
+### Contact
+
+- Supabase support: https://supabase.com/support
+- Render support: https://render.com/support
+- Cloudinary support: https://cloudinary.com/support
