@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Building2, Car, FileText, Star, Users } from 'lucide-react';
-import { adminApi } from '@/lib/api-client';
+import { adminApi, secureDocUrl } from '@/lib/api-client';
 
 interface DriverDocument { id: string; type?: string; label: string; status: string; expiryDate?: string | null; fileUrl?: string | null; rejectionReason?: string | null; }
 interface AffiliateDriver {
@@ -135,7 +135,7 @@ export default function AdminAffiliateDetailPage() {
                   <p className="font-medium text-sm" style={{ color: '#0a0f1e' }}>{doc.label}</p>
                   <p className="text-xs text-slate-400 capitalize">{doc.status}{doc.expiryDate ? ` - expires ${new Date(doc.expiryDate).toLocaleDateString('en-GB')}` : ''}</p>
                   {doc.rejectionReason && <p className="text-xs text-red-600 mt-1">{doc.rejectionReason}</p>}
-                  {doc.fileUrl && <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 mt-2 inline-block">View document</a>}
+                  {doc.fileUrl && <a href={secureDocUrl(doc.fileUrl, 'admin') ?? doc.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 mt-2 inline-block">View document</a>}
                 </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full h-fit font-semibold capitalize ${doc.status === 'approved' ? 'bg-green-50 text-green-700' : doc.status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>{doc.status}</span>
               </div>

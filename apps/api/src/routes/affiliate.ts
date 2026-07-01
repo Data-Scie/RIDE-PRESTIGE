@@ -288,7 +288,16 @@ router.get('/jobs/history', async (req: Request, res: Response) => {
  */
 router.get('/jobs/:id', async (req: Request, res: Response) => {
   try {
-    const job = await prisma.job.findUnique({ where: { id: req.params.id } });
+    const affId = getAffId(req);
+    const job = await prisma.job.findFirst({
+      where: {
+        id: req.params.id,
+        OR: [
+          { affiliateId: affId },
+          { status: 'awaiting_affiliate', affiliateId: null },
+        ],
+      },
+    });
     if (!job) { res.status(404).json({ success: false, message: 'Job not found' }); return; }
     res.json({ success: true, data: shapeJob(job) });
   } catch (e) {

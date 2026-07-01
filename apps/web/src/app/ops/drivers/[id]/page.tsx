@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle, Mail, Phone, Star, XCircle } from 'lucide-react';
-import { opsApi } from '@/lib/api-client';
+import { opsApi, secureDocUrl } from '@/lib/api-client';
 
 function RejectDocModal({ onConfirm, onCancel }: { onConfirm: (reason: string) => void; onCancel: () => void }) {
   const [reason, setReason] = useState('');
@@ -164,7 +164,7 @@ export default function DriverDetailPage() {
               <span className="text-sm">{document.label}</span>
               <div className="text-right">
                 <span className="flex items-center justify-end gap-1 text-xs capitalize">{document.status === 'approved' ? <CheckCircle size={16} className="text-green-500" /> : <XCircle size={16} className="text-amber-500" />}{document.status}</span>
-                {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600">View document</a>}
+                {document.fileUrl && <a href={secureDocUrl(document.fileUrl, 'ops') ?? document.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600">View document</a>}
                 <div className="flex gap-1 mt-1 flex-wrap justify-end">
                   <button onClick={() => void updateDocument(document.id, 'approve')} className="text-[10px] px-2 py-1 rounded bg-green-600 text-white">Approve</button>
                   {document.status !== 'approved' && (

@@ -27,6 +27,8 @@ import driverRouter   from './routes/driver';
 import customerRouter from './routes/customer';
 
 import { notFound, errorHandler } from './middleware/errorHandler';
+import { verifyToken } from './middleware/auth';
+import type { Request, Response, NextFunction } from 'express';
 
 const app    = express();
 const server = createServer(app);
@@ -86,7 +88,17 @@ if (process.env.NODE_ENV === 'production') {
 } else {
   app.use(morgan('dev'));
 }
-app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+// Vehicle/marketing photos are intentionally public
+app.use('/uploads/vehicles', express.static(path.resolve(process.cwd(), 'uploads', 'vehicles')));
+// Compliance documents require a valid JWT. Bearer header takes priority; ?token= supports
+// direct browser navigation (e.g. clicking an <a href> link in the portal).
+app.use('/uploads/documents', (req: Request, res: Response, next: NextFunction) => {
+  const token = (req.headers.authorization?.startsWith('Bearer ')
+    ? req.headers.authorization.slice(7)
+    : null) ?? (req.query.token as string | undefined);
+  if (!token) { res.status(401).json({ success: false, message: 'Authentication required' }); return; }
+  try { verifyToken(token); next(); } catch { res.status(401).json({ success: false, message: 'Invalid or expired token' }); }
+}, express.static(path.resolve(process.cwd(), 'uploads', 'documents')));
 
 const cacheablePublicGetPaths = [
   '/api/public/site-settings',

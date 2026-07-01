@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from 'react';
 import { FileText, Plus, Search, Star, X } from 'lucide-react';
-import { adminApi } from '@/lib/api-client';
+import { adminApi, secureDocUrl } from '@/lib/api-client';
 
 interface DriverDocument {
   id: string;
@@ -205,7 +205,7 @@ export default function AdminDriversPage() {
                               <div>
                                 <p className="font-semibold text-sm text-slate-800">{document.label}</p>
                                 <p className="text-xs text-slate-400">Expiry: {document.expiryDate || 'Not supplied'}</p>
-                                {document.fileUrl ? <a href={document.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 font-semibold">Open uploaded file</a> : <p className="text-xs text-amber-600">No file uploaded yet</p>}
+                                {document.fileUrl ? <a href={secureDocUrl(document.fileUrl, 'admin') ?? document.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 font-semibold">Open uploaded file</a> : <p className="text-xs text-amber-600">No file uploaded yet</p>}
                                 {document.rejectionReason && <p className="text-xs text-red-600 mt-1">{document.rejectionReason}</p>}
                               </div>
                               <span className={`text-[10px] px-2 py-0.5 rounded-full h-fit font-semibold capitalize ${document.status === 'approved' ? 'bg-green-50 text-green-700' : document.status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>{document.status}</span>

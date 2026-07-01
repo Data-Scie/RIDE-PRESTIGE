@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Car, FileCheck2, Plus } from 'lucide-react';
-import { driverApi } from '@/lib/api-client';
+import { driverApi, secureDocUrl } from '@/lib/api-client';
 
 type DocumentRecord = {
   id: string;
@@ -238,7 +238,7 @@ function DocumentForm({
     <div className="p-4 rounded-xl bg-slate-50">
       <div className="flex justify-between gap-3"><p className="font-semibold text-sm">{document.label}</p><span className="text-xs capitalize">{document.status}</span></div>
       {document.rejectionReason && <p className="text-xs text-red-600 mt-1">{document.rejectionReason}</p>}
-      {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-blue-600">View uploaded document</a>}
+      {document.fileUrl && <a href={secureDocUrl(document.fileUrl, 'driver') ?? document.fileUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-blue-600">View uploaded document</a>}
       <input type="file" accept=".pdf,image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} className="mt-3 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white" />
       <p className="mt-2 text-[11px] text-slate-400">Or paste a hosted document URL.</p>
       <input type="url" value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="Secure document URL" className="mt-3 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" />

@@ -21,6 +21,21 @@ export function getPortalToken(role: 'admin' | 'ops' | 'affiliate' | 'driver' | 
   return getToken(role);
 }
 
+// Appends the portal JWT as ?token= for local-disk compliance documents, which require auth
+// but are opened via plain browser navigation (no Authorization header available).
+// Cloudinary and other external URLs are returned unchanged.
+export function secureDocUrl(
+  url: string | null | undefined,
+  role: 'admin' | 'ops' | 'affiliate' | 'driver' | 'customer',
+): string | null {
+  if (!url) return null;
+  if (!url.includes('/uploads/documents/')) return url;
+  const token = getCookie(`rp_${role}_jwt`);
+  if (!token) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}token=${encodeURIComponent(token)}`;
+}
+
 async function request<T>(
   path: string,
   role: 'admin' | 'ops' | 'affiliate' | 'driver' | 'customer',

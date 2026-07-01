@@ -62,3 +62,8 @@ coverage/
 tmp/
 artifacts/local-dev/
 artifacts/live-demo/demo-account.json
+# Deployment bundles (large binaries, not source)
+artifacts/*.tar.gz
+artifacts/*.zip
+# Contains real demo credentials — never commit
+portal-credentials.txt

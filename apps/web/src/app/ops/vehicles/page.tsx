@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { CheckCircle, Search, XCircle, Car, Building2, User } from 'lucide-react';
-import { opsApi } from '@/lib/api-client';
+import { opsApi, secureDocUrl } from '@/lib/api-client';
 
 type Vehicle = {
   id: string;
@@ -206,7 +206,7 @@ function VehicleCard({
                           <p className="text-xs font-semibold text-slate-700">{document.label}</p>
                           <p className={`mt-1 text-[11px] font-semibold capitalize ${current ? 'text-slate-500' : 'text-red-600'}`}>{document.status} · {document.expiryDate || 'missing expiry'}</p>
                           {document.rejectionReason && <p className="mt-1 text-[11px] text-red-600">{document.rejectionReason}</p>}
-                          {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-blue-600">Open document</a>}
+                          {document.fileUrl && <a href={secureDocUrl(document.fileUrl, 'ops') ?? document.fileUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-blue-600">Open document</a>}
                         </div>
                         <div className="flex gap-1 flex-wrap justify-end">
                           <button onClick={() => onUpdateDocument(vehicle.id, document.id, 'approve')} disabled={busy || !current || document.status === 'approved'} className="rounded-lg bg-green-600 px-2 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50">Approve</button>

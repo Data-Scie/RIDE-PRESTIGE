@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Car, Plus, Save, Trash2, X } from 'lucide-react';
-import { affiliateApi } from '@/lib/api-client';
+import { affiliateApi, secureDocUrl } from '@/lib/api-client';
 
 interface VehicleDocument {
   id: string;
@@ -296,7 +296,7 @@ function VehicleDocumentForm({
         <span className="text-[11px] font-semibold capitalize text-slate-500">{document.status}</span>
       </div>
       {document.rejectionReason && <p className="mt-1 text-[11px] text-red-600">{document.rejectionReason}</p>}
-      {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[11px] text-blue-600">View uploaded document</a>}
+      {document.fileUrl && <a href={secureDocUrl(document.fileUrl, 'affiliate') ?? document.fileUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[11px] text-blue-600">View uploaded document</a>}
       <input type="file" accept=".pdf,image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs" />
       <input type="url" value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="Or paste hosted document URL" className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs" />
       <input required type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs" />

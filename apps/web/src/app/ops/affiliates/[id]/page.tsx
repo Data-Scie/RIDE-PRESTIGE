@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Phone, Mail, MapPin, Car, Users, FileText, CheckCircle, XCircle } from 'lucide-react';
-import { opsApi } from '@/lib/api-client';
+import { opsApi, secureDocUrl } from '@/lib/api-client';
 
 interface Affiliate {
   id: string; companyName: string; contactPerson: string; email: string; phone: string;
@@ -133,7 +133,7 @@ export default function AffiliateDetailPage() {
                   <p className="font-semibold text-sm text-slate-800">{document.label}</p>
                   <p className="text-xs text-slate-400 capitalize">{document.status}{document.expiryDate ? ` - expires ${new Date(document.expiryDate).toLocaleDateString('en-GB')}` : ''}</p>
                   {document.rejectionReason && <p className="text-xs text-red-600 mt-1">{document.rejectionReason}</p>}
-                  {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 mt-2 inline-block">View document</a>}
+                  {document.fileUrl && <a href={secureDocUrl(document.fileUrl, 'ops') ?? document.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 mt-2 inline-block">View document</a>}
                 </div>
                 {document.status === 'approved' ? <CheckCircle size={18} className="text-green-500" /> : <XCircle size={18} className="text-amber-500" />}
               </div>

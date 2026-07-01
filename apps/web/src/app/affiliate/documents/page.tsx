@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { FileCheck2 } from 'lucide-react';
-import { affiliateApi } from '@/lib/api-client';
+import { affiliateApi, secureDocUrl } from '@/lib/api-client';
 
 type DocumentRecord = {
   id: string;
@@ -116,7 +116,7 @@ function DocumentForm({
         <span className="text-xs capitalize">{document.status}</span>
       </div>
       {document.rejectionReason && <p className="text-xs text-red-600 mt-1">{document.rejectionReason}</p>}
-      {document.fileUrl && <a href={document.fileUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-blue-600">View uploaded document</a>}
+      {document.fileUrl && <a href={secureDocUrl(document.fileUrl, 'affiliate') ?? document.fileUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-blue-600">View uploaded document</a>}
       <input type="file" accept=".pdf,image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} className="mt-3 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white" />
       <p className="mt-2 text-[11px] text-slate-400">Or paste a hosted document URL.</p>
       <input type="url" value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="Document URL" className="mt-2 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" />
