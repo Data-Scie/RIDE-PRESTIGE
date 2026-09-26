@@ -68,6 +68,9 @@ const allowedOrigins = [
   // custom production domain (e.g. cPanel hosting) can be allowed at once.
   ...(process.env.WEB_ORIGIN ? process.env.WEB_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean) : []),
 ];
+// L3: a misconfigured WEB_ORIGIN otherwise fails silently — every rejected origin just gets a
+// generic CORS error with no indication of what was actually allowed.
+console.log(`[CORS] Allowed origins: ${allowedOrigins.join(', ')}`);
 app.use(cors({
   origin(origin, callback) {
     // Allow non-browser clients (mobile apps, curl, server-to-server) which send no Origin header.
@@ -128,6 +131,15 @@ app.use((req, res, next) => {
 
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500, message: { success: false, message: 'Too many requests, please try again later.' } }));
 app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 60, message: { success: false, message: 'Too many login attempts, please try again later.' } }));
+
+// H4: registration/forgot-password/contact trigger email+SMS sends and are cheap to spam —
+// give them a much tighter limiter than the generous global one above. These are leaf routes
+// (no nested child paths), so a prefix-matched app.use is safe here. Quote/booking are NOT
+// mounted this way because '/api/public/booking' has child routes (:reference, :reference/track,
+// :reference/rate) that a prefix match would wrongly catch — those limiters live in public.ts
+// directly on the two specific POST handlers instead.
+const writeAbuseLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { success: false, message: 'Too many requests, please try again later.' } });
+app.use(['/api/auth/register/customer', '/api/auth/register/driver', '/api/auth/register/affiliate', '/api/auth/forgot-password', '/api/public/contact'], writeAbuseLimiter);
 
 // ─── Swagger / OpenAPI Docs ───────────────────────────────────────────────────
 
@@ -261,6 +273,9 @@ server.listen(PORT, () => {
   console.log('');
   if (!isCloudinaryConfigured()) {
     console.warn('⚠  CLOUDINARY env vars not set — compliance documents will be stored on ephemeral disk and lost on redeploy. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET in production.');
+  }
+  if (process.env.NODE_ENV === 'production' && !process.env.WEB_ORIGIN) {
+    console.warn('⚠  WEB_ORIGIN env var not set in production — Stripe checkout redirects will silently fall back to the Vercel demo domain instead of the real production site.');
   }
 });
 

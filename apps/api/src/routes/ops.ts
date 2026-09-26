@@ -146,12 +146,14 @@ router.get('/dashboard', async (_req: Request, res: Response) => {
  *     responses:
  *       200: { description: Documents }
  */
-router.get('/documents', async (_req: Request, res: Response) => {
+router.get('/documents', async (req: Request, res: Response) => {
   try {
+    const { page = '1', limit = '50' } = req.query as Record<string, string>;
+    const p = parseInt(page); const l = parseInt(limit);
     const [affiliates, drivers, vehicles] = await Promise.all([
-      prisma.affiliate.findMany(),
-      prisma.driver.findMany({ include: { documents: true, affiliate: { select: { id: true, companyName: true } } } }),
-      prisma.fleetVehicle.findMany(),
+      prisma.affiliate.findMany({ orderBy: { createdAt: 'desc' }, skip: (p - 1) * l, take: l }),
+      prisma.driver.findMany({ include: { documents: true, affiliate: { select: { id: true, companyName: true } } }, orderBy: { joinedDate: 'desc' }, skip: (p - 1) * l, take: l }),
+      prisma.fleetVehicle.findMany({ orderBy: { createdAt: 'desc' }, skip: (p - 1) * l, take: l }),
     ]);
 
     await Promise.all([
@@ -160,10 +162,12 @@ router.get('/documents', async (_req: Request, res: Response) => {
       ...vehicles.map(v => ensureVehicleDocuments(v.id)),
     ]);
 
+    // Doc queries are scoped to the fetched page's entities so the merged rows below stay
+    // consistent with the page of affiliates/drivers/vehicles just loaded.
     const [affiliateDocs, driverDocs, vehicleDocs] = await Promise.all([
-      prisma.affiliateDocument.findMany(),
-      prisma.driverDocument.findMany(),
-      prisma.vehicleDocument.findMany(),
+      prisma.affiliateDocument.findMany({ where: { affiliateId: { in: affiliates.map(a => a.id) } } }),
+      prisma.driverDocument.findMany({ where: { driverId: { in: drivers.map(d => d.id) } } }),
+      prisma.vehicleDocument.findMany({ where: { vehicleId: { in: vehicles.map(v => v.id) } } }),
     ]);
 
     const affiliateById = new Map(affiliates.map(a => [a.id, a]));
@@ -203,7 +207,7 @@ router.get('/documents', async (_req: Request, res: Response) => {
       }),
     ];
 
-    res.json({ success: true, data: rows, total: rows.length });
+    res.json({ success: true, data: rows, total: rows.length, page: p, limit: l });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }
@@ -857,16 +861,31 @@ router.put('/vehicles/:id/reject', async (req: Request, res: Response) => {
  *     responses:
  *       200: { description: Affiliates }
  */
-router.get('/affiliates', async (_req: Request, res: Response) => {
+router.get('/affiliates', async (req: Request, res: Response) => {
   try {
-    const affiliates = await prisma.affiliate.findMany();
-    const list = await Promise.all(affiliates.map(async ({ passwordHash: _, ...a }) => ({
+    const { page = '1', limit = '50' } = req.query as Record<string, string>;
+    const p = parseInt(page); const l = parseInt(limit);
+    const [affiliates, total] = await Promise.all([
+      prisma.affiliate.findMany({ orderBy: { createdAt: 'desc' }, skip: (p - 1) * l, take: l }),
+      prisma.affiliate.count(),
+    ]);
+    const affiliateIds = affiliates.map(a => a.id);
+    // Single groupBy per related model instead of 3 extra queries per affiliate row (N+1).
+    const [driverCounts, vehicleCounts, jobCounts] = await Promise.all([
+      prisma.driver.groupBy({ by: ['affiliateId'], where: { affiliateId: { in: affiliateIds } }, _count: true }),
+      prisma.fleetVehicle.groupBy({ by: ['affiliateId'], where: { affiliateId: { in: affiliateIds } }, _count: true }),
+      prisma.job.groupBy({ by: ['affiliateId'], where: { affiliateId: { in: affiliateIds } }, _count: true }),
+    ]);
+    const driverCountById = new Map(driverCounts.map(c => [c.affiliateId, c._count]));
+    const vehicleCountById = new Map(vehicleCounts.map(c => [c.affiliateId, c._count]));
+    const jobCountById = new Map(jobCounts.map(c => [c.affiliateId, c._count]));
+    const list = affiliates.map(({ passwordHash: _, ...a }) => ({
       ...a,
-      driverCount:  await prisma.driver.count({ where: { affiliateId: a.id } }),
-      vehicleCount: await prisma.fleetVehicle.count({ where: { affiliateId: a.id } }),
-      totalJobs:    await prisma.job.count({ where: { affiliateId: a.id } }),
-    })));
-    res.json({ success: true, data: list });
+      driverCount: driverCountById.get(a.id) ?? 0,
+      vehicleCount: vehicleCountById.get(a.id) ?? 0,
+      totalJobs: jobCountById.get(a.id) ?? 0,
+    }));
+    res.json({ success: true, data: list, total, page: p, limit: l, pages: Math.ceil(total / l) });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }
@@ -995,19 +1014,23 @@ router.put('/affiliates/:affiliateId/documents/:documentId/reject', async (req: 
   }
 });
 
-router.get('/drivers', async (_req: Request, res: Response) => {
+router.get('/drivers', async (req: Request, res: Response) => {
   try {
+    const { page = '1', limit = '50' } = req.query as Record<string, string>;
+    const p = parseInt(page); const l = parseInt(limit);
     const drivers = await prisma.driver.findMany({
       include: {
         documents: true,
         affiliate: { select: { id: true, companyName: true } },
       },
       orderBy: { joinedDate: 'desc' },
+      skip: (p - 1) * l,
+      take: l,
     });
     const driversMissingDocuments = drivers.filter(driver => !hasAllDriverDocuments(driver.documents));
     if (driversMissingDocuments.length === 0) {
       const list = drivers.map(({ passwordHash: _, ...d }) => d);
-      res.json({ success: true, data: list, total: list.length });
+      res.json({ success: true, data: list, total: list.length, page: p, limit: l });
       return;
     }
     await Promise.all(driversMissingDocuments.map(driver => ensureDriverDocuments(driver.id)));
@@ -1017,9 +1040,11 @@ router.get('/drivers', async (_req: Request, res: Response) => {
         affiliate: { select: { id: true, companyName: true } },
       },
       orderBy: { joinedDate: 'desc' },
+      skip: (p - 1) * l,
+      take: l,
     });
     const list = refreshed.map(({ passwordHash: _, ...d }) => d);
-    res.json({ success: true, data: list, total: list.length });
+    res.json({ success: true, data: list, total: list.length, page: p, limit: l });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }
@@ -1209,36 +1234,40 @@ router.put('/drivers/:id/reject', async (req: Request, res: Response) => {
  */
 router.get('/customers', async (_req: Request, res: Response) => {
   try {
-    const [customers, jobs] = await Promise.all([
-      prisma.customer.findMany(),
-      // Capped, not a true full-history scan - bounds worst case as job volume grows. Aggregates
-      // (totalJobs/totalSpend/rating) for very long-tenured customers may undercount once total
-      // job volume exceeds this window; a real fix would aggregate this in SQL instead.
-      prisma.job.findMany({ orderBy: { createdAt: 'desc' }, take: 5000 }),
-    ]);
+    const customers = await prisma.customer.findMany();
+    // Aggregation (totalJobs/totalSpend/avg rating) is computed in SQL across the full Job
+    // table instead of loading raw rows into JS - no row cap, no undercounting as volume grows.
+    const stats = await prisma.$queryRaw<Array<{
+      groupKey: string; totalJobs: number; totalSpend: number | null; avgRating: number | null; latestJobId: string; earliestCreatedAt: Date;
+    }>>`
+      SELECT COALESCE(LOWER("customerEmail"), 'phone:' || "customerPhone") AS "groupKey",
+             COUNT(*)::int AS "totalJobs",
+             SUM("fareAmount")::float AS "totalSpend",
+             AVG("driverRating")::float AS "avgRating",
+             (ARRAY_AGG("id" ORDER BY "createdAt" DESC))[1] AS "latestJobId",
+             MIN("createdAt") AS "earliestCreatedAt"
+      FROM "Job"
+      GROUP BY 1
+    `;
+    // Only the single latest job per customer group is fetched - bounded by distinct customer
+    // count, not total job volume.
+    const latestJobs = await prisma.job.findMany({ where: { id: { in: stats.map(s => s.latestJobId) } } });
+    const latestJobById = new Map(latestJobs.map(job => [job.id, job]));
     const customerByEmail = new Map(customers.map(customer => [customer.email.toLowerCase(), customer]));
-    const jobGroups = new Map<string, typeof jobs>();
-    for (const job of jobs) {
-      const key = job.customerEmail?.toLowerCase() || `phone:${job.customerPhone}`;
-      jobGroups.set(key, [...(jobGroups.get(key) ?? []), job]);
-    }
 
-    const list = Array.from(jobGroups.entries()).map(([key, customerJobs]) => {
-      const latest = customerJobs[0];
+    const list = stats.map(stat => {
+      const latest = latestJobById.get(stat.latestJobId)!;
       const registered = latest.customerEmail ? customerByEmail.get(latest.customerEmail.toLowerCase()) : undefined;
-      const ratings = customerJobs.map(job => job.driverRating).filter((rating): rating is number => rating !== null);
       return {
-        id: registered?.id ?? `guest:${encodeURIComponent(key)}`,
+        id: registered?.id ?? `guest:${encodeURIComponent(stat.groupKey)}`,
         fullName: registered?.fullName ?? latest.customerName,
         email: registered?.email ?? latest.customerEmail ?? '',
         phone: registered?.phone ?? latest.customerPhone,
-        createdAt: registered?.createdAt.toISOString() ?? customerJobs[customerJobs.length - 1].createdAt.toISOString(),
+        createdAt: registered?.createdAt.toISOString() ?? stat.earliestCreatedAt.toISOString(),
         isGuest: !registered,
-        totalJobs: customerJobs.length,
-        totalSpend: parseFloat(customerJobs.reduce((sum, job) => sum + job.fareAmount, 0).toFixed(2)),
-        averageCustomerRating: ratings.length
-          ? parseFloat((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1))
-          : null,
+        totalJobs: stat.totalJobs,
+        totalSpend: parseFloat((stat.totalSpend ?? 0).toFixed(2)),
+        averageCustomerRating: stat.avgRating !== null ? parseFloat(stat.avgRating.toFixed(1)) : null,
         latestRide: {
           bookingRef: latest.bookingRef,
           status: latest.status,
@@ -1247,8 +1276,9 @@ router.get('/customers', async (_req: Request, res: Response) => {
       };
     });
 
+    const jobGroupKeys = new Set(stats.map(stat => stat.groupKey));
     for (const customer of customers) {
-      if (!jobGroups.has(customer.email.toLowerCase())) {
+      if (!jobGroupKeys.has(customer.email.toLowerCase())) {
         const { passwordHash: _, ...safe } = customer;
         list.push({
           ...safe,

@@ -53,6 +53,59 @@ jobs:
       - run: npm ci
       - run: npm run lint:mobile
 
+  # H11: the 6 integration scripts under apps/api/scripts previously only ever ran ad-hoc
+  # against a live shared dev/prod Supabase DB. This runs them against a throwaway Postgres
+  # service container + a locally-built API server instead, so dispatch/payment/auth
+  # regressions are caught on every PR, not just when someone remembers to run them by hand.
+  integration-tests:
+    name: Integration tests (dispatch/payment/auth)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ride_prestige_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ride_prestige_ci"
+      DIRECT_URL: "postgresql://ci:ci@localhost:5432/ride_prestige_ci"
+      JWT_SECRET: "ci-integration-test-secret-not-used-outside-this-job"
+      API_URL: "http://localhost:4000"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate --workspace=apps/api
+      - run: npm run db:push --workspace=apps/api
+      - run: npm run db:seed --workspace=apps/api
+      - run: npm run build --workspace=apps/api
+      - name: Start API server in background
+        run: nohup node apps/api/dist/index.js > api.log 2>&1 &
+      - name: Wait for API to become healthy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4000/health > /dev/null; then echo "API is up"; exit 0; fi
+            sleep 2
+          done
+          echo "API did not become healthy in time"; cat api.log; exit 1
+      - run: npm run test:ride-lifecycle --workspace=apps/api
+      - run: npm run test:driver-applications --workspace=apps/api
+      - run: npm run test:document-override-approval --workspace=apps/api
+      - name: Dump API server logs
+        if: always()
+        run: cat api.log || true
+
   # CI-gated deploy: Render is triggered here instead of on raw git push, so a
   # failing CI run blocks production. To enable:
   #   1. In Render dashboard: Service → Settings → Build & Deploy → disable "Auto-Deploy".
@@ -60,10 +113,11 @@ jobs:
   #   3. In GitHub: repo Settings → Secrets → Actions → add RENDER_DEPLOY_HOOK_URL.
   #   4. In GitHub: repo Settings → Branches → add branch protection rule for "main",
   #      require status checks "API (typecheck + build)", "Web (lint + typecheck + build)",
-  #      "Mobile apps (lint)", and "Deploy to Render" to pass before merging.
+  #      "Mobile apps (lint)", "Integration tests (dispatch/payment/auth)", and
+  #      "Deploy to Render" to pass before merging.
   deploy-render:
     name: Deploy to Render
-    needs: [api, web, mobile-lint]
+    needs: [api, web, mobile-lint, integration-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

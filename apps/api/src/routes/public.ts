@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { v4 as uuid } from 'uuid';
 import { prisma } from '../lib/db';
 import { estimateDistance, estimateHours, calculateFare, applyCommission, getPricingConfig } from '../services/fareService';
@@ -19,6 +20,11 @@ import type { VehicleCategory, BookingType } from '../types';
 import type Stripe from 'stripe';
 
 const router = Router();
+
+// H4: quote/booking are called repeatedly during a normal session (address edits re-fetch a
+// quote), so allow more headroom than registration/contact (limited globally in index.ts) while
+// still capping abuse — both trigger email+SMS sends on booking creation.
+const quoteBookingLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: { success: false, message: 'Too many requests, please try again later.' } });
 
 router.get('/affiliates', async (_req: Request, res: Response) => {
   try {
@@ -287,7 +293,7 @@ router.get('/pages/:slug', async (req: Request, res: Response) => {
  *     responses:
  *       200: { description: Quote result }
  */
-router.post('/quote', async (req: Request, res: Response) => {
+router.post('/quote', quoteBookingLimiter, async (req: Request, res: Response) => {
   const { pickupPostcode, dropoffPostcode, vehicleCategory, passengers, bookingType, date, time, notes, couponCode, pickupLatitude, pickupLongitude, dropoffLatitude, dropoffLongitude } =
     req.body as {
       pickupPostcode: string; dropoffPostcode: string; vehicleCategory: VehicleCategory;
@@ -359,7 +365,7 @@ router.post('/quote', async (req: Request, res: Response) => {
  *     responses:
  *       201: { description: Booking created }
  */
-router.post('/booking', async (req: Request, res: Response) => {
+router.post('/booking', quoteBookingLimiter, async (req: Request, res: Response) => {
   const { fullName, phone, email, pickupPostcode, dropoffPostcode, vehicleCategory, passengers,
           bookingType, date, time, notes, couponCode, pickupLatitude, pickupLongitude, dropoffLatitude, dropoffLongitude } = req.body as {
     fullName: string; phone: string; email: string;
@@ -675,21 +681,6 @@ router.post('/booking/:reference/rate', async (req: Request, res: Response) => {
     }
     res.json({ success: true, message: 'Thank you for your feedback' });
   } catch {
-    res.status(500).json({ success: false, message: 'Database error' });
-  }
-});
-
-// ─── Approved Affiliates (public, for driver registration dropdown) ───────────
-
-router.get('/affiliates', async (_req: Request, res: Response) => {
-  try {
-    const affiliates = await prisma.affiliate.findMany({
-      where: { isApproved: true },
-      select: { id: true, companyName: true, tradingName: true, city: true },
-      orderBy: { companyName: 'asc' },
-    });
-    res.json({ success: true, data: affiliates });
-  } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }
 });

@@ -124,12 +124,3 @@ export function getCategoryLabel(category: VehicleCategory): string {
   return { prestige: 'Prestige Vehicle', minibus: 'Minibus', coaches: 'Coach', taxi: 'Taxi' }[category];
 }
 
-export function applyVehicleMultiplier(base: number, category: VehicleCategory): number {
-  return base * { minibus: 1.2, coaches: 1.8, prestige: 2.0, taxi: 1.0 }[category];
-}
-
-export const fareSettings = {
-  baseFare: 15, ratePerMile: 2.50, ratePerMinute: 0.35,
-  surgeMultiplier: 1.0, serviceFee: 3.50, mcPercentage: 15,
-  waitingTimeFee: 8, airportFee: 12, minimumFare: 25,
-};

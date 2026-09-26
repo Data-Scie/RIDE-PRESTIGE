@@ -24,6 +24,60 @@ This is a punch list. Work top to bottom; each item is scoped to be fixable inde
 
 ---
 
+## Status update — 2026-09-26
+
+Resolved since the original audit (2026-06-27). Fixes for the first group below were
+committed on 2026-07-01 but sat unpushed on the local machine for ~3 months — they only
+reached Render/Vercel production today, after being found, typecheck-fixed, and pushed
+this session:
+
+- ✅ **C1** — `/uploads/documents/*` now requires JWT auth (Bearer header or `?token=`).
+- ✅ **C2** — `GET /api/affiliate/jobs/:id` now scoped by `affiliateId`.
+- ✅ **C3** — `schema.prisma` documents the intentional `db push` strategy.
+- ✅ **C4** — Backup & Disaster Recovery runbook added to `DEPLOYMENT.md` §7.
+- ✅ **C5** — CI-gated Render deploy wired in `ci.yml` (`deploy-render` job); manual one-time
+  Render/GitHub dashboard setup steps are documented inline in the workflow file and still
+  need to actually be clicked through in each dashboard to take effect.
+- ✅ **H1** — `/health` reports Cloudinary config status; startup warning if unset.
+- ✅ **H5** — `portal-credentials.txt` gitignored (confirmed never previously committed).
+- ✅ **H6** — Stripe checkout now has an idempotency key + `cancelCheckoutSession()` on booking cancel.
+- ✅ **H7** — Portal profile-fetch failures now show a visible error banner instead of failing silently.
+- ✅ **H8** — Booking quote-fetch failure now shows an error box on the booking form.
+- ✅ **H9** — cPanel deployment path documented in `DEPLOYMENT.md` §5.
+- ✅ **H10** — `next.config.ts` `output: "standalone"` committed.
+- ✅ **M15** — `artifacts/*.tar.gz` / `*.zip` gitignored.
+
+Fixed this session (2026-09-26), on top of the above:
+
+- ✅ **H2** — N+1 per-affiliate loop replaced with `groupBy`; unbounded affiliate/driver/vehicle
+  lists in `ops.ts`/`admin.ts` now paginated (`page`/`limit`, matching the existing convention).
+- ✅ **H3** — `admin.ts`/`ops.ts` `/customers` no longer scan up to 5000 `Job` rows into JS;
+  aggregation (totalJobs/totalSpend/avg rating) now runs as a SQL `GROUP BY`, which also fixes
+  the undercounting-past-5000-rows bug the old code's own comment flagged.
+- ✅ **H4** — Dedicated rate limiters added: registration/forgot-password/contact (10/15min,
+  global in `index.ts`), quote/booking (30/15min, route-level in `public.ts` to avoid catching
+  the `/booking/:reference` tracking routes with a prefix match).
+- ✅ **H11** — New `integration-tests` CI job runs all 6 integration scripts against a real
+  `postgres:18` service container + a locally built API server on every push/PR (previously
+  these only ever ran ad-hoc against the live shared dev/prod Supabase DB). Not yet observed
+  passing in an actual GitHub Actions run — first push should be watched.
+- ✅ **M4** — Duplicate `GET /affiliates` in `public.ts` removed.
+- ✅ **M7** — Startup warning if `WEB_ORIGIN` unset in production (Stripe redirect fallback risk).
+- ✅ **M12** — `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` documented in `mobile-customer/.env.example`.
+- ✅ **L3** — Resolved CORS `allowedOrigins` now logged at startup.
+- ✅ **L4** — Dead `fareSettings`/`applyVehicleMultiplier` exports removed (`lib/fare.ts`, `lib/data.ts`).
+- ✅ **L6** — Startup warning if `STRIPE_SECRET_KEY` mode (test/live) doesn't match `NODE_ENV`.
+
+**Still open, not addressed this session:** M1, M2, M3, M5, M6, M8, M9, M10, M11, M13, M14,
+L1, L2, L5, L7, L8, L9, L10 — see below, unchanged from the original audit.
+
+**Separately, found live on 2026-09-26 (not in the original audit):** the production custom
+domain `rideprestige.co.uk` is completely unreachable — DNS resolves and TCP connects, but the
+cPanel Node origin never responds (times out). Not a code issue; needs the user to check the
+cPanel Node app's running/crashed state directly.
+
+---
+
 ## 🔴 Critical
 
 ### C1. Driver/affiliate compliance documents are publicly readable with no auth

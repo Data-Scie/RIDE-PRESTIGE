@@ -254,9 +254,3 @@ export const faqItems: FAQItem[] = [
 export const pages: Page[] = [
   { id: 'page-home', slug: 'home', title: 'Homepage', seoTitle: 'Ride Prestige — Coach & Minibus Hire UK', metaDescription: 'Coach and minibus hire across Sheffield and the UK. Reliable transport for groups, events and airport transfers.', ogTitle: 'Ride Prestige', ogDescription: 'Your local transport minutes away.', sections: [] },
 ];
-
-export const fareSettings = {
-  baseFare: 15, ratePerMile: 2.50, ratePerMinute: 0.35,
-  surgeMultiplier: 1.0, serviceFee: 3.50, mcPercentage: 15,
-  waitingTimeFee: 8, airportFee: 12, minimumFare: 25,
-};

@@ -1013,11 +1013,16 @@ router.put('/drivers/:id/documents/:docId', async (req: Request, res: Response) 
  *     responses:
  *       200: { description: Affiliates list }
  */
-router.get('/affiliates', async (_req: Request, res: Response) => {
+router.get('/affiliates', async (req: Request, res: Response) => {
   try {
-    const affiliates = await prisma.affiliate.findMany();
+    const { page = '1', limit = '50' } = req.query as Record<string, string>;
+    const p = parseInt(page); const l = parseInt(limit);
+    const [affiliates, total] = await Promise.all([
+      prisma.affiliate.findMany({ orderBy: { createdAt: 'desc' }, skip: (p - 1) * l, take: l }),
+      prisma.affiliate.count(),
+    ]);
     const list = affiliates.map(({ passwordHash: _, ...a }) => a);
-    res.json({ success: true, data: list, total: list.length });
+    res.json({ success: true, data: list, total, page: p, limit: l, pages: Math.ceil(total / l) });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Database error' });
   }
@@ -1268,15 +1273,27 @@ router.put('/vehicles/:vehicleId/documents/:documentId/reject', async (req: Requ
 
 router.get('/customers', async (_req: Request, res: Response) => {
   try {
-    const [customers, jobs] = await Promise.all([
-      prisma.customer.findMany(),
-      // Capped, not a true full-history scan - bounds worst case as job volume grows. Aggregates
-      // (totalJobs/totalSpend/rating) for very long-tenured customers may undercount once total
-      // job volume exceeds this window; a real fix would aggregate this in SQL instead.
-      prisma.job.findMany({ orderBy: { createdAt: 'desc' }, take: 5000 }),
-    ]);
-    const affiliateIds = [...new Set(jobs.map(job => job.affiliateId).filter((id): id is string => Boolean(id)))];
-    const driverIds = [...new Set(jobs.map(job => job.assignedDriverId).filter((id): id is string => Boolean(id)))];
+    const customers = await prisma.customer.findMany();
+    // Aggregation (totalJobs/totalSpend/avg rating) is computed in SQL across the full Job
+    // table instead of loading raw rows into JS - no row cap, no undercounting as volume grows.
+    const stats = await prisma.$queryRaw<Array<{
+      groupKey: string; totalJobs: number; totalSpend: number | null; avgRating: number | null; latestJobId: string; earliestCreatedAt: Date;
+    }>>`
+      SELECT COALESCE(LOWER("customerEmail"), 'phone:' || "customerPhone") AS "groupKey",
+             COUNT(*)::int AS "totalJobs",
+             SUM("fareAmount")::float AS "totalSpend",
+             AVG("driverRating")::float AS "avgRating",
+             (ARRAY_AGG("id" ORDER BY "createdAt" DESC))[1] AS "latestJobId",
+             MIN("createdAt") AS "earliestCreatedAt"
+      FROM "Job"
+      GROUP BY 1
+    `;
+    // Only the single latest job per customer group is fetched - bounded by distinct customer
+    // count, not total job volume.
+    const latestJobs = await prisma.job.findMany({ where: { id: { in: stats.map(s => s.latestJobId) } } });
+    const latestJobById = new Map(latestJobs.map(job => [job.id, job]));
+    const affiliateIds = [...new Set(latestJobs.map(job => job.affiliateId).filter((id): id is string => Boolean(id)))];
+    const driverIds = [...new Set(latestJobs.map(job => job.assignedDriverId).filter((id): id is string => Boolean(id)))];
     const [affiliates, drivers] = await Promise.all([
       prisma.affiliate.findMany({ where: { id: { in: affiliateIds } }, select: { id: true, companyName: true, tradingName: true } }),
       prisma.driver.findMany({ where: { id: { in: driverIds } }, select: { id: true, fullName: true, driverType: true } }),
@@ -1284,16 +1301,10 @@ router.get('/customers', async (_req: Request, res: Response) => {
     const affiliateById = new Map(affiliates.map(affiliate => [affiliate.id, affiliate]));
     const driverById = new Map(drivers.map(driver => [driver.id, driver]));
     const customerByEmail = new Map(customers.map(customer => [customer.email.toLowerCase(), customer]));
-    const jobGroups = new Map<string, typeof jobs>();
-    for (const job of jobs) {
-      const key = job.customerEmail?.toLowerCase() || `phone:${job.customerPhone}`;
-      jobGroups.set(key, [...(jobGroups.get(key) ?? []), job]);
-    }
 
-    const list: Record<string, unknown>[] = Array.from(jobGroups.entries()).map(([key, customerJobs]) => {
-      const latest = customerJobs[0];
+    const list: Record<string, unknown>[] = stats.map(stat => {
+      const latest = latestJobById.get(stat.latestJobId)!;
       const registered = latest.customerEmail ? customerByEmail.get(latest.customerEmail.toLowerCase()) : undefined;
-      const ratings = customerJobs.map(job => job.driverRating).filter((rating): rating is number => rating !== null);
       const affiliate = latest.affiliateId ? affiliateById.get(latest.affiliateId) : null;
       const driver = latest.assignedDriverId ? driverById.get(latest.assignedDriverId) : null;
       const acceptedBy = affiliate
@@ -1302,17 +1313,15 @@ router.get('/customers', async (_req: Request, res: Response) => {
           ? 'independent_driver'
           : 'unassigned';
       return {
-        id: registered?.id ?? `guest:${encodeURIComponent(key)}`,
+        id: registered?.id ?? `guest:${encodeURIComponent(stat.groupKey)}`,
         fullName: registered?.fullName ?? latest.customerName,
         email: registered?.email ?? latest.customerEmail ?? '',
         phone: registered?.phone ?? latest.customerPhone,
-        createdAt: registered?.createdAt.toISOString() ?? customerJobs[customerJobs.length - 1].createdAt.toISOString(),
+        createdAt: registered?.createdAt.toISOString() ?? stat.earliestCreatedAt.toISOString(),
         isGuest: !registered,
-        totalJobs: customerJobs.length,
-        totalSpend: parseFloat(customerJobs.reduce((sum, job) => sum + job.fareAmount, 0).toFixed(2)),
-        averageCustomerRating: ratings.length
-          ? parseFloat((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1))
-          : null,
+        totalJobs: stat.totalJobs,
+        totalSpend: parseFloat((stat.totalSpend ?? 0).toFixed(2)),
+        averageCustomerRating: stat.avgRating !== null ? parseFloat(stat.avgRating.toFixed(1)) : null,
         latestRide: {
           bookingRef: latest.bookingRef,
           status: latest.status,
@@ -1331,8 +1340,9 @@ router.get('/customers', async (_req: Request, res: Response) => {
       };
     });
 
+    const jobGroupKeys = new Set(stats.map(stat => stat.groupKey));
     for (const customer of customers) {
-      if (!jobGroups.has(customer.email.toLowerCase())) {
+      if (!jobGroupKeys.has(customer.email.toLowerCase())) {
         const { passwordHash: _, ...safe } = customer;
         list.push({
           ...safe,

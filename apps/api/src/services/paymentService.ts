@@ -10,7 +10,15 @@ export function isStripeConfigured(): boolean {
 
 function getStripe(): Stripe {
   if (!stripeClient) {
-    stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+    const key = process.env.STRIPE_SECRET_KEY as string;
+    // L6: a live key in a non-prod environment risks real charges from test traffic; a test
+    // key in prod means payments silently never actually charge anyone. Neither crashes — just warn.
+    if (process.env.NODE_ENV === 'production' && key.startsWith('sk_test_')) {
+      console.warn('⚠  STRIPE_SECRET_KEY is a TEST key in a production environment — no real payments will be taken.');
+    } else if (process.env.NODE_ENV !== 'production' && key.startsWith('sk_live_')) {
+      console.warn('⚠  STRIPE_SECRET_KEY is a LIVE key in a non-production environment — real cards will be charged.');
+    }
+    stripeClient = new Stripe(key);
   }
   return stripeClient;
 }
