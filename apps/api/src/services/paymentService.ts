@@ -104,7 +104,9 @@ export async function cancelCheckoutSession(bookingId: string): Promise<void> {
   const payment = await prisma.payment.findFirst({ where: { bookingId, status: 'pending' } });
   if (!payment) return;
   try {
-    await getStripe().checkout.sessions.expire(payment.transactionRef);
+    if (payment.transactionRef) {
+      await getStripe().checkout.sessions.expire(payment.transactionRef);
+    }
   } catch {
     // Session already expired or completed — still update the DB record below
   }
